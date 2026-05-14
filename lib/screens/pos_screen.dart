@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import '../utils/product_image_helper.dart';
+import '../utils/number_formatter.dart';
 import '../widgets/cart_summary.dart';
 import '../widgets/checkout_modal.dart';
 import '../widgets/header.dart';
@@ -361,7 +362,7 @@ child: TabBarView(
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
-                                '${item.quantity}x Rp${item.product.price.toStringAsFixed(0)}',
+                                '${item.quantity}x ${NumberFormatter.formatRupiah(item.product.price)}',
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: AppColors.textSecondary,
@@ -371,7 +372,7 @@ child: TabBarView(
                           ),
                         ),
                         Text(
-                          'Rp${item.subtotal.toStringAsFixed(0)}',
+                          NumberFormatter.formatRupiah(item.subtotal),
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 11,
@@ -401,7 +402,7 @@ child: TabBarView(
                         style: Theme.of(context).textTheme.labelMedium,
                       ),
                       Text(
-                        'Rp${cart.totalAmount.toStringAsFixed(0)}',
+                        NumberFormatter.formatRupiah(cart.totalAmount),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
@@ -616,7 +617,7 @@ child: TabBarView(
                           const SizedBox(height: 6),
                           // Price
                           Text(
-                            'Rp${productItem.price.toStringAsFixed(0)}',
+                            NumberFormatter.formatRupiah(productItem.price),
                             style: TextStyle(
                               color: isOutOfStock 
                                 ? AppColors.textSecondary 

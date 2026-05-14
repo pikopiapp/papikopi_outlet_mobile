@@ -6,6 +6,16 @@ import '../widgets/header.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 
+// Format currency helper
+String formatCurrency(num value) {
+  // Convert to integer and add thousand separator
+  final intValue = value.toInt();
+  return intValue.toString().replaceAllMapped(
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (Match m) => '${m[1]}.',
+  );
+}
+
 class StockScreen extends StatefulWidget {
   const StockScreen({super.key});
 
@@ -464,7 +474,7 @@ Widget _buildStockTab() {
                           ),
                           DataCell(
                             Text(
-                              'Rp${price.toStringAsFixed(0)}',
+                              formatCurrency(price),
                               style: TextStyle(
                                 color: AppColors.accent,
                                 fontWeight: FontWeight.w600,

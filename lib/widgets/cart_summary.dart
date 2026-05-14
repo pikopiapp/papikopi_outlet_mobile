@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../theme/thema.dart';
+import '../utils/number_formatter.dart';
 
 class CartSummary extends StatelessWidget {
   const CartSummary({super.key});
@@ -24,14 +25,14 @@ class CartSummary extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.shopping_cart, color: Colors.white, size: 24),
+                  Icon(Icons.shopping_cart, color: Colors.white, size: 28),
                   const SizedBox(width: 8),
                   const Text(
                     'Keranjang',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 18,
                     ),
                   ),
                   const Spacer(),
@@ -116,14 +117,14 @@ class CartSummary extends StatelessWidget {
                         'Total Item',
                         style: TextStyle(
                           color: AppColors.textSecondary,
-                          fontSize: 13,
+                          fontSize: 14,
                         ),
                       ),
                       Text(
                         '${cartProvider.totalQuantity} pcs',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                          fontSize: 16,
                         ),
                       ),
                     ],
@@ -143,33 +144,11 @@ class CartSummary extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Rp${(cartProvider.totalAmount).toStringAsFixed(0)}',
+                        NumberFormatter.formatRupiah(cartProvider.totalAmount),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                           color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  // HPP and Profit (small)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'HPP: Rp${(cartProvider.totalHpp).toStringAsFixed(0)}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      Text(
-                        'Profit: Rp${(cartProvider.totalProfit).toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.green,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -260,14 +239,14 @@ class CartItemWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       child: Container(
         decoration: BoxDecoration(
           border: Border.all(color: AppColors.accentLight),
           borderRadius: BorderRadius.circular(6),
           color: AppColors.surface,
         ),
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(12),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -280,16 +259,16 @@ class CartItemWidget extends StatelessWidget {
                     item.product.name,
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
-                      fontSize: 12,
+                      fontSize: 14,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
-                    'Rp${item.product.price.toStringAsFixed(0)} x${item.quantity}',
+                    '${NumberFormatter.formatRupiah(item.product.price)} x${item.quantity}',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 12,
                       color: AppColors.textSecondary,
                     ),
                   ),
@@ -307,23 +286,23 @@ class CartItemWidget extends StatelessWidget {
                       : null,
                   child: Icon(
                     Icons.remove_circle_outline,
-                    size: 16,
+                    size: 24,
                     color: item.quantity > 1
                         ? AppColors.primary
                         : AppColors.altSurface,
                   ),
                 ),
-                const SizedBox(width: 3),
+                const SizedBox(width: 6),
                 Text(
                   '${item.quantity}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
-                const SizedBox(width: 3),
+                const SizedBox(width: 6),
                 GestureDetector(
                   onTap: () => onQuantityChanged(item.quantity + 1),
                   child: Icon(
                     Icons.add_circle_outline,
-                    size: 16,
+                    size: 24,
                     color: AppColors.primary,
                   ),
                 ),
@@ -335,18 +314,18 @@ class CartItemWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  'Rp${item.subtotal.toStringAsFixed(0)}',
+                  NumberFormatter.formatRupiah(item.subtotal),
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 11,
+                    fontSize: 13,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 GestureDetector(
                   onTap: onRemove,
                   child: Icon(
                     Icons.delete_outline,
-                    size: 16,
+                    size: 22,
                     color: Colors.red,
                   ),
                 ),

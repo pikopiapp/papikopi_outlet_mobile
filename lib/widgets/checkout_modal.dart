@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../services/supabase_service.dart';
 import '../theme/thema.dart';
+import '../utils/number_formatter.dart';
 
 class CheckoutModal extends StatefulWidget {
   final TabController? tabController;
@@ -237,7 +238,7 @@ class _CheckoutModalState extends State<CheckoutModal> {
                         children: [
                           const Text('Total Harga:'),
                           Text(
-                            'Rp${cartProvider.totalAmount.toStringAsFixed(0)}',
+                            NumberFormatter.formatRupiah(cartProvider.totalAmount),
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],

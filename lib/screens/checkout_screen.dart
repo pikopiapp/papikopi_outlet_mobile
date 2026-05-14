@@ -5,6 +5,7 @@ import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import '../theme/thema.dart';
+import '../utils/number_formatter.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -316,7 +317,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
                 padding: const EdgeInsets.all(12),
                 child: Text(
-                  'Rp${_calculateTotal().toStringAsFixed(0)}',
+                  NumberFormatter.formatRupiah(_calculateTotal()),
                   style: const TextStyle(
                     fontSize: 18,
                     color: Color.fromARGB(255, 100, 100, 100),

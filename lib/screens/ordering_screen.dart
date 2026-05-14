@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
 import '../providers/product_provider.dart';
 import '../theme/thema.dart';
+import '../utils/number_formatter.dart';
+
+// Format currency helper with Rp prefix and separator titik - now using NumberFormatter
+String formatCurrencyRp(num value) {
+  return NumberFormatter.formatRupiah(value.toDouble());
+}
 
 class OrderingScreen extends StatefulWidget {
   const OrderingScreen({super.key});
@@ -383,7 +388,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Rp ${NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(product.price)}',
+                                formatCurrencyRp(product.price),
                                 style: TextStyle(
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.w700,
@@ -443,14 +448,14 @@ class _OrderingScreenState extends State<OrderingScreen> {
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           Text(
-                            '${item['quantity']}x @ Rp ${NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(item['unit_price'])}',
+                            '${item['quantity']}x @ ${formatCurrencyRp(item['unit_price'])}',
                             style: TextStyle(color: Colors.grey[600], fontSize: 12),
                           ),
                         ],
                       ),
                     ),
                     Text(
-                      'Rp ${NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(subtotal)}',
+                      formatCurrencyRp(subtotal),
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     IconButton(
@@ -468,7 +473,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
               children: [
                 const Text('Total:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 Text(
-                  'Rp ${NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(
+                  formatCurrencyRp(
                     _orderItems.fold<double>(
                       0,
                       (sum, item) =>
@@ -476,7 +481,7 @@ class _OrderingScreenState extends State<OrderingScreen> {
                           ((item['unit_price'] as num).toDouble() *
                               (item['quantity'] as int)),
                     ),
-                  )}',
+                  ),
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -629,7 +634,7 @@ class _QuantityDialogState extends State<_QuantityDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Harga: Rp ${NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(widget.product.price)}',
+            'Harga: ${formatCurrencyRp(widget.product.price)}',
             style: const TextStyle(fontSize: 14),
           ),
           const SizedBox(height: 16),
@@ -666,7 +671,7 @@ class _QuantityDialogState extends State<_QuantityDialog> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Total: Rp ${NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0).format(widget.product.price * _quantity)}',
+            'Total: ${formatCurrencyRp(widget.product.price * _quantity)}',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
         ],

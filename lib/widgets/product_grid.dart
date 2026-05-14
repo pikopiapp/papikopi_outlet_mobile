@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../theme/thema.dart';
+import '../utils/number_formatter.dart';
 
 class ProductGrid extends StatelessWidget {
   final List<Product> products;
@@ -119,7 +120,7 @@ class ProductCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Rp${product.price.toStringAsFixed(0)}',
+                      NumberFormatter.formatRupiah(product.price),
                       style: const TextStyle(
                         color: AppColors.accent,
                         fontWeight: FontWeight.bold,
