@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Branding Colors -->
+    <color name="splash_background">#1F4E5F</color>
+    <color name="primary_color">#1F4E5F</color>
+    <color name="secondary_color">#F59E0B</color>
+</resources>

@@ -1,0 +1,2 @@
+# Exclude sign_in_with_apple from Android build
+# This plugin is only needed for iOS
