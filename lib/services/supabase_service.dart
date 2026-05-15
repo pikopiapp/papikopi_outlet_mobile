@@ -1465,51 +1465,73 @@ class SupabaseService {
       final effectiveInvestorId = investorId.trim();
       print('👤 getInvestorAssignments - fetching for investorId=$effectiveInvestorId');
 
-      // Query investor_assignments with outlet details
+      // First, verify investor exists in system
+      try {
+        final userData = await _client
+            .from('users')
+            .select('id, email, role')
+            .eq('id', effectiveInvestorId)
+            .maybeSingle();
+        
+        if (userData != null) {
+          print('✅ Investor found: ${userData['email']} (${userData['role']})');
+        } else {
+          print('⚠️ Investor not found in users table');
+        }
+      } catch (e) {
+        print('⚠️ Error checking investor: $e');
+      }
+
+      // Query investor_assignments with direct outlet join
+      print('🔍 Querying investor_assignments with filter investor_id=$effectiveInvestorId');
       final response = await _client
           .from('investor_assignments')
-          .select('id, outlet_id, investment_amount, margin_percentage, status, created_at')
+          .select('id, outlet_id, investment_amount, margin_percentage, status, created_at, outlets(id, name, type, address)')
           .eq('investor_id', effectiveInvestorId)
           .order('created_at', ascending: false);
+
+      print('📦 Query completed, response type: ${response.runtimeType}');
 
       final assignmentRows = (response as List<dynamic>)
           .whereType<Map<String, dynamic>>()
           .toList();
 
       print('✅ Fetched ${assignmentRows.length} assignments');
+      if (assignmentRows.isNotEmpty) {
+        print('   First assignment: ${assignmentRows.first}');
+      } else {
+        print('⚠️ No assignments found');
+        
+        // Fallback: Check all investor_ids in the table for debugging
+        print('   Checking all investor_ids in database...');
+        try {
+          final allAssignments = await _client
+              .from('investor_assignments')
+              .select('investor_id')
+              .limit(5);
+          
+          final uniqueIds = <String>{};
+          (allAssignments as List<dynamic>?)?.forEach((row) {
+            final id = (row as Map<String, dynamic>)['investor_id'] as String?;
+            if (id != null) uniqueIds.add(id);
+          });
+          
+          print('   Sample investor_ids in database: $uniqueIds');
+        } catch (e) {
+          print('   Error checking database: $e');
+        }
+      }
 
       if (assignmentRows.isEmpty) {
         return [];
       }
 
-      // Get outlet IDs and fetch outlet details
-      final outletIds = assignmentRows
-          .map((a) => (a['outlet_id'] as String?)?.trim())
-          .whereType<String>()
-          .where((id) => id.isNotEmpty)
-          .toSet()
-          .toList();
-
-      if (outletIds.isEmpty) return assignmentRows;
-
-      final outletResponse = await _client
-          .from('outlets')
-          .select('id, name, type, address')
-          .inFilter('id', outletIds);
-
-      final outletRows = (outletResponse as List<dynamic>)
-          .whereType<Map<String, dynamic>>()
-          .toList();
-
-      final outletMap = <String, Map<String, dynamic>>{
-        for (final o in outletRows)
-          (o['id'] as String): o,
-      };
-
-      // Merge outlet info with assignments
+      // Map outlets directly from the joined response
       return assignmentRows.map((assignment) {
         final outletId = (assignment['outlet_id'] as String?)?.trim() ?? '';
-        final outlet = outletMap[outletId];
+        final outlet = assignment['outlets'] as Map<String, dynamic>?;
+
+        print('🔗 Assignment outlet_id=$outletId => outlet_name=${outlet?['name'] ?? 'NOT FOUND'}');
 
         return <String, dynamic>{
           ...assignment,
@@ -2965,6 +2987,46 @@ class SupabaseService {
     } catch (e) {
       print('⚠️ Error fetching business day start hour: $e');
       return 4; // Default to 4 AM
+    }
+  }
+
+  // DEBUG: Create test investor assignments for development
+  Future<void> seedTestInvestorAssignments({
+    required String investorId,
+  }) async {
+    if (!_isInitialized) return;
+
+    try {
+      print('🌱 Seeding test investor assignments for investorId=$investorId');
+
+      // Get first 2 outlets
+      final outlets = await _client
+          .from('outlets')
+          .select('id, name')
+          .limit(2);
+
+      if ((outlets as List<dynamic>).isEmpty) {
+        print('⚠️ No outlets found to create assignments');
+        return;
+      }
+
+      // Create assignments
+      final assignments = (outlets as List<dynamic>)
+          .map((outlet) => {
+                'investor_id': investorId,
+                'outlet_id': outlet['id'],
+                'investment_amount': 50000000,
+                'margin_percentage': 10,
+                'status': 'active',
+              })
+          .toList();
+
+      final result = await _client.from('investor_assignments').insert(assignments);
+
+      print('✅ Created ${assignments.length} test assignments');
+      print('   Result: $result');
+    } catch (e) {
+      print('⚠️ Error seeding test assignments: $e');
     }
   }
 }

@@ -141,6 +141,30 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
     return _supabaseService.getInvestorAssignments(investorId: user.id);
   }
 
+  Future<void> _seedTestData() async {
+    final authProvider = context.read<AuthProvider>();
+    final user = authProvider.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not found')),
+      );
+      return;
+    }
+
+    try {
+      await _supabaseService.seedTestInvestorAssignments(investorId: user.id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Test data seeded successfully')),
+      );
+      // Refresh the UI
+      setState(() {});
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
@@ -190,10 +214,30 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
                 }
 
                 final rows = snap.data ?? [];
+                print('📊 Investor profile - received ${rows.length} outlets');
+                if (rows.isNotEmpty) {
+                  print('   First row: ${rows.first}');
+                }
+                
                 if (rows.isEmpty) {
-                  return _InfoBox(
-                    title: "Outlet investor",
-                    value: "Belum ada outlet yang diinvestasikan untuk user.id=${user?.id ?? '-'}",
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _InfoBox(
+                        title: "Outlet investor",
+                        value: "Belum ada outlet yang diinvestasikan untuk user.id=${user?.id ?? '-'}",
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        onPressed: _seedTestData,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Seed Test Data (Dev)'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
                   );
                 }
 
@@ -213,13 +257,14 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
                     children: [
                       ...shown.map((r) {
                         final outletName = (r['outlet_name'] as String?) ?? '-';
-                        final outletId = (r['outlet_id'] as String?) ?? '-';
                         final outletType = (r['outlet_type'] as String?) ?? 'unknown';
                         final investmentAmount =
                             (r['investment_amount'] as num?)?.toDouble() ?? 0.0;
                         final marginPercentage =
                             (r['margin_percentage'] as num?)?.toDouble() ?? 0.0;
                         final status = (r['status'] as String?) ?? 'unknown';
+
+                        print('🏢 Rendering outlet: $outletName | type=$outletType | data=$r');
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
