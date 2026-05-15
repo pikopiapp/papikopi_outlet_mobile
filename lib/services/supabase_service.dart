@@ -1484,11 +1484,27 @@ class SupabaseService {
 
       // Query investor_assignments with direct outlet join
       print('🔍 Querying investor_assignments with filter investor_id=$effectiveInvestorId');
-      final response = await _client
-          .from('investor_assignments')
-          .select('id, outlet_id, investment_amount, margin_percentage, status, created_at, outlets(id, name, type, address)')
-          .eq('investor_id', effectiveInvestorId)
-          .order('created_at', ascending: false);
+      
+      List<Map<String, dynamic>> response;
+      try {
+        // Try with outlet join first
+        response = await _client
+            .from('investor_assignments')
+            .select('id, outlet_id, investment_amount, margin_percentage, status, created_at, outlets(id, name, type, address)')
+            .eq('investor_id', effectiveInvestorId)
+            .order('created_at', ascending: false);
+        print('✅ Query with join succeeded');
+      } catch (joinError) {
+        print('⚠️ Join query failed: $joinError');
+        print('   Trying query without join...');
+        // Fallback: query without join
+        response = await _client
+            .from('investor_assignments')
+            .select('id, outlet_id, investment_amount, margin_percentage, status, created_at')
+            .eq('investor_id', effectiveInvestorId)
+            .order('created_at', ascending: false);
+        print('✅ Query without join succeeded');
+      }
 
       print('📦 Query completed, response type: ${response.runtimeType}');
 
@@ -1526,20 +1542,44 @@ class SupabaseService {
         return [];
       }
 
-      // Map outlets directly from the joined response
-      return assignmentRows.map((assignment) {
+      // For each assignment, fetch outlet data if not in join
+      final enrichedAssignments = <Map<String, dynamic>>[];
+      
+      for (final assignment in assignmentRows) {
         final outletId = (assignment['outlet_id'] as String?)?.trim() ?? '';
-        final outlet = assignment['outlets'] as Map<String, dynamic>?;
+        var outlet = assignment['outlets'] as Map<String, dynamic>?;
+        
+        // If outlet data not in join, fetch it separately
+        if (outlet == null || outlet.isEmpty) {
+          print('⚠️ Outlet data missing for assignment, fetching separately...');
+          try {
+            final outletData = await _client
+                .from('outlets')
+                .select('id, name, type, address')
+                .eq('id', outletId)
+                .maybeSingle();
+            
+            if (outletData != null) {
+              outlet = outletData as Map<String, dynamic>;
+              print('✅ Fetched outlet separately: ${outlet['name']}');
+            }
+          } catch (e) {
+            print('⚠️ Error fetching outlet separately: $e');
+          }
+        }
 
         print('🔗 Assignment outlet_id=$outletId => outlet_name=${outlet?['name'] ?? 'NOT FOUND'}');
 
-        return <String, dynamic>{
+        enrichedAssignments.add(<String, dynamic>{
           ...assignment,
           'outlet_name': outlet?['name'] ?? 'Unknown Outlet',
           'outlet_type': outlet?['type'] ?? 'unknown',
           'outlet_address': outlet?['address'] ?? '',
-        };
-      }).toList();
+        });
+      }
+      
+      print('✅ Returning ${enrichedAssignments.length} enriched assignments');
+      return enrichedAssignments;
     } catch (e) {
       print('❌ Error fetching investor assignments: $e');
       return [];
