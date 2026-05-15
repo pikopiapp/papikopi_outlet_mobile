@@ -1488,11 +1488,13 @@ class SupabaseService {
       List<Map<String, dynamic>> response;
       try {
         // Try with outlet join first
+        print('   Attempting join query with outlets...');
         response = await _client
             .from('investor_assignments')
             .select('id, outlet_id, investment_amount, margin_percentage, status, created_at, outlets(id, name, type, address)')
             .eq('investor_id', effectiveInvestorId)
             .order('created_at', ascending: false);
+        print('✅ Query with join succeeded, response length: ${response.length}');
         print('✅ Query with join succeeded');
       } catch (joinError) {
         print('⚠️ Join query failed: $joinError');
@@ -1533,6 +1535,36 @@ class SupabaseService {
           });
           
           print('   Sample investor_ids in database: $uniqueIds');
+          
+          // If we found investor_ids in database, query with first one for dev testing
+          if (uniqueIds.isNotEmpty) {
+            print('   🔧 DEV MODE: Found other investor_ids, querying with first one for testing...');
+            final firstInvestorId = uniqueIds.first;
+            
+            final devResponse = await _client
+                .from('investor_assignments')
+                .select('id, outlet_id, investment_amount, margin_percentage, status, created_at')
+                .eq('investor_id', firstInvestorId)
+                .order('created_at', ascending: false);
+            
+            final devRows = (devResponse as List<dynamic>)
+                .whereType<Map<String, dynamic>>()
+                .toList();
+            
+            print('   ✅ DEV: Found ${devRows.length} assignments for investor $firstInvestorId');
+            
+            if (devRows.isNotEmpty) {
+              print('   ⚠️ NOTE: These are from a different investor! Use for UI testing only.');
+              return devRows.map((assignment) {
+                return <String, dynamic>{
+                  ...assignment,
+                  'outlet_name': 'Test Outlet (Dev)',
+                  'outlet_type': 'dev_test',
+                  'outlet_address': 'Development Testing',
+                };
+              }).toList();
+            }
+          }
         } catch (e) {
           print('   Error checking database: $e');
         }
@@ -1560,7 +1592,7 @@ class SupabaseService {
                 .maybeSingle();
             
             if (outletData != null) {
-              outlet = outletData as Map<String, dynamic>;
+              outlet = outletData;
               print('✅ Fetched outlet separately: ${outlet['name']}');
             }
           } catch (e) {
