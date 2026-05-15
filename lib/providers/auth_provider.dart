@@ -17,9 +17,12 @@ class AuthProvider extends ChangeNotifier {
   final _supabaseService = SupabaseService();
 
   Future<void> initialize() async {
-    // AuthService is already initialized in main()
-    // Just load the saved user
-    _currentUser = _authService.getSavedUser();
+    final saved = _authService.getSavedUser();
+
+    // Resolve current user (and investorId remap) from Supabase session.
+    final current = await _supabaseService.getCurrentUserWithProfile();
+
+    _currentUser = current ?? saved;
     notifyListeners();
   }
 

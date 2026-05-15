@@ -6,6 +6,8 @@ import 'providers/cart_provider.dart';
 import 'providers/product_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/shell_screen.dart';
+import 'screens/manager/manager_shell_screen.dart';
+import 'screens/investor_screen.dart';
 import 'services/supabase_service.dart';
 import 'services/auth_service.dart';
 import 'theme/thema.dart';
@@ -42,6 +44,8 @@ class MyApp extends StatelessWidget {
         routes: {
           '/login': (context) => const LoginScreen(),
           '/shell': (context) => const ShellScreen(),
+          '/manager': (context) => const ManagerShellScreen(),
+          '/investor': (context) => const InvestorScreen(),
         },
       ),
     );
@@ -122,8 +126,17 @@ class _InitialScreenState extends State<_InitialScreen>
       if (!mounted) return;
 
       if (authProvider.isAuthenticated) {
-        print('✅ User authenticated, navigating to shell');
-        Navigator.of(context).pushReplacementNamed('/shell');
+        final role = authProvider.currentUser?.role;
+        print('✅ User authenticated, role=$role');
+
+        if (role == 'manager') {
+          Navigator.of(context).pushReplacementNamed('/manager');
+        } else if (role == 'investor') {
+          Navigator.of(context).pushReplacementNamed('/investor');
+        } else {
+          // default: barista/admin -> shell
+          Navigator.of(context).pushReplacementNamed('/shell');
+        }
       } else {
         print('❌ User not authenticated, navigating to login');
         Navigator.of(context).pushReplacementNamed('/login');

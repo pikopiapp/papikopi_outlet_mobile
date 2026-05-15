@@ -60,7 +60,15 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted && authProvider.isAuthenticated) {
-        Navigator.of(context).pushReplacementNamed('/shell');
+        final role = authProvider.currentUser?.role;
+
+        if (role == 'manager') {
+          Navigator.of(context).pushReplacementNamed('/manager');
+        } else if (role == 'investor') {
+          Navigator.of(context).pushReplacementNamed('/investor');
+        } else {
+          Navigator.of(context).pushReplacementNamed('/shell');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -231,4 +239,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-

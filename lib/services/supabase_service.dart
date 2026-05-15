@@ -145,10 +145,64 @@ class SupabaseService {
       print('⚠️ Supabase DNS resolution failed, attempting connection anyway...');
     }
     
-    // Try custom database login using RPC function for bcrypt verification
+    // 1) Pastikan session Supabase Auth terbentuk (karena RLS SELECT untuk authenticated).
     try {
-      print('🔐 Attempting custom database login for: $email');
-      
+      print('🔐 Attempting Supabase auth sign-in for: $email');
+      final res = await _client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Timeout: Koneksi server terlalu lama'),
+      );
+
+      final sessionUser = res.user;
+      final session = _client.auth.currentSession;
+
+      if (sessionUser != null && session != null) {
+        // Ambil user profile dari tabel untuk isi role/outletId seperti model app.
+        final profile = await _client
+            .from('users')
+            .select()
+            .eq('id', sessionUser.id)
+            .single();
+
+        final user = user_model.User.fromJson(profile);
+
+        final profileRole = user.role;
+        final dynamicInvestorId = profile['investor_id'];
+        final investorIdFromProfile =
+            (dynamicInvestorId is String && dynamicInvestorId.isNotEmpty)
+                ? dynamicInvestorId
+                : null;
+
+        print('🧩 signIn profile.id=${profile['id']}');
+        print('🧩 signIn parsed user.id=${user.id}');
+        print('🧩 signIn profileRole=$profileRole');
+        print('🧩 signIn profile[investor_id]=$dynamicInvestorId');
+
+        if (profileRole == 'investor' && investorIdFromProfile != null) {
+          _cachedUser = user_model.User(
+            id: investorIdFromProfile,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            outletId: user.outletId,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          );
+          print('✅ signIn remapped investor user.id=${_cachedUser?.id}');
+          return _cachedUser!;
+        }
+
+        _cachedUser = user;
+        print('⚠️ signIn no remap, using user.id=${_cachedUser?.id}');
+        return user;
+      }
+    } catch (e) {
+      // 2) Fallback ke RPC verifikasi (legacy) jika auth sign-in gagal.
+      print('⚠️ Supabase auth sign-in failed, fallback to RPC: $e');
+
       final response = await _client.rpc(
         'verify_user_password',
         params: {
@@ -159,29 +213,66 @@ class SupabaseService {
         const Duration(seconds: 10),
         onTimeout: () => throw Exception('Timeout: Koneksi server terlalu lama'),
       );
-      
-      print('📋 RPC Response: $response');
-      
+
       if (response != null && response is Map<String, dynamic>) {
         final success = response['success'] as bool? ?? false;
-        
+
         if (success) {
           print('✅ Custom database login successful for: $email');
+
           final userData = response['user'] as Map<String, dynamic>;
           final user = user_model.User.fromJson(userData);
-          _cachedUser = user; // Cache the user
+
+          // When using fallback RPC, we may miss investor id remapping.
+          // Fetch full users row and, if role == investor, remap user.id from users.investor_id.
+          try {
+            final profile = await _client
+                .from('users')
+                .select()
+                .eq('id', user.id)
+                .single();
+
+            final profileRole = (profile['role'] as String?) ?? user.role;
+            final dynamicInvestorId = profile['investor_id'];
+
+            final investorIdFromProfile =
+                (dynamicInvestorId is String && dynamicInvestorId.isNotEmpty)
+                    ? dynamicInvestorId
+                    : null;
+
+            print('🧩 rpc profileRole=$profileRole');
+            print('🧩 rpc profile[investor_id]=$dynamicInvestorId');
+
+            if (profileRole == 'investor' && investorIdFromProfile != null) {
+              _cachedUser = user_model.User(
+                id: investorIdFromProfile,
+                email: user.email,
+                name: user.name,
+                role: user.role,
+                outletId: user.outletId,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt,
+              );
+              print('✅ rpc remapped investor user.id=${_cachedUser?.id}');
+              return _cachedUser!;
+            }
+          } catch (e) {
+            print('⚠️ rpc remap lookup failed: $e');
+          }
+
+          _cachedUser = user;
+          print('⚠️ rpc no remap, using user.id=${_cachedUser?.id}');
           return user;
         } else {
           final message = response['message'] as String? ?? 'Login gagal - alasan tidak diketahui';
-          print('❌ Login failed: $message');
           throw Exception(message);
         }
       }
       throw Exception('Response tidak valid dari server');
-    } catch (e) {
-      print('⚠️ Custom database login failed: $e');
-      rethrow; // Propagate error immediately - don't try fallback
     }
+
+    // Kalau sampai sini, sign-in tidak membentuk session dan RPC juga tidak return.
+    throw Exception('Login gagal - tidak bisa membentuk session authenticated');
   }
 
   Future<void> signOut() async {
@@ -213,6 +304,73 @@ class SupabaseService {
     );
     
     return user;
+  }
+
+  /// Async variant: resolve investor remap from `users` table using the current session.
+  /// This fixes the case where we load "saved user" without re-running `signIn()`.
+  Future<user_model.User?> getCurrentUserWithProfile() async {
+    // If we already have a remapped cached user, use it.
+    if (_cachedUser != null) return _cachedUser;
+
+    final session = _client.auth.currentSession;
+    if (session == null) return null;
+
+    // Baseline user from session
+    final baseline = user_model.User(
+      id: session.user.id,
+      email: session.user.email ?? '',
+      name: session.user.userMetadata?['name'] ?? 'User',
+      role: session.user.userMetadata?['role'] ?? 'barista',
+      outletId: session.user.userMetadata?['outlet_id'] ?? '',
+      createdAt: DateTime.parse(session.user.createdAt),
+    );
+
+    print('🧩 getCurrentUserWithProfile baseline.id=${baseline.id} role=${baseline.role}');
+
+    try {
+      final profile = await _client
+          .from('users')
+          .select()
+          .eq('id', session.user.id)
+          .single();
+
+      // Debug: show all columns returned by users so we can find which one maps to investor_assignments.investor_id
+      print('🧩 getCurrentUserWithProfile users row keys=${profile.keys.toList()}');
+      print('🧩 getCurrentUserWithProfile users row raw=${profile}');
+
+      final parsed = user_model.User.fromJson(profile);
+
+      final profileRole = parsed.role;
+      final dynamicInvestorId = profile['investor_id'];
+      final investorIdFromProfile =
+          (dynamicInvestorId is String && dynamicInvestorId.isNotEmpty)
+              ? dynamicInvestorId
+              : null;
+
+      print('🧩 getCurrentUserWithProfile profile.id=${profile['id']} role=$profileRole investor_id=$dynamicInvestorId');
+
+      if (profileRole == 'investor' && investorIdFromProfile != null) {
+        _cachedUser = user_model.User(
+          id: investorIdFromProfile,
+          email: parsed.email,
+          name: parsed.name,
+          role: parsed.role,
+          outletId: parsed.outletId,
+          createdAt: parsed.createdAt,
+          updatedAt: parsed.updatedAt,
+        );
+        print('✅ getCurrentUserWithProfile remapped id=${_cachedUser?.id}');
+        return _cachedUser;
+      }
+
+      _cachedUser = parsed;
+      print('⚠️ getCurrentUserWithProfile no remap, using id=${_cachedUser?.id}');
+      return _cachedUser;
+    } catch (e) {
+      // If profile lookup fails, fallback to baseline.
+      print('❌ getCurrentUserWithProfile profile lookup failed: $e');
+      return baseline;
+    }
   }
   
   void setCurrentUser(user_model.User user) {
@@ -1112,6 +1270,257 @@ class SupabaseService {
     } catch (e) {
       print('❌ Error fetching batch damage: $e');
       return null;
+    }
+  }
+
+  // Investor assignments: ambil outlet aktif milik investor
+  // NOTE: Hindari join outlets!inner supaya REST/alias relasi tidak bergantung pada konfigurasi FK/RLS.
+  Future<List<Outlet>> getActiveInvestorOutlets({
+    required String investorId,
+  }) async {
+    if (!_isInitialized) {
+      return [];
+    }
+
+    try {
+      final response = await _client
+          .from('investor_assignments')
+          .select('outlet_id')
+          .eq('investor_id', investorId)
+          .eq('status', 'active');
+
+      final rows = response as List<dynamic>;
+      final outletIds = rows
+          .map((r) => r['outlet_id']?.toString())
+          .whereType<String>()
+          .toList();
+
+      final outlets = <Outlet>[];
+      for (final outletId in outletIds) {
+        final outlet = await getOutlet(outletId);
+        if (outlet != null) {
+          outlets.add(outlet);
+        }
+      }
+
+      return outlets;
+    } catch (e) {
+      print('❌ Error fetching active investor outlets: $e');
+      return [];
+    }
+  }
+
+  /// Enhanced investor outlet summary (match web dashboard logic)
+  ///
+  /// Equivalent logic:
+  /// - Fetch investor_assignments (all for investor)
+  /// - Fetch outlets by ids
+  /// - Fetch sales profit for last 30 days
+  /// - Compute investor_share = outlet_profit * margin_percentage / 100
+  Future<List<Map<String, dynamic>>> getInvestorOutletsSummary({
+    required String investorId,
+    int profitTrendDays = 30,
+  }) async {
+    if (!_isInitialized) {
+      print('⚠️ getInvestorOutletsSummary: Supabase not initialized');
+      return [];
+    }
+
+    try {
+      // Gunakan investorId dari caller (AuthProvider biasanya sudah melakukan remap id untuk role investor)
+      // Hindari override dengan session.user.id karena bisa menyebabkan mismatch
+      // antara id auth user vs id investor yang dipakai oleh tabel investor_assignments.
+      final effectiveInvestorId = investorId.trim();
+
+      print('👤 getInvestorOutletsSummary START - investorId=$effectiveInvestorId');
+
+      final endIso = DateTime.now().toUtc().toIso8601String();
+      final startIso = DateTime.now()
+          .toUtc()
+          .subtract(Duration(days: profitTrendDays))
+          .toIso8601String();
+
+      print('📅 Date range: $startIso to $endIso');
+
+      // 1) Fetch assignments (field spesifik seperti web)
+      print('🔍 Querying investor_assignments for investor_id=$effectiveInvestorId');
+      final assignmentsResponse = await _client
+          .from('investor_assignments')
+          .select('outlet_id, investment_amount, margin_percentage, status')
+          .eq('investor_id', effectiveInvestorId);
+
+      final assignmentsRows = (assignmentsResponse as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+
+      print('✅ Query result: ${assignmentsRows.length} assignments found');
+      if (assignmentsRows.isNotEmpty) {
+        print('   First assignment: ${assignmentsRows.first}');
+      }
+
+      if (assignmentsRows.isEmpty) {
+        print('⚠️ No assignments found for investor_id=$effectiveInvestorId');
+        return [];
+      }
+
+      final outletIds = assignmentsRows
+          .map((a) => (a['outlet_id'] as String?)?.trim())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      print('🔎 outletIds=${outletIds.length} => $outletIds');
+
+      if (outletIds.isEmpty) {
+        print('⚠️ No valid outlet IDs extracted');
+        return [];
+      }
+
+      // 2) Fetch outlets by ids
+      print('🏪 Querying outlets for ids: $outletIds');
+      final outletResponse = await _client
+          .from('outlets')
+          .select('id, name')
+          .inFilter('id', outletIds);
+
+      final outletRows = (outletResponse as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+
+      print('✅ Fetched ${outletRows.length} outlets');
+      if (outletRows.isNotEmpty) {
+        print('   First outlet: ${outletRows.first}');
+      }
+
+      final outletMap = <String, Map<String, dynamic>>{
+        for (final o in outletRows)
+          (o['id'] as String): o,
+      };
+
+      // 3) Aggregate sales profit for those outlets
+      print('💰 Querying sales for outlets with profit calculation');
+      final salesResponse = await _client
+          .from('sales')
+          .select('outlet_id, profit')
+          .inFilter('outlet_id', outletIds)
+          .gte('created_at', startIso)
+          .lte('created_at', endIso);
+
+      final salesRows = (salesResponse as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+
+      print('✅ Fetched ${salesRows.length} sales records');
+
+      final profitMap = <String, double>{};
+      for (final sale in salesRows) {
+        final outletId = (sale['outlet_id'] as String?)?.trim();
+        if (outletId == null || outletId.isEmpty) continue;
+
+        final profit = (sale['profit'] as num?)?.toDouble() ?? 0.0;
+        profitMap[outletId] = (profitMap[outletId] ?? 0.0) + profit;
+      }
+
+      // 4) Build summary per assignment row
+      return assignmentsRows.map((assignment) {
+        final outletId = (assignment['outlet_id'] as String?)?.trim() ?? '';
+        final outlet = outletMap[outletId];
+        final outletProfit = profitMap[outletId] ?? 0.0;
+
+        final investmentAmount =
+            (assignment['investment_amount'] as num?)?.toDouble() ?? 0.0;
+        final marginPercentage =
+            (assignment['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+
+        final investorShare = outletProfit * marginPercentage / 100.0;
+        final status = (assignment['status'] as String?) ?? 'unknown';
+
+        return <String, dynamic>{
+          'outlet_id': outletId,
+          'outlet_name': outlet?['name'] ?? 'Unknown',
+          'investment_amount': investmentAmount,
+          'margin_percentage': marginPercentage,
+          'outlet_profit': outletProfit,
+          'investor_share': investorShare,
+          'status': status,
+        };
+      }).toList();
+    } catch (e) {
+      print('❌ Error fetching investor outlets summary: $e');
+      return [];
+    }
+  }
+
+  // Fetch investor assignments with outlet details
+  Future<List<Map<String, dynamic>>> getInvestorAssignments({
+    required String investorId,
+  }) async {
+    if (!_isInitialized) {
+      print('⚠️ getInvestorAssignments: Supabase not initialized');
+      return [];
+    }
+
+    try {
+      final effectiveInvestorId = investorId.trim();
+      print('👤 getInvestorAssignments - fetching for investorId=$effectiveInvestorId');
+
+      // Query investor_assignments with outlet details
+      final response = await _client
+          .from('investor_assignments')
+          .select('id, outlet_id, investment_amount, margin_percentage, status, created_at')
+          .eq('investor_id', effectiveInvestorId)
+          .order('created_at', ascending: false);
+
+      final assignmentRows = (response as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+
+      print('✅ Fetched ${assignmentRows.length} assignments');
+
+      if (assignmentRows.isEmpty) {
+        return [];
+      }
+
+      // Get outlet IDs and fetch outlet details
+      final outletIds = assignmentRows
+          .map((a) => (a['outlet_id'] as String?)?.trim())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (outletIds.isEmpty) return assignmentRows;
+
+      final outletResponse = await _client
+          .from('outlets')
+          .select('id, name, type, address')
+          .inFilter('id', outletIds);
+
+      final outletRows = (outletResponse as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+
+      final outletMap = <String, Map<String, dynamic>>{
+        for (final o in outletRows)
+          (o['id'] as String): o,
+      };
+
+      // Merge outlet info with assignments
+      return assignmentRows.map((assignment) {
+        final outletId = (assignment['outlet_id'] as String?)?.trim() ?? '';
+        final outlet = outletMap[outletId];
+
+        return <String, dynamic>{
+          ...assignment,
+          'outlet_name': outlet?['name'] ?? 'Unknown Outlet',
+          'outlet_type': outlet?['type'] ?? 'unknown',
+          'outlet_address': outlet?['address'] ?? '',
+        };
+      }).toList();
+    } catch (e) {
+      print('❌ Error fetching investor assignments: $e');
+      return [];
     }
   }
 
