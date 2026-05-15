@@ -5,7 +5,6 @@ import '../providers/auth_provider.dart';
 import '../services/supabase_service.dart';
 import '../theme/thema.dart';
 import '../widgets/header.dart';
-import '../models/outlet.dart';
 
 class InvestorScreen extends StatefulWidget {
   const InvestorScreen({super.key});
@@ -241,21 +240,166 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
                   );
                 }
 
-                final shown = rows.take(5).toList();
-                final overflow = rows.length > shown.length;
+                // Calculate summary
+                double totalInvestment = 0;
+                double avgMargin = 0;
+                for (final r in rows) {
+                  final amount = (r['investment_amount'] as num?)?.toDouble() ?? 0.0;
+                  final margin = (r['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+                  totalInvestment += amount;
+                  avgMargin += margin;
+                }
+                avgMargin = rows.isNotEmpty ? avgMargin / rows.length : 0;
 
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.altSurface),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ...shown.map((r) {
+                final formattedTotal = totalInvestment.toStringAsFixed(0)
+                    .replaceAllMapped(
+                      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+                      (match) => '${match.group(1)}.',
+                    );
+
+                return Column(
+                  children: [
+                    // Summary Cards
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Card(
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.orange.shade50,
+                                    Colors.orange.shade100,
+                                  ],
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Total Investasi',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.orange[700],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Rp $formattedTotal',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Card(
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.green.shade50,
+                                    Colors.green.shade100,
+                                  ],
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Rata-rata Profit',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.green[700],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '${avgMargin.toStringAsFixed(1)}%',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Card(
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.blue.shade50,
+                                    Colors.blue.shade100,
+                                  ],
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Jumlah Outlet',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.blue[700],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '${rows.length}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Outlet List
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: rows.length,
+                      itemBuilder: (context, index) {
+                        final r = rows[index];
                         final outletName = (r['outlet_name'] as String?) ?? '-';
                         final outletType = (r['outlet_type'] as String?) ?? 'unknown';
                         final investmentAmount =
@@ -264,41 +408,169 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
                             (r['margin_percentage'] as num?)?.toDouble() ?? 0.0;
                         final status = (r['status'] as String?) ?? 'unknown';
 
-                        print('🏢 Rendering outlet: $outletName | type=$outletType | data=$r');
+                        // Format currency
+                        final formattedAmount = investmentAmount.toStringAsFixed(0)
+                            .replaceAllMapped(
+                              RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+                              (match) => '${match.group(1)}.',
+                            );
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '• $outletName',
-                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                          child: Card(
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.blue.shade50,
+                                    Colors.blue.shade100,
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '  Type: $outletType | Status: $status',
-                                style: Theme.of(context).textTheme.bodySmall,
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Header: Outlet Name + Status Badge
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              outletName,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                                color: Color(0xFF1F4E5F),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              outletType
+                                                  .replaceAll('_', ' ')
+                                                  .toUpperCase(),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.blue[600],
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: status == 'active'
+                                              ? Colors.green[100]
+                                              : Colors.orange[100],
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(
+                                            color: status == 'active'
+                                                ? Colors.green[400]!
+                                                : Colors.orange[400]!,
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          status.toUpperCase(),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: status == 'active'
+                                                ? Colors.green[800]
+                                                : Colors.orange[800],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    height: 1,
+                                    color: Colors.blue[200],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // Investment Details
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Modal Investasi',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.blue[600],
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              'Rp $formattedAmount',
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF1F4E5F),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              'Bagian Profit',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.green[600],
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              '${marginPercentage.toStringAsFixed(1)}%',
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.green,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '  Investment: Rp${investmentAmount.toStringAsFixed(0)} | Margin: ${marginPercentage.toStringAsFixed(1)}%',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
+                            ),
                           ),
                         );
-                      }).toList(),
-                      if (overflow)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            '+ ${rows.length - shown.length} more outlets',
-                            style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.blueAccent),
-                          ),
-                        ),
-                    ],
-                  ),
+                      },
+                    ),
+                  ],
                 );
               },
             ),
@@ -324,26 +596,32 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
   final _supabaseService = SupabaseService();
   String _period = 'daily';
 
-  Future<String?> _resolveInvestorOutletId() async {
+  Future<List<Map<String, dynamic>>> _resolveInvestorOutlets() async {
     final authProvider = context.read<AuthProvider>();
     final user = authProvider.currentUser;
-    if (user == null) return null;
+    if (user == null) return [];
 
-    final outlets = await _supabaseService.getActiveInvestorOutlets(investorId: user.id);
-    // fallback jika investor_assignments kosong
-    if (outlets.isEmpty) {
-      return user.outletId.isNotEmpty ? user.outletId : null;
+    try {
+      return await _supabaseService.getInvestorAssignments(investorId: user.id);
+    } catch (e) {
+      print('❌ Error fetching investor assignments: $e');
+      return [];
     }
-
-    // Ambil outlet pertama dulu
-    return outlets.first.id;
   }
 
-  Future<Map<String, dynamic>> _fetchRevenue(String outletId) async {
+  Future<Map<String, dynamic>> _fetchRevenueForOutlet(String outletId) async {
     return _supabaseService.getRevenueData(
       outletId: outletId,
       selectedDate: DateTime.now(),
     );
+  }
+
+  String _formatCurrency(double amount) {
+    return amount.toStringAsFixed(0)
+        .replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+          (match) => '${match.group(1)}.',
+        );
   }
 
   @override
@@ -351,98 +629,465 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Revenue Investor',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            const Text('Pilih periode:'),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _PillButton(
-                  active: _period == 'daily',
-                  label: 'Harian (Daily)',
-                  onTap: () => setState(() => _period = 'daily'),
-                ),
-                _PillButton(
-                  active: _period == 'weekly',
-                  label: 'Mingguan (Weekly)',
-                  onTap: () => setState(() => _period = 'weekly'),
-                ),
-                _PillButton(
-                  active: _period == 'monthly',
-                  label: 'Bulanan (Monthly)',
-                  onTap: () => setState(() => _period = 'monthly'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            FutureBuilder<String?>(
-              future: _resolveInvestorOutletId(),
-              builder: (context, outletSnap) {
-                if (outletSnap.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(
-                    height: 140,
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                final outletId = outletSnap.data;
-                if (outletId == null || outletId.isEmpty) {
-                  return const _InfoBox(
-                    title: 'Outlet investor',
-                    value: 'Belum ada data outlet active untuk investor.',
-                  );
-                }
-
-                return FutureBuilder<Map<String, dynamic>>(
-                  future: _fetchRevenue(outletId),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const SizedBox(
-                        height: 140,
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    if (snapshot.hasError) {
-                      return _InfoBox(
-                        title: 'Error',
-                        value: 'Gagal memuat revenue: ${snapshot.error}',
-                      );
-                    }
-
-                    final data = snapshot.data ?? {};
-                    final periodData =
-                        (data[_period] as Map<String, dynamic>?) ?? {};
-
-                    final amount =
-                        (periodData['amount'] as num?)?.toDouble() ?? 0.0;
-                    final count =
-                        (periodData['count'] as num?)?.toInt() ?? 0;
-                    final cash = (periodData['cash'] as num?)?.toDouble() ?? 0.0;
-                    final qris = (periodData['qris'] as num?)?.toDouble() ?? 0.0;
-
-                    return _RevenueCard(
-                      periodLabel: _period == 'daily'
-                          ? 'Harian'
-                          : _period == 'weekly'
-                              ? 'Mingguan'
-                              : 'Bulanan',
-                      amount: amount,
-                      count: count,
-                      cash: cash,
-                      qris: qris,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Revenue Investor',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              const Text('Pilih periode:'),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _PillButton(
+                    active: _period == 'daily',
+                    label: 'Harian (Daily)',
+                    onTap: () => setState(() => _period = 'daily'),
+                  ),
+                  _PillButton(
+                    active: _period == 'weekly',
+                    label: 'Mingguan (Weekly)',
+                    onTap: () => setState(() => _period = 'weekly'),
+                  ),
+                  _PillButton(
+                    active: _period == 'monthly',
+                    label: 'Bulanan (Monthly)',
+                    onTap: () => setState(() => _period = 'monthly'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _resolveInvestorOutlets(),
+                builder: (context, outletsSnap) {
+                  if (outletsSnap.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      height: 140,
+                      child: Center(child: CircularProgressIndicator()),
                     );
-                  },
-                );
-              },
-            ),
-          ],
+                  }
+                  if (outletsSnap.hasError) {
+                    return _InfoBox(
+                      title: 'Error',
+                      value: 'Gagal memuat outlets investor: ${outletsSnap.error}',
+                    );
+                  }
+
+                  final outlets = outletsSnap.data ?? [];
+                  if (outlets.isEmpty) {
+                    return const _InfoBox(
+                      title: 'Outlet investor',
+                      value: 'Belum ada outlet yang diinvestasikan.',
+                    );
+                  }
+
+                  // Calculate total revenue across outlets
+                  double totalRevenue = 0;
+                  double totalInvestorShare = 0;
+                  int totalTransactions = 0;
+
+                  return FutureBuilder<List<Map<String, dynamic>>>(
+                    future: Future.wait(
+                      outlets.map((outlet) async {
+                        final revenue = await _fetchRevenueForOutlet(
+                          outlet['outlet_id'] as String? ?? '',
+                        );
+                        return {
+                          ...outlet,
+                          'revenue': revenue,
+                        };
+                      }),
+                    ),
+                    builder: (context, revenueSnap) {
+                      if (revenueSnap.connectionState == ConnectionState.waiting) {
+                        return const SizedBox(
+                          height: 140,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (revenueSnap.hasError) {
+                        return _InfoBox(
+                          title: 'Error',
+                          value: 'Gagal memuat revenue: ${revenueSnap.error}',
+                        );
+                      }
+
+                      final outletData = revenueSnap.data ?? [];
+
+                      // Calculate summary
+                      totalRevenue = 0;
+                      totalInvestorShare = 0;
+                      totalTransactions = 0;
+
+                      for (final item in outletData) {
+                        final revenue =
+                            (item['revenue'] as Map<String, dynamic>?) ?? {};
+                        final periodData =
+                            (revenue[_period] as Map<String, dynamic>?) ?? {};
+                        final amount =
+                            (periodData['amount'] as num?)?.toDouble() ?? 0.0;
+                        final count =
+                            (periodData['count'] as num?)?.toInt() ?? 0;
+                        final margin =
+                            (item['margin_percentage'] as num?)?.toDouble() ??
+                                0.0;
+
+                        totalRevenue += amount;
+                        totalInvestorShare +=
+                            (amount * margin / 100).toDouble();
+                        totalTransactions += count;
+                      }
+
+                      return Column(
+                        children: [
+                          // Summary Cards
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Card(
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.purple.shade50,
+                                          Colors.purple.shade100,
+                                        ],
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Total Revenue',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.purple[700],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Rp ${_formatCurrency(totalRevenue)}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.purple[800],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Card(
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.teal.shade50,
+                                          Colors.teal.shade100,
+                                        ],
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Bagian Anda',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.teal[700],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Rp ${_formatCurrency(totalInvestorShare)}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.teal[800],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Card(
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.blue.shade50,
+                                          Colors.blue.shade100,
+                                        ],
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Transaksi',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.blue[700],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          '$totalTransactions',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blue[800],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          // Per-Outlet Revenue Cards
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: outletData.length,
+                            itemBuilder: (context, index) {
+                              final item = outletData[index];
+                              final outletName =
+                                  (item['outlet_name'] as String?) ?? '-';
+                              final revenue =
+                                  (item['revenue'] as Map<String, dynamic>?) ??
+                                      {};
+                              final periodData =
+                                  (revenue[_period] as Map<String, dynamic>?) ??
+                                      {};
+                              final amount =
+                                  (periodData['amount'] as num?)?.toDouble() ??
+                                      0.0;
+                              final count =
+                                  (periodData['count'] as num?)?.toInt() ?? 0;
+                              final cash =
+                                  (periodData['cash'] as num?)?.toDouble() ?? 0.0;
+                              final qris =
+                                  (periodData['qris'] as num?)?.toDouble() ?? 0.0;
+                              final margin =
+                                  (item['margin_percentage'] as num?)
+                                      ?.toDouble() ??
+                                      0.0;
+                              final investorShare =
+                                  (amount * margin / 100).toDouble();
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Card(
+                                  elevation: 2,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(10),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Colors.cyan.shade50,
+                                          Colors.cyan.shade100,
+                                        ],
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.all(14),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Header: Outlet Name
+                                        Text(
+                                          outletName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                            color: Color(0xFF1F4E5F),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Container(
+                                          height: 1,
+                                          color: Colors.cyan[200],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        // Revenue Row 1
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Total Revenue',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.cyan[600],
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Rp ${_formatCurrency(amount)}',
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Color(0xFF1F4E5F),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    'Bagian Anda',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.green[600],
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Rp ${_formatCurrency(investorShare)}',
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.green[700],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        // Revenue Row 2
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Transaksi',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.cyan[600],
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    '$count',
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Color(0xFF1F4E5F),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    'Metode Pembayaran',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: Colors.cyan[600],
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Cash: Rp ${_formatCurrency(cash)} | QRIS: Rp ${_formatCurrency(qris)}',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: Colors.cyan[700],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -461,12 +1106,25 @@ class _InvestorReportOutletPlaceholderState
     extends State<_InvestorReportOutletPlaceholder> {
   final _supabaseService = SupabaseService();
 
-  late Future<List<Map<String, dynamic>>> _futureOutlets;
+  Future<List<Map<String, dynamic>>> _resolveInvestorOutlets() async {
+    final authProvider = context.read<AuthProvider>();
+    final user = authProvider.currentUser;
+    if (user == null) return [];
 
-  @override
-  void initState() {
-    super.initState();
-    _futureOutlets = _supabaseService.getOutlets();
+    try {
+      return await _supabaseService.getInvestorAssignments(investorId: user.id);
+    } catch (e) {
+      print('❌ Error fetching investor assignments: $e');
+      return [];
+    }
+  }
+
+  String _formatCurrency(double amount) {
+    return amount.toStringAsFixed(0)
+        .replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+          (match) => '${match.group(1)}.',
+        );
   }
 
   @override
@@ -474,66 +1132,378 @@ class _InvestorReportOutletPlaceholderState
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Report Outlet',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Ringkasan performa per outlet (placeholder: daftar outlet).',
-            ),
-            const SizedBox(height: 24),
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: _futureOutlets,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Report Outlet',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Ringkasan outlet yang diinvestasikan.',
+              ),
+              const SizedBox(height: 24),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _resolveInvestorOutlets(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
                       height: 180,
-                      child: Center(child: CircularProgressIndicator()));
-                }
-                if (snapshot.hasError) {
-                  return _InfoBox(
-                    title: 'Error',
-                    value: 'Gagal memuat outlets: ${snapshot.error}',
-                  );
-                }
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return _InfoBox(
+                      title: 'Error',
+                      value: 'Gagal memuat outlets investor: ${snapshot.error}',
+                    );
+                  }
 
-                final outlets = snapshot.data ?? [];
-                if (outlets.isEmpty) {
-                  return const Text('Tidak ada data outlet.');
-                }
+                  final outlets = snapshot.data ?? [];
+                  if (outlets.isEmpty) {
+                    return const _InfoBox(
+                      title: 'Outlet investor',
+                      value: 'Belum ada outlet yang diinvestasikan.',
+                    );
+                  }
 
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.altSurface),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // Calculate summary
+                  int totalOutlets = outlets.length;
+                  int activeOutlets = outlets
+                      .where((o) => (o['status'] as String?) == 'active')
+                      .length;
+                  double totalInvestment = 0;
+                  for (final o in outlets) {
+                    final amount =
+                        (o['investment_amount'] as num?)?.toDouble() ?? 0.0;
+                    totalInvestment += amount;
+                  }
+
+                  return Column(
                     children: [
-                      ...outlets.map((o) {
-                        final id = o['id']?.toString() ?? '';
-                        final name = o['name']?.toString() ?? '';
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Text(
-                            '• $name ($id)',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                      // Summary Cards
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Card(
+                              elevation: 1,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.blue.shade50,
+                                      Colors.blue.shade100,
+                                    ],
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Total Outlet',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.blue[700],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '$totalOutlets',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue[800],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                        );
-                      }).toList(),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Card(
+                              elevation: 1,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.green.shade50,
+                                      Colors.green.shade100,
+                                    ],
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Outlet Aktif',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.green[700],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '$activeOutlets',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green[800],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Card(
+                              elevation: 1,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.orange.shade50,
+                                      Colors.orange.shade100,
+                                    ],
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Total Investasi',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.orange[700],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Rp ${_formatCurrency(totalInvestment)}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.orange[800],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      // Outlet List
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: outlets.length,
+                        itemBuilder: (context, index) {
+                          final outlet = outlets[index];
+                          final outletName =
+                              (outlet['outlet_name'] as String?) ?? '-';
+                          final outletType =
+                              (outlet['outlet_type'] as String?) ?? 'unknown';
+                          final investmentAmount =
+                              (outlet['investment_amount'] as num?)?.toDouble() ??
+                                  0.0;
+                          final marginPercentage =
+                              (outlet['margin_percentage'] as num?)
+                                  ?.toDouble() ??
+                                  0.0;
+                          final status =
+                              (outlet['status'] as String?) ?? 'unknown';
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.indigo.shade50,
+                                      Colors.indigo.shade100,
+                                    ],
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    // Header: Outlet Name + Status Badge
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                outletName,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                  color: Color(0xFF1F4E5F),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                outletType
+                                                    .replaceAll('_', ' ')
+                                                    .toUpperCase(),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.indigo[600],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: status == 'active'
+                                                ? Colors.green[100]
+                                                : Colors.orange[100],
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: status == 'active'
+                                                  ? Colors.green[400]!
+                                                  : Colors.orange[400]!,
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            status.toUpperCase(),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: status == 'active'
+                                                  ? Colors.green[800]
+                                                  : Colors.orange[800],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      height: 1,
+                                      color: Colors.indigo[200],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // Investment Details
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Modal Investasi',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.indigo[600],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                'Rp ${_formatCurrency(investmentAmount)}',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Color(0xFF1F4E5F),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                'Margin Profit',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.green[600],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                '${marginPercentage.toStringAsFixed(1)}%',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.green,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
-                  ),
-                );
-              },
-            ),
-          ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -714,68 +1684,6 @@ class _PillButton extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _RevenueCard extends StatelessWidget {
-  final String periodLabel;
-  final double amount;
-  final int count;
-  final double cash;
-  final double qris;
-
-  const _RevenueCard({
-    required this.periodLabel,
-    required this.amount,
-    required this.count,
-    required this.cash,
-    required this.qris,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.altSurface),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$periodLabel Revenue',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Total: Rp${amount.toStringAsFixed(0)}',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Jumlah transaksi: $count',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Cash: Rp${cash.toStringAsFixed(0)}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'QRIS: Rp${qris.toStringAsFixed(0)}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ],
       ),
     );
   }
