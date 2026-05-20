@@ -3,9 +3,12 @@ import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../theme/thema.dart';
 import '../utils/number_formatter.dart';
+import 'checkout_modal.dart';
 
 class CartSummary extends StatelessWidget {
-  const CartSummary({super.key});
+  final TabController? tabController;
+  
+  const CartSummary({super.key, this.tabController});
 
   @override
   Widget build(BuildContext context) {
@@ -162,10 +165,11 @@ class CartSummary extends StatelessWidget {
                       onPressed: cartProvider.items.isEmpty
                           ? null
                           : () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Lanjut ke tab Checkout untuk menyelesaikan transaksi'),
-                                  duration: Duration(seconds: 2),
+                              // 🔧 Show Checkout modal dialog
+                              showDialog(
+                                context: context,
+                                builder: (context) => CheckoutModal(
+                                  tabController: tabController,
                                 ),
                               );
                             },
@@ -224,7 +228,7 @@ class CartSummary extends StatelessWidget {
   }
 }
 
-class CartItemWidget extends StatelessWidget {
+class CartItemWidget extends StatefulWidget {
   final dynamic item;
   final VoidCallback onRemove;
   final Function(int) onQuantityChanged;
@@ -237,100 +241,205 @@ class CartItemWidget extends StatelessWidget {
   });
 
   @override
+  State<CartItemWidget> createState() => _CartItemWidgetState();
+}
+
+class _CartItemWidgetState extends State<CartItemWidget> {
+  late TextEditingController _quantityController;
+  bool _isEditing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantityController =
+        TextEditingController(text: widget.item.quantity.toString());
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  void _toggleEditMode() {
+    if (_isEditing) {
+      // Save changes
+      final newQuantity = int.tryParse(_quantityController.text) ?? 1;
+      if (newQuantity > 0) {
+        widget.onQuantityChanged(newQuantity);
+        setState(() => _isEditing = false);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Jumlah harus lebih dari 0')),
+        );
+      }
+    } else {
+      // Enter edit mode
+      setState(() => _isEditing = true);
+    }
+  }
+
+  void _cancelEdit() {
+    _quantityController.text = widget.item.quantity.toString();
+    setState(() => _isEditing = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.accentLight),
+          border: Border.all(
+            color: _isEditing ? AppColors.primary : AppColors.accentLight,
+            width: _isEditing ? 2 : 1,
+          ),
           borderRadius: BorderRadius.circular(6),
           color: AppColors.surface,
         ),
         padding: const EdgeInsets.all(12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Product info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.product.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+            // Main row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Product info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.item.product.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        NumberFormatter.formatRupiah(widget.item.product.price),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${NumberFormatter.formatRupiah(item.product.price)} x${item.quantity}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                // Quantity controls or input
+                if (_isEditing)
+                  SizedBox(
+                    width: 70,
+                    child: TextField(
+                      controller: _quantityController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: widget.item.quantity > 1
+                            ? () =>
+                                widget.onQuantityChanged(widget.item.quantity - 1)
+                            : null,
+                        child: Icon(
+                          Icons.remove_circle_outline,
+                          size: 24,
+                          color: widget.item.quantity > 1
+                              ? AppColors.primary
+                              : AppColors.altSurface,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${widget.item.quantity}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () =>
+                            widget.onQuantityChanged(widget.item.quantity + 1),
+                        child: Icon(
+                          Icons.add_circle_outline,
+                          size: 24,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(width: 4),
+                // Subtotal and actions
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      NumberFormatter.formatRupiah(widget.item.subtotal),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: _toggleEditMode,
+                      child: Icon(
+                        _isEditing ? Icons.check_circle : Icons.edit_outlined,
+                        size: 22,
+                        color: _isEditing ? Colors.green : AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            // Action buttons when editing
+            if (_isEditing) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: _cancelEdit,
+                    icon: const Icon(Icons.close, size: 16),
+                    label: const Text('Batal'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: widget.onRemove,
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Hapus'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red,
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 4),
-            // Quantity buttons
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: item.quantity > 1
-                      ? () => onQuantityChanged(item.quantity - 1)
-                      : null,
-                  child: Icon(
-                    Icons.remove_circle_outline,
-                    size: 24,
-                    color: item.quantity > 1
-                        ? AppColors.primary
-                        : AppColors.altSurface,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '${item.quantity}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () => onQuantityChanged(item.quantity + 1),
-                  child: Icon(
-                    Icons.add_circle_outline,
-                    size: 24,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 4),
-            // Subtotal and delete
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  NumberFormatter.formatRupiah(item.subtotal),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                GestureDetector(
-                  onTap: onRemove,
-                  child: Icon(
-                    Icons.delete_outline,
-                    size: 22,
-                    color: Colors.red,
-                  ),
-                ),
-              ],
-            ),
+            ],
           ],
         ),
       ),

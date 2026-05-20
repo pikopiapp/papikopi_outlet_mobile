@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 
 import '../models/product.dart';
 import '../providers/auth_provider.dart';
@@ -8,10 +9,11 @@ import '../providers/product_provider.dart';
 import '../utils/product_image_helper.dart';
 import '../utils/number_formatter.dart';
 import '../widgets/cart_summary.dart';
-import '../widgets/checkout_modal.dart';
 import '../widgets/header.dart';
 import '../theme/thema.dart';
 import 'profile_screen.dart';
+import 'transaction_history_screen.dart';
+import 'qr_camera_screen.dart';
 
 class POSScreen extends StatefulWidget {
   const POSScreen({super.key});
@@ -30,10 +32,8 @@ class _POSScreenState extends State<POSScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      setState(() {});
-    });
+    _tabController = TabController(length: 3, vsync: this); // 🔧 Only 3 tabs
+    _tabController.addListener(_onTabChange);
     
     // Initialize refresh animation controller
     _refreshAnimationController = AnimationController(
@@ -56,11 +56,164 @@ class _POSScreenState extends State<POSScreen>
     });
   }
 
+  void _onTabChange() {
+    // Refresh products when switching to POS tab (tab 0)
+    if (_tabController.index == 0) {
+      _refreshProductsQuietly();
+    }
+    // Refresh transaction history when switching to Riwayat tab (tab 2)
+    else if (_tabController.index == 2) {
+      print('📋 Switching to transaction history tab, refreshing data...');
+      setState(() {});
+    }
+    
+    setState(() {});
+  }
+
+  Future<void> _refreshProductsQuietly() async {
+    try {
+      final product = context.read<ProductProvider>();
+      final auth = context.read<AuthProvider>();
+
+      if (auth.currentUser != null) {
+        await product.loadProductsWithStock(auth.currentUser!.outletId);
+        print('✅ Products refreshed quietly');
+      }
+    } catch (e) {
+      print('⚠️ Error refreshing products: $e');
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
     _refreshAnimationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleQRScan() async {
+    final scannedCode = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (context) => const QRCameraScreen()),
+    );
+
+    if (scannedCode != null && scannedCode.isNotEmpty) {
+      await _addProductByCode(scannedCode);
+    }
+  }
+
+  Future<void> _addProductByCode(String code) async {
+    final productProvider = context.read<ProductProvider>();
+    final cartProvider = context.read<CartProvider>();
+
+    try {
+      // Try to parse JSON from QR code first
+      String? searchId;
+      String? productName;
+      
+      try {
+        final jsonData = jsonDecode(code) as Map<String, dynamic>;
+        
+        // Try to get product_id from JSON (warehouse QR format)
+        if (jsonData.containsKey('product_id')) {
+          searchId = jsonData['product_id'] as String;
+        }
+        // Fallback: Mobile app format with "id" field
+        else if (jsonData.containsKey('id')) {
+          searchId = jsonData['id'] as String;
+        }
+        
+        // Get product name for matching
+        if (jsonData.containsKey('product')) {
+          productName = jsonData['product'] as String;
+        }
+      } catch (e) {
+        // Not JSON, treat as plain code - assume it's a product ID
+        searchId = code;
+      }
+
+      // Find product
+      Product? product;
+      
+      // Try exact ID match first
+      if (searchId != null && searchId.isNotEmpty) {
+        for (final p in productProvider.products) {
+          if (p.id == searchId) {
+            product = p;
+            break;
+          }
+        }
+      }
+      
+      // If not found by ID, try product name match
+      if (product == null && productName != null && productName.isNotEmpty) {
+        for (final p in productProvider.products) {
+          if (p.name.toLowerCase() == productName.toLowerCase()) {
+            product = p;
+            break;
+          }
+        }
+      }
+      
+      // Last resort: partial matching
+      if (product == null && searchId != null) {
+        for (final p in productProvider.products) {
+          if (p.id.toLowerCase().contains(searchId.toLowerCase()) ||
+              p.name.toLowerCase().contains(searchId.toLowerCase())) {
+            product = p;
+            break;
+          }
+        }
+      }
+
+      if (product == null) {
+        if (mounted) {
+          String errorMsg = '❌ Produk tidak ditemukan';
+          if (searchId != null) errorMsg += ': $searchId';
+          if (productName != null) errorMsg += ' ($productName)';
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMsg),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Check if out of stock
+      if (product.stock <= 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ ${product.name} habis'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Add to cart
+      cartProvider.addItem(product);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ ${product.name} ditambahkan ke keranjang'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _refreshData() async {
@@ -148,6 +301,7 @@ class _POSScreenState extends State<POSScreen>
               builder: (context, cart, _) {
                 return TabBar(
                   controller: _tabController,
+                  isScrollable: true,
                   tabs: [
                     const Tab(
                       icon: Icon(Icons.shopping_cart_outlined),
@@ -187,15 +341,17 @@ class _POSScreenState extends State<POSScreen>
                       ),
                       text: 'Keranjang',
                     ),
+                    // 🔧 Checkout tab button hidden - only shown via navigation
                     const Tab(
-                      icon: Icon(Icons.payment),
-                      text: 'Checkout',
+                      icon: Icon(Icons.receipt_long),
+                      text: 'Riwayat',
                     ),
                   ],
                   labelColor: AppColors.primary,
                   unselectedLabelColor: AppColors.textSecondary,
                   indicatorColor: AppColors.primary,
                   indicatorWeight: 3,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 12),
                 );
               },
             ),
@@ -207,12 +363,18 @@ child: TabBarView(
               children: [
                 _buildPOSTab(),
                 _buildCartTab(),
-                CheckoutModal(tabController: _tabController),
+                const TransactionHistoryScreen(),
               ],
             ),
           ),
         ],
       ),
+      // Floating Action Button - Only visible on Pemesanan tab
+      floatingActionButton: _tabController.index == 0 ? FloatingActionButton(
+        onPressed: _handleQRScan,
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
+      ) : null,
     );
   }
 
@@ -265,7 +427,7 @@ child: TabBarView(
 
   // ==================== CART TAB ====================
   Widget _buildCartTab() {
-    return const CartSummary();
+    return CartSummary(tabController: _tabController);
   }
 
   Widget _buildCartSummaryPreview() {
@@ -443,15 +605,29 @@ child: TabBarView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       color: AppColors.background,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Pilih Produk',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Pilih Produk',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              // QR Scanner Button
+              Tooltip(
+                message: 'Scan QR Code',
+                child: IconButton(
+                  icon: const Icon(Icons.qr_code_scanner),
+                  onPressed: _handleQRScan,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           _buildCategoryChips(isTablet),

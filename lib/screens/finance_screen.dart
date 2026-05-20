@@ -475,6 +475,7 @@ class _FinanceScreenState extends State<FinanceScreen>
             DailyBonusCard(
               omset: omset,
               isLoading: _isLoadingRevenue,
+              selectedDate: _selectedDate,
             ),
             const SizedBox(height: 16),
 

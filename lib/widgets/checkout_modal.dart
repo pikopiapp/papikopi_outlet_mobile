@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
+import '../providers/product_provider.dart';
 import '../services/supabase_service.dart';
 import '../theme/thema.dart';
 import '../utils/number_formatter.dart';
@@ -148,22 +149,34 @@ class _CheckoutModalState extends State<CheckoutModal> {
       }
 
       if (mounted) {
+        // 🔧 Refresh product stock after sale
+        print('🔄 Refreshing product stock...');
+        try {
+          final productProvider = context.read<ProductProvider>();
+          await productProvider.loadProductsWithStock(
+            authProvider.currentUser!.outletId,
+          );
+          print('✅ Product stock refreshed');
+        } catch (e) {
+          print('⚠️ Warning: Could not refresh product stock: $e');
+        }
+
         // Clear cart
         cartProvider.clear();
 
-// Show success
+        // Show success
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Transaksi berhasil')),
+          const SnackBar(content: Text('✅ Transaksi berhasil')),
         );
 
-// Navigate back to first tab
-        if (tabController != null) {
-          tabController!.animateTo(0); // Go back to first tab (Pemesanan)
-        } else {
-          // Try Navigator if TabController not available
-          if (Navigator.canPop(context)) {
-            Navigator.pop(context);
-          }
+        // Add small delay to ensure data is persisted before refresh
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Close dialog and navigate to ordering tab
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+          // Go to ordering tab (index 0) to start new order
+          tabController?.animateTo(0);
         }
       }
     } catch (e, stackTrace) {
@@ -173,164 +186,171 @@ class _CheckoutModalState extends State<CheckoutModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}')),
         );
+        setState(() => _isProcessing = false);
       }
     } finally {
       if (mounted) {
-        setState(() => _isProcessing = false);
+        // Make sure to reset processing state if not already done in catch
+        if (_isProcessing) {
+          setState(() => _isProcessing = false);
+        }
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<CartProvider>(
-      builder: (context, cartProvider, _) {
-        return SingleChildScrollView(
-          child: Container(
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 24,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header
-                const Text(
-                  'Konfirmasi Checkout',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Consumer<CartProvider>(
+        builder: (context, cartProvider, _) {
+          return SingleChildScrollView(
+            child: Container(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  const Text(
+                    'Konfirmasi Checkout',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                // Order Summary
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.altSurface),
+                  const SizedBox(height: 24),
+                  // Order Summary
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.altSurface),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Ringkasan Pesanan',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Item:'),
+                            Text('${cartProvider.totalQuantity}'),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Total Harga:'),
+                            Text(
+                              NumberFormatter.formatRupiah(cartProvider.totalAmount),
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        // HPP and Profit are hidden for outlet staff but still calculated and stored
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 24),
+                  // Payment Method
+                  const Text(
+                    'Metode Pembayaran',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
-                      const Text(
-'Ringkasan Pesanan',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: const Text('Cash'),
+                          value: 'CASH',
+                          groupValue: _selectedPaymentMethod,
+                          onChanged: _isProcessing
+                              ? null
+                              : (value) {
+                                  setState(() => _selectedPaymentMethod = value ?? 'CASH');
+                                },
+                          contentPadding: EdgeInsets.zero,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Item:'),
-                          Text('${cartProvider.totalQuantity}'),
-                        ],
+                      Expanded(
+                        child: RadioListTile<String>(
+                          title: const Text('QRIS'),
+                          value: 'QRIS',
+                          groupValue: _selectedPaymentMethod,
+                          onChanged: _isProcessing
+                              ? null
+                              : (value) {
+                                  setState(() => _selectedPaymentMethod = value ?? 'CASH');
+                                },
+                          contentPadding: EdgeInsets.zero,
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Total Harga:'),
-                          Text(
-                            NumberFormatter.formatRupiah(cartProvider.totalAmount),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      // HPP and Profit are hidden for outlet staff but still calculated and stored
                     ],
                   ),
-                ),
-                const SizedBox(height: 24),
-                // Payment Method
-                const Text(
-                  'Metode Pembayaran',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: RadioListTile<String>(
-                        title: const Text('Cash'),
-                        value: 'CASH',
-                        groupValue: _selectedPaymentMethod,
-                        onChanged: _isProcessing
-                            ? null
-                            : (value) {
-                                setState(() =>
-_selectedPaymentMethod = value ?? 'CASH');
-                              },
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                    Expanded(
-                      child: RadioListTile<String>(
-                        title: const Text('QRIS'),
-                        value: 'QRIS',
-                        groupValue: _selectedPaymentMethod,
-                        onChanged: _isProcessing
-                            ? null
-: (value) {
-                                setState(() =>
-                                    _selectedPaymentMethod = value ?? 'CASH');
-                              },
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                // Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isProcessing
-                            ? null
-                            : () => tabController?.animateTo(1),
-                        child: const Text('Batal'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isProcessing ? null : _handleCheckout,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
+                  const SizedBox(height: 24),
+                  // Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _isProcessing
+                              ? null
+                              : () {
+                                  Navigator.pop(context);
+                                },
+                          child: const Text('Batal'),
                         ),
-                        child: _isProcessing
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white),
-                                ),
-                              )
-                            : const Text(
-                                'Checkout',
-                                style: TextStyle(color: Colors.white),
-                              ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _isProcessing ? null : _handleCheckout,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                          ),
+                          child: _isProcessing
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white),
+                                  ),
+                                )
+                              : const Text(
+                                  'Checkout',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

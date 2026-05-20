@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/supabase_service.dart';
 import '../services/auth_service.dart';
+import '../providers/product_provider.dart';
 import '../theme/thema.dart';
 import '../widgets/header.dart';
 import 'profile_screen.dart';
@@ -1644,6 +1646,16 @@ Widget _buildReturnTab() {
                             notesController.dispose();
 
                             if (success) {
+                              // 🔧 FIX #7: Refresh product stock and cart after return
+                              print('🔄 Refreshing product stock and cart after return...');
+                              try {
+                                final productProvider = context.read<ProductProvider>();
+                                await productProvider.loadProductsWithStock(_outletId);
+                                print('✅ Product stock refreshed');
+                              } catch (e) {
+                                print('⚠️ Warning: Could not refresh product stock: $e');
+                              }
+                              
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('✅ Pengembalian berhasil dibuat'),

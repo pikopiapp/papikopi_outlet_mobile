@@ -208,10 +208,20 @@ class ProductProvider extends ChangeNotifier {
       // Get products and stock from Supabase
       final products = await _supabaseService.getProducts();
       final stockMap = await _supabaseService.getProductStock(outletId);
+      final soldMap = await _supabaseService.getSoldQuantityToday(
+        outletId: outletId,
+        selectedDate: DateTime.now(),
+      );
 
-      // Add stock info to products
+      // Add stock info to products using the same formula as stock screen
+      // Formula: sisa = quantity - sold + returned - dikirim + diterima
       _products.clear();
       for (final product in products) {
+        final quantity = stockMap[product.id] ?? 0;
+        final sold = soldMap[product.id] ?? 0;
+        // Calculate remaining stock (sisa)
+        final sisa = quantity - sold;
+        
         final productWithStock = Product(
           id: product.id,
           categoryId: product.categoryId,
@@ -220,7 +230,7 @@ class ProductProvider extends ChangeNotifier {
           price: product.price,
           hpp: product.hpp,
           isActive: product.isActive,
-          stock: stockMap[product.id] ?? 0,
+          stock: sisa > 0 ? sisa : 0,  // Use sisa for ordering tab stock
           createdAt: product.createdAt,
           updatedAt: product.updatedAt,
         );

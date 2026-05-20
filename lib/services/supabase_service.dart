@@ -427,7 +427,7 @@ class SupabaseService {
       final response = await _client.from('sales').insert({
         'outlet_id': outletId,
         'barista_id': baristaId,
-        'payment_method': paymentMethod.toLowerCase(),
+        'payment_method': paymentMethod.toUpperCase(),
         'total_amount': totalAmount,
         'hpp_total': totalHpp,
         'bonus_amount': totalBonus,
@@ -465,7 +465,7 @@ class SupabaseService {
 
   Future<List<Sale>> getSales({String? outletId, String? baristaId}) async {
     var query = _client.from('sales').select(
-      'id, outlet_id, barista_id, payment_method, total_amount, hpp_total, bonus_amount, profit, created_at, sale_items(id, sale_id, product_id, quantity, price, hpp, created_at)',
+      'id, outlet_id, barista_id, payment_method, total_amount, hpp_total, bonus_amount, profit, created_at, is_edited, edited_at, sale_items(id, sale_id, product_id, quantity, price, hpp, created_at, products(name))',
     );
 
     if (outletId != null) {
@@ -477,6 +477,13 @@ class SupabaseService {
     }
 
     final response = await query.order('created_at', ascending: false);
+
+    print('📊 getSales response:');
+    print('   Total records: ${(response as List<dynamic>).length}');
+    if ((response as List<dynamic>).isNotEmpty) {
+      final firstRecord = response[0];
+      print('   First record: $firstRecord');
+    }
 
     return (response as List<dynamic>)
         .map((item) => Sale.fromJson(item as Map<String, dynamic>))
@@ -497,6 +504,48 @@ class SupabaseService {
       return null;
     }
   }
+
+  /// Get barista assigned to a specific outlet.
+  /// Web logic uses: /api/staff?role=barista then /api/outlets/${outletId}/baristas
+  /// Mobile maps it to users table where role='barista' and outlet assignment column.
+  ///
+  /// NOTE: sesuai info user, kolom assignment outlet pada barista adalah `outlet_assigment`.
+  Future<List<Map<String, dynamic>>> getBaristasByOutlet({
+    required String outletId,
+  }) async {
+    if (!_isInitialized) return [];
+
+    try {
+      final response = await _client
+          .from('users')
+          .select('id, name, email, role, outlet_assigment')
+          .eq('role', 'barista')
+          .eq('outlet_assigment', outletId);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching baristas by outlet: $e');
+      return [];
+    }
+  }
+
+  /// Get all baristas (used for assignment availability if needed later).
+  Future<List<Map<String, dynamic>>> getAllBaristas() async {
+    if (!_isInitialized) return [];
+
+    try {
+      final response = await _client
+          .from('users')
+          .select('id, name, email, role, outlet_assigment')
+          .eq('role', 'barista');
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching all baristas: $e');
+      return [];
+    }
+  }
+
 
   // Leaderboard
   Future<List<Map<String, dynamic>>> getLeaderboard({
@@ -575,7 +624,7 @@ class SupabaseService {
 
       print('✅ RPC response received: ${(response as List).length} items');
       
-      return (response as List)
+      return response
           .map((item) => item as Map<String, dynamic>)
           .toList();
     } catch (e) {
@@ -775,6 +824,82 @@ class SupabaseService {
     } catch (e) {
       print('❌ Error fetching product stock: $e');
       return {};
+    }
+  }
+
+  // Decrease showcase allocation when product is sold
+  Future<void> decreaseShowcaseAllocation({
+    required String outletId,
+    required String productId,
+    required int quantitySold,
+  }) async {
+    if (!_isInitialized) {
+      print('⚠️ SupabaseService not initialized - cannot update showcase allocation');
+      return;
+    }
+
+    try {
+      // Get current allocation from showcase_products for this outlet + product
+      final response = await _client
+          .from('showcase_allocations')
+          .select('id, quantity')
+          .eq('outlet_id', outletId)
+          .match({
+            'showcase_products': {
+              'product_id': productId
+            }
+          });
+
+      // If no direct match, try a simpler query using showcase_products join
+      if (response.isEmpty) {
+        // First get the showcase_product id for this product
+        final showcaseProduct = await _client
+            .from('showcase_products')
+            .select('id')
+            .eq('product_id', productId)
+            .maybeSingle();
+
+        if (showcaseProduct == null) {
+          print('⚠️ No showcase_product found for product $productId');
+          return;
+        }
+
+        final showcaseProductId = showcaseProduct['id'] as String;
+
+        // Now get the allocation
+        final allocation = await _client
+            .from('showcase_allocations')
+            .select('id, quantity')
+            .eq('outlet_id', outletId)
+            .eq('showcase_product_id', showcaseProductId)
+            .maybeSingle();
+
+        if (allocation != null) {
+          final currentQty = allocation['quantity'] as int? ?? 0;
+          final newQty = (currentQty - quantitySold).clamp(0, currentQty);
+          
+          await _client
+              .from('showcase_allocations')
+              .update({'quantity': newQty})
+              .eq('id', allocation['id']);
+          
+          print('✅ Decreased showcase allocation: product=$productId, old=$currentQty, new=$newQty');
+        }
+      } else if (response.isNotEmpty) {
+        final allocation = response.first;
+        final currentQty = allocation['quantity'] as int? ?? 0;
+        final newQty = (currentQty - quantitySold).clamp(0, currentQty);
+        
+        await _client
+            .from('showcase_allocations')
+            .update({'quantity': newQty})
+            .eq('id', allocation['id']);
+        
+        print('✅ Decreased showcase allocation: product=$productId, old=$currentQty, new=$newQty');
+      }
+    } catch (e) {
+      print('⚠️ Error decreasing showcase allocation: $e');
+      // Don't fail checkout if this fails
     }
   }
 
@@ -1620,6 +1745,7 @@ class SupabaseService {
 
   // Get all outlets
   Future<List<Map<String, dynamic>>> getOutlets() async {
+
     if (!_isInitialized) {
       return [];
     }
@@ -2797,7 +2923,7 @@ class SupabaseService {
       print('📢 Fetching announcements from database...');
       final response = await _client
           .from('announcements')
-          .select()
+          .select('id, title, description, created_at')
           .order('created_at', ascending: false)
           .limit(10);
       
@@ -2841,12 +2967,15 @@ class SupabaseService {
     }
 
     try {
+      print('💬 Fetching private messages for user: $userId');
       final response = await _client
           .from('private_messages')
-          .select('*')
+          .select('id, sender_id, receiver_id, message, created_at')
           .or('sender_id.eq.$userId,receiver_id.eq.$userId')
           .order('created_at', ascending: false)
           .limit(50);
+      
+      print('💬 Messages fetched: ${response.length} items');
       
       // Enrich messages with sender info
       List<Map<String, dynamic>> messages = List<Map<String, dynamic>>.from(response);
@@ -2859,9 +2988,13 @@ class SupabaseService {
               .select('id, name, email')
               .eq('id', senderId)
               .single();
-          message['sender'] = senderData;
+          message['sender_name'] = senderData['name'] ?? 'Unknown';
+          message['sender_email'] = senderData['email'] ?? '';
+          print('   - From ${message['sender_name']}: ${message['message']}');
         } catch (e) {
-          message['sender'] = {'name': 'Unknown', 'id': senderId};
+          message['sender_name'] = 'Unknown';
+          message['sender_email'] = '';
+          print('   - Error fetching sender info: $e');
         }
       }
       

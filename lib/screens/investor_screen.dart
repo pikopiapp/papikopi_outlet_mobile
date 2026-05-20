@@ -96,8 +96,8 @@ class _InvestorScreenState extends State<InvestorScreen> {
         elevation: 8,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
+            icon: Icon(Icons.home),
+            label: 'Home',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.trending_up),
@@ -172,22 +172,20 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Profile Investor',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Nama: ${user?.name ?? "-"}',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Selamat Datang, ${user?.name ?? "Investor"}! 👋',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             const SizedBox(height: 8),
             Text(
-              'Email: ${user?.email ?? "-"}',
-              style: Theme.of(context).textTheme.bodyMedium,
+              'Kelola investasi Anda dan pantau performa outlet',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
+              ),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -259,140 +257,107 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
 
                 return Column(
                   children: [
-                    // Summary Cards
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Card(
-                            elevation: 1,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                    // Summary Table
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.blue[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: [
+                          // Row 1: Total Investasi
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
                             ),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.orange.shade50,
-                                    Colors.orange.shade100,
-                                  ],
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Total Investasi',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Total Investasi',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.orange[700],
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                Text(
+                                  'Rp $formattedTotal',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange,
                                   ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Rp $formattedTotal',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.orange[800],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Card(
-                            elevation: 1,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                          Divider(
+                            height: 1,
+                            color: Colors.blue[200],
+                          ),
+                          // Row 2: Rata-rata Profit
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
                             ),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.green.shade50,
-                                    Colors.green.shade100,
-                                  ],
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Rata-rata Profit',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Rata-rata Profit',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.green[700],
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                Text(
+                                  '${avgMargin.toStringAsFixed(1)}%',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
                                   ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    '${avgMargin.toStringAsFixed(1)}%',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green[800],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Card(
-                            elevation: 1,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                          Divider(
+                            height: 1,
+                            color: Colors.blue[200],
+                          ),
+                          // Row 3: Jumlah Outlet
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
                             ),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.blue.shade50,
-                                    Colors.blue.shade100,
-                                  ],
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Jumlah Outlet',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Jumlah Outlet',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.blue[700],
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                Text(
+                                  '${rows.length}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
                                   ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    '${rows.length}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue[800],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     // Outlet List
                     ListView.builder(
                       shrinkWrap: true,
@@ -574,11 +539,8 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
                 );
               },
             ),
-            const SizedBox(height: 24),
-            const Text(
-              'Fitur profile investor (edit data, preferensi, dsb) akan ditambahkan di sini.',
-            ),
           ],
+        ),
         ),
       ),
     );
@@ -1521,6 +1483,7 @@ class _InvestorNotificationPlaceholder extends StatefulWidget {
 class _InvestorNotificationPlaceholderState
     extends State<_InvestorNotificationPlaceholder> {
   final _supabaseService = SupabaseService();
+  String _selectedTab = 'transactions'; // transactions, announcements, chat
 
   Future<String?> _resolveInvestorOutletId() async {
     final authProvider = context.read<AuthProvider>();
@@ -1542,112 +1505,445 @@ class _InvestorNotificationPlaceholderState
     );
   }
 
+  void _showAnnouncementDetail(Map<String, dynamic> announcement) {
+    final title = announcement['title']?.toString() ?? 'Pengumuman';
+    final content = announcement['description']?.toString() ?? '';
+    final createdAt = announcement['created_at']?.toString() ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 40,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                createdAt,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                height: 1,
+                color: Colors.grey[300],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                content,
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Tutup'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Notifikasi Transaksi',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Notifikasi transaksi terbaru dari database.',
-            ),
-            const SizedBox(height: 24),
-            FutureBuilder<String?>(
-              future: _resolveInvestorOutletId(),
-              builder: (context, outletSnap) {
-                final outletId = outletSnap.data;
-                if (outletSnap.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(
-                    height: 160,
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (outletId == null || outletId.isEmpty) {
-                  return const _InfoBox(
-                    title: 'Outlet investor',
-                    value: 'Belum ada data outlet active untuk investor.',
-                  );
-                }
-
-                return FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _fetchNotifications(outletId),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const SizedBox(
-                          height: 160,
-                          child: Center(child: CircularProgressIndicator()));
-                    }
-                    if (snapshot.hasError) {
-                      return _InfoBox(
-                        title: 'Error',
-                        value: 'Gagal memuat notifikasi: ${snapshot.error}',
-                      );
-                    }
-
-                    final items = snapshot.data ?? [];
-                    if (items.isEmpty) {
-                      return const _InfoBox(
-                        title: 'Kosong',
-                        value: 'Belum ada transaksi terbaru.',
-                      );
-                    }
-
-                    return Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.altSurface),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: items.map((t) {
-                          final id = t['id']?.toString() ?? '';
-                          final total =
-                              (t['total_amount'] as num?)?.toDouble() ?? 0.0;
-                          final payment = t['payment_method']?.toString() ?? '';
-                          final createdAt = t['created_at']?.toString() ?? '';
-
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '• Transaksi #$id',
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '  Total: Rp${total.toStringAsFixed(0)} | ${payment.toUpperCase()}',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '  Waktu: $createdAt',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Notifikasi',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              // Tab buttons - inline row
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _PillButton(
+                      active: _selectedTab == 'transactions',
+                      label: '💳 Transaksi',
+                      onTap: () => setState(() => _selectedTab = 'transactions'),
+                    ),
+                    const SizedBox(width: 8),
+                    _PillButton(
+                      active: _selectedTab == 'announcements',
+                      label: '📢 Pengumuman',
+                      onTap: () => setState(() => _selectedTab = 'announcements'),
+                    ),
+                    const SizedBox(width: 8),
+                    _PillButton(
+                      active: _selectedTab == 'chat',
+                      label: '💬 Chat',
+                      onTap: () => setState(() => _selectedTab = 'chat'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Content based on selected tab
+              if (_selectedTab == 'transactions') ...[
+                _buildTransactionsContent(),
+              ] else if (_selectedTab == 'announcements') ...[
+                _buildAnnouncementsContent(),
+              ] else if (_selectedTab == 'chat') ...[
+                _buildChatContent(),
+              ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTransactionsContent() {
+    return FutureBuilder<String?>(
+      future: _resolveInvestorOutletId(),
+      builder: (context, outletSnap) {
+        final outletId = outletSnap.data;
+        if (outletSnap.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 160,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (outletId == null || outletId.isEmpty) {
+          return const _InfoBox(
+            title: 'Outlet investor',
+            value: 'Belum ada data outlet active untuk investor.',
+          );
+        }
+
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: _fetchNotifications(outletId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                  height: 160,
+                  child: Center(child: CircularProgressIndicator()));
+            }
+            if (snapshot.hasError) {
+              return _InfoBox(
+                title: 'Error',
+                value: 'Gagal memuat notifikasi: ${snapshot.error}',
+              );
+            }
+
+            final items = snapshot.data ?? [];
+            if (items.isEmpty) {
+              return const _InfoBox(
+                title: 'Kosong',
+                value: 'Belum ada transaksi terbaru.',
+              );
+            }
+
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.altSurface),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: items.map((t) {
+                  final id = t['id']?.toString() ?? '';
+                  final total =
+                      (t['total_amount'] as num?)?.toDouble() ?? 0.0;
+                  final payment = t['payment_method']?.toString() ?? '';
+                  final createdAt = t['created_at']?.toString() ?? '';
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '• Transaksi #$id',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '  Total: Rp${total.toStringAsFixed(0)} | ${payment.toUpperCase()}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '  Waktu: $createdAt',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAnnouncementsContent() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _supabaseService.getAnnouncements(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 160,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _InfoBox(
+            title: 'Error',
+            value: 'Gagal memuat pengumuman: ${snapshot.error}',
+          );
+        }
+
+        final announcements = snapshot.data ?? [];
+        if (announcements.isEmpty) {
+          return const _InfoBox(
+            title: 'Kosong',
+            value: 'Tidak ada pengumuman saat ini.',
+          );
+        }
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.altSurface),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: announcements.asMap().entries.map((entry) {
+              final index = entry.key;
+              final announcement = entry.value;
+
+              final title = announcement['title']?.toString() ?? 'Pengumuman';
+              final content = announcement['description']?.toString() ?? '';
+              final createdAt = announcement['created_at']?.toString() ?? '';
+
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: index < announcements.length - 1 ? 12 : 0,
+                ),
+                child: InkWell(
+                  onTap: () {
+                    _showAnnouncementDetail(announcement);
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        content,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              createdAt,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              _showAnnouncementDetail(announcement);
+                            },
+                            icon: const Icon(Icons.visibility, size: 16),
+                            label: const Text('Detail'),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 0,
+                              ),
+                              minimumSize: const Size(0, 0),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (index < announcements.length - 1)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Divider(
+                            height: 1,
+                            color: AppColors.altSurface,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildChatContent() {
+    final authProvider = context.read<AuthProvider>();
+    final userId = authProvider.currentUser?.id;
+
+    if (userId == null) {
+      return const _InfoBox(
+        title: 'Error',
+        value: 'User tidak ditemukan. Silakan login kembali.',
+      );
+    }
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _supabaseService.getPrivateMessagesWithSenderInfo(userId: userId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 160,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _InfoBox(
+            title: 'Error',
+            value: 'Gagal memuat chat: ${snapshot.error}',
+          );
+        }
+
+        final messages = snapshot.data ?? [];
+        if (messages.isEmpty) {
+          return const _InfoBox(
+            title: 'Kosong',
+            value: 'Belum ada chat pribadi.',
+          );
+        }
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.altSurface),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: messages.asMap().entries.map((entry) {
+              final index = entry.key;
+              final message = entry.value;
+
+              final senderName = message['sender_name']?.toString() ?? 'Unknown';
+              final content = message['message']?.toString() ?? '';
+              final createdAt = message['created_at']?.toString() ?? '';
+
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: index < messages.length - 1 ? 12 : 0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '👤 $senderName',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      content,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      createdAt,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey,
+                      ),
+                    ),
+                    if (index < messages.length - 1)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Divider(
+                          height: 1,
+                          color: AppColors.altSurface,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 }

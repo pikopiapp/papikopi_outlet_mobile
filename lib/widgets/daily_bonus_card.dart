@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import '../utils/bonus_calculator.dart';
+import '../utils/holiday_detector.dart';
 import 'package:intl/intl.dart';
 
 class DailyBonusCard extends StatelessWidget {
   final double omset;
   final bool isLoading;
+  final DateTime? selectedDate;
 
   const DailyBonusCard({
     super.key,
     this.omset = 0,
     this.isLoading = false,
+    this.selectedDate,
   });
 
   String _formatCurrency(double amount) {
@@ -87,8 +90,12 @@ class DailyBonusCard extends StatelessWidget {
       );
     }
 
+    // Determine if today/selected date is a holiday
+    final dateToCheck = selectedDate ?? DateTime.now();
+    final isHolidayDate = isHoliday(dateToCheck);
+    
     // Calculate bonus and wage components using the top-level functions
-    final bonusData = calculateBonus(omset);
+    final bonusData = calculateBonus(omset, isHoliday: isHolidayDate);
     final totalBonus = bonusData.totalBonus;
     final breakdown = bonusData.breakdown;
     
@@ -115,13 +122,34 @@ class DailyBonusCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '💰 Upah Harian',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '💰 Upah Harian',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (isHolidayDate)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade600,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '🎉 ${getHolidayDescription(selectedDate ?? DateTime.now())}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
@@ -244,6 +272,18 @@ class DailyBonusCard extends StatelessWidget {
                     fontStyle: FontStyle.italic,
                   ),
                 ),
+                if (isHolidayDate) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '🎉 Bonus Hari Libur: Semua Tier 20%',
+                    style: TextStyle(
+                      color: Colors.orange.shade300,
+                      fontSize: 9,
+                      fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
