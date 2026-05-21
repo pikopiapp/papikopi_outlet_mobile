@@ -18,11 +18,93 @@ class CheckoutModal extends StatefulWidget {
 
 class _CheckoutModalState extends State<CheckoutModal> {
   String _selectedPaymentMethod = 'CASH';
+  String _gratiReason = '';
   bool _isProcessing = false;
+  bool _showWarning = false;
+  String _warningMessage = '';
 
   // Get the tabController from widget prop or try to find from context
   TabController? get tabController {
     return widget.tabController ?? DefaultTabController.maybeOf(context);
+  }
+
+  Future<void> _showGratisReasonDialog() async {
+    final List<String> reasons = ['Preman', 'Sample', 'Rusak/Expired', 'Permintaan Manager', 'Lainnya'];
+    
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Alasan Gratis'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: reasons
+                .map((reason) => RadioListTile<String>(
+                      title: Text(reason),
+                      value: reason,
+                      groupValue: _gratiReason,
+                      onChanged: (value) {
+                        setState(() => _gratiReason = value ?? '');
+                        Navigator.pop(context);
+                      },
+                      contentPadding: EdgeInsets.zero,
+                    ))
+                .toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _checkMonthlyGratisLimit() async {
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final supabaseService = SupabaseService();
+      
+      if (authProvider.currentUser == null) return;
+
+      // Get current month's transactions
+      final now = DateTime.now();
+      final monthStart = DateTime(now.year, now.month, 1);
+      
+      final result = await supabaseService.getMonthlyGratisStats(
+        outletId: authProvider.currentUser!.outletId,
+        monthStart: monthStart,
+      );
+      
+      final totalTransactions = result['total'] as int;
+      final gratisCount = result['gratis_count'] as int;
+      
+      if (totalTransactions == 0) {
+        setState(() {
+          _showWarning = false;
+          _warningMessage = '';
+        });
+        return;
+      }
+      
+      final gratisPercentage = (gratisCount / totalTransactions) * 100;
+      
+      if (gratisPercentage >= 3.0) {
+        setState(() {
+          _showWarning = true;
+          _warningMessage = '⚠️ Limit gratis 3% sudah tercapai! (${gratisPercentage.toStringAsFixed(1)}% dari $totalTransactions transaksi)';
+        });
+      } else {
+        setState(() {
+          _showWarning = false;
+          _warningMessage = 'Gratis: ${gratisPercentage.toStringAsFixed(1)}% dari 3% limit';
+        });
+      }
+    } catch (e) {
+      print('Warning: Could not check gratis limit: $e');
+    }
   }
 
 
@@ -39,6 +121,40 @@ class _CheckoutModalState extends State<CheckoutModal> {
       return;
     }
 
+    // Validate Gratis has reason selected
+    if (_selectedPaymentMethod == 'GRATIS' && _gratiReason.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih alasan untuk transaksi gratis')),
+      );
+      return;
+    }
+
+    // Check gratis limit if gratis
+    if (_selectedPaymentMethod == 'GRATIS') {
+      if (_showWarning) {
+        // Show confirmation dialog if limit reached
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('⚠️ Limit Gratis'),
+            content: Text(_warningMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Batal'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Lanjutkan'),
+              ),
+            ],
+          ),
+        );
+        
+        if (confirmed != true) return;
+      }
+    }
+
     if (authProvider.currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('User tidak ditemukan')),
@@ -53,10 +169,15 @@ class _CheckoutModalState extends State<CheckoutModal> {
       if (!supabaseService.isInitialized) {
         throw Exception('Sistem belum terhubung ke server');
       }
+      
       // Calculate totals
-      final totalAmount = cartProvider.totalAmount;
+      double totalAmount = _selectedPaymentMethod == 'GRATIS' 
+          ? 0 
+          : cartProvider.totalAmount;
       final totalHpp = cartProvider.totalHpp;
-      final totalBonus = (totalAmount * 0.05).toDouble(); // 5% bonus
+      final totalBonus = _selectedPaymentMethod == 'GRATIS'
+          ? 0.0
+          : (totalAmount * 0.05); // 5% bonus
       final profit = totalAmount - totalHpp;
 
       // Prepare sale items
@@ -76,6 +197,9 @@ class _CheckoutModalState extends State<CheckoutModal> {
       print('   Barista: ${authProvider.currentUser!.id}');
       print('   Payment: $_selectedPaymentMethod');
       print('   Amount: $totalAmount');
+      if (_selectedPaymentMethod == 'GRATIS') {
+        print('   Gratis Reason: $_gratiReason');
+      }
       print('   Items: ${items.length}');
       
       final saleId = await supabaseService.createSale(
@@ -121,12 +245,18 @@ class _CheckoutModalState extends State<CheckoutModal> {
             if (matchingBatch != null) {
               print('🛒 Recording ${cartItem.quantity} units of ${cartItem.product.name} from batch ${matchingBatch['batch_code']}');
               
+              // Build notes with gratis reason if applicable
+              String notes = 'Penjualan dari POS - ${cartItem.product.name} - Payment: $_selectedPaymentMethod';
+              if (_selectedPaymentMethod == 'GRATIS') {
+                notes += ' - Alasan: $_gratiReason';
+              }
+              
               await supabaseService.recordSaleToWarehouse(
                 batchId: matchingBatch['id'] as String,
                 outletId: authProvider.currentUser!.outletId,
                 quantitySold: cartItem.quantity,
                 saleDate: DateTime.now(),
-                notes: 'Penjualan dari POS - ${cartItem.product.name} - Payment: $_selectedPaymentMethod',
+                notes: notes,
               );
               
               // Update batch quantity (reduce stock)
@@ -276,34 +406,86 @@ class _CheckoutModalState extends State<CheckoutModal> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
+                  Column(
                     children: [
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('Cash'),
-                          value: 'CASH',
-                          groupValue: _selectedPaymentMethod,
-                          onChanged: _isProcessing
-                              ? null
-                              : (value) {
-                                  setState(() => _selectedPaymentMethod = value ?? 'CASH');
-                                },
-                          contentPadding: EdgeInsets.zero,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: RadioListTile<String>(
+                              title: const Text('Cash'),
+                              value: 'CASH',
+                              groupValue: _selectedPaymentMethod,
+                              onChanged: _isProcessing
+                                  ? null
+                                  : (value) {
+                                      setState(() => _selectedPaymentMethod = value ?? 'CASH');
+                                    },
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<String>(
+                              title: const Text('QRIS'),
+                              value: 'QRIS',
+                              groupValue: _selectedPaymentMethod,
+                              onChanged: _isProcessing
+                                  ? null
+                                  : (value) {
+                                      setState(() => _selectedPaymentMethod = value ?? 'CASH');
+                                    },
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ],
                       ),
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('QRIS'),
-                          value: 'QRIS',
-                          groupValue: _selectedPaymentMethod,
-                          onChanged: _isProcessing
-                              ? null
-                              : (value) {
-                                  setState(() => _selectedPaymentMethod = value ?? 'CASH');
-                                },
-                          contentPadding: EdgeInsets.zero,
+                      // Gratis button - only for barista
+                      if (context.read<AuthProvider>().currentUser?.role == 'barista')
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Column(
+                            children: [
+                              RadioListTile<String>(
+                                title: Row(
+                                  children: [
+                                    const Text('Gratis'),
+                                    if (_selectedPaymentMethod == 'GRATIS')
+                                      Text(
+                                        ' - ${_gratiReason.isNotEmpty ? _gratiReason : "(Pilih alasan)"}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                value: 'GRATIS',
+                                groupValue: _selectedPaymentMethod,
+                                onChanged: _isProcessing
+                                    ? null
+                                    : (value) async {
+                                        if (value != null) {
+                                          setState(() => _selectedPaymentMethod = value);
+                                          await _checkMonthlyGratisLimit();
+                                          await _showGratisReasonDialog();
+                                        }
+                                      },
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              // Warning message
+                              if (_selectedPaymentMethod == 'GRATIS' && _warningMessage.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 16, top: 4),
+                                  child: Text(
+                                    _warningMessage,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: _showWarning ? Colors.red[400] : Colors.green[400],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 24),

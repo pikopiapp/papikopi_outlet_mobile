@@ -490,6 +490,37 @@ class SupabaseService {
         .toList();
   }
 
+  /// Get monthly gratis transaction statistics
+  Future<Map<String, int>> getMonthlyGratisStats({
+    required String outletId,
+    required DateTime monthStart,
+  }) async {
+    try {
+      final monthEnd = DateTime(monthStart.year, monthStart.month + 1, 0);
+      
+      // Get all sales for this month
+      final response = await _client
+          .from('sales')
+          .select('id, payment_method')
+          .eq('outlet_id', outletId)
+          .gte('created_at', monthStart.toIso8601String())
+          .lte('created_at', monthEnd.toIso8601String());
+      
+      final salesList = response as List<dynamic>;
+      final gratisCount = salesList
+          .where((sale) => (sale['payment_method'] as String?)?.toUpperCase() == 'GRATIS')
+          .length;
+      
+      return {
+        'total': salesList.length,
+        'gratis_count': gratisCount,
+      };
+    } catch (e) {
+      print('❌ Error getting gratis stats: $e');
+      return {'total': 0, 'gratis_count': 0};
+    }
+  }
+
   // Outlet
   Future<Outlet?> getOutlet(String outletId) async {
     try {
