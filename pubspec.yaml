@@ -38,8 +38,8 @@ dependencies:
   # Connectivity
   connectivity_plus: ^5.0.0
   
-  # Bluetooth Printer
-  bluetooth_print: ^1.2.0
+  # Bluetooth Printer (commented out - needs compatibility fix with Flutter 3.28+)
+  # bluetooth_print: ^4.3.0
 
 dev_dependencies:
   flutter_test:

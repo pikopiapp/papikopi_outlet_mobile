@@ -821,31 +821,202 @@ class SupabaseService {
   }
 
   // Get product stock (legacy method - returns Map for backward compatibility)
-  Future<Map<String, int>> getProductStock(String outletId) async {
+  // Calculate product stock at a specific date (historical stock)
+  Future<Map<String, int>> getProductStockAtDate(String outletId, DateTime selectedDate) async {
     if (!_isInitialized) {
       print('⚠️ SupabaseService not initialized - returning empty stock');
       return {};
     }
     
     try {
-      // Query from showcase_allocations with join to showcase_products
-      // Get product_id and quantity allocated to this outlet
+      // Get outlet's business_day_start_hour
+      final outletData = await _client
+          .from('outlets')
+          .select('business_day_start_hour')
+          .eq('id', outletId)
+          .single();
+      final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+
+      // IMPORTANT: selectedDate comes as local time from DateTime.now() on device
+      // Device is in UTC+7 (Indonesia), so we need to convert properly
+      // 
+      // Strategy: Work in UTC throughout to avoid confusion
+      // 1. Take the local selectedDate and convert to UTC
+      // 2. Calculate what the business day should be based on local time interpretation
+      // 3. Since display says "business day starts at 21:00 local time", 
+      //    we calculate based on wall-clock time in UTC+7, then convert to UTC for query
+      
+      // First, understand the device timezone offset
+      // Dart's DateTime.now() is local time, and .toUtc() assumes device is in local timezone
+      final nowLocal = DateTime.now();
+      final nowUtc = nowLocal.toUtc();
+      final deviceTimezoneOffset = nowLocal.difference(nowUtc);
+      
+      print('📱 Device Timezone Info:');
+      print('   Now (Local): ${nowLocal.toIso8601String()}');
+      print('   Now (UTC): ${nowUtc.toIso8601String()}');
+      print('   Device TZ Offset: ${deviceTimezoneOffset.inHours}h ${(deviceTimezoneOffset.inMinutes % 60)}m');
+
+      // selectedDate is in local time (what user sees on screen)
+      // Business day calculation should be based on local wall-clock time
+      // If it's May 23, 04:05 AM local time, and business day starts at 21:00,
+      // that's part of May 22's business day (21:00 May 22 to 21:00 May 23)
+      
+      final year = selectedDate.year;
+      final month = selectedDate.month;
+      final day = selectedDate.day;
+      
+      // Calculate business day start/end in LOCAL time
+      DateTime businessDayStartLocal;
+      DateTime businessDayEndLocal;
+      
+      if (businessDayStartHour >= 12) {
+        // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
+        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+      } else {
+        // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+      }
+      
+      // Subtract 1 millisecond from end to exclude the exact end time
+      businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
+
+      // Convert to UTC for database query
+      // This is where the magic happens - .toUtc() assumes the DateTime is in device local timezone
+      final businessDayStartUtc = businessDayStartLocal.toUtc();
+      final businessDayEndUtc = businessDayEndLocal.toUtc();
+
+      print('═══════════════════════════════════════════════════════════════');
+      print('📊 getProductStockAtDate - STOCK CALCULATION');
+      print('   User Selected Date (Local): ${selectedDate.toIso8601String()}');
+      print('   Outlet ID: $outletId');
+      print('   Business Day Start Hour: $businessDayStartHour:00');
+      print('   ');
+      print('   📅 Business Day Range (LOCAL TIME - device screen):');
+      print('   Start: ${businessDayStartLocal.toIso8601String()}');
+      print('   End:   ${businessDayEndLocal.toIso8601String()}');
+      print('   ');
+      print('   🌍 Business Day Range (UTC - for database query):');
+      print('   Start: ${businessDayStartUtc.toIso8601String()}');
+      print('   End:   ${businessDayEndUtc.toIso8601String()}');
+      print('═══════════════════════════════════════════════════════════════');
+
+      // Query: Get allocations created within the business day range (UTC)
+      final currentResponse = await _client
+          .from('showcase_allocations')
+          .select('id, quantity, showcase_product_id, created_at')
+          .eq('outlet_id', outletId)
+          .gte('created_at', businessDayStartUtc.toIso8601String())
+          .lte('created_at', businessDayEndUtc.toIso8601String());
+
+      print('🔍 Database Query:');
+      print('   SELECT showcase_allocations WHERE');
+      print('   ├─ outlet_id = "$outletId"');
+      print('   ├─ created_at >= "${businessDayStartUtc.toIso8601String()}"');
+      print('   └─ created_at <= "${businessDayEndUtc.toIso8601String()}"');
+      print('   ');
+      print('   ✅ Results: ${(currentResponse as List).length} allocations');
+      
+      if ((currentResponse as List).isNotEmpty) {
+        print('   ');
+        print('   📋 Allocation Details:');
+        for (int i = 0; i < currentResponse.length && i < 5; i++) {
+          final row = currentResponse[i];
+          final allocTime = DateTime.parse(row['created_at'] as String);
+          final allocTimeLocal = allocTime.toLocal();
+          print('     [$i] ${row['created_at']} (Local: ${allocTimeLocal.toIso8601String()}), qty: ${row['quantity']}');
+        }
+      }
+
+      // Get all showcase products to map showcase_product_id -> product_id
+      final showcaseProducts = await _client
+          .from('showcase_products')
+          .select('id, product_id');
+      
+      final showcaseProductMap = <String, String>{};
+      for (final sp in showcaseProducts) {
+        final id = sp['id'] as String?;
+        final productId = sp['product_id'] as String?;
+        if (id != null && productId != null) {
+          showcaseProductMap[id] = productId;
+        }
+      }
+
+      // Aggregate quantities by product_id
+      final stockMap = <String, int>{};
+      for (final row in currentResponse) {
+        final quantity = row['quantity'] as int? ?? 0;
+        final showcaseProductId = row['showcase_product_id'] as String?;
+        
+        if (showcaseProductId != null && showcaseProductMap.containsKey(showcaseProductId)) {
+          final productId = showcaseProductMap[showcaseProductId]!;
+          stockMap[productId] = (stockMap[productId] ?? 0) + quantity;
+        }
+      }
+      
+      if (stockMap.isEmpty) {
+        print('');
+        print('⚠️ NO STOCK FOUND for this business day');
+        print('');
+        return {};
+      }
+
+      print('');
+      print('✅ Final Stock (Aggregated by Product):');
+      for (final entry in stockMap.entries) {
+        print('   - Product: $entry.key, Total Quantity: ${entry.value}');
+      }
+      print('');
+      return stockMap;
+    } catch (e) {
+      print('❌ Error calculating historical stock: $e');
+      return {};
+    }
+  }
+
+  Future<Map<String, int>> getProductStock(String outletId, {DateTime? selectedDate}) async {
+    if (!_isInitialized) {
+      print('⚠️ SupabaseService not initialized - returning empty stock');
+      return {};
+    }
+    
+    // If selectedDate is provided, use historical stock calculation
+    if (selectedDate != null) {
+      return getProductStockAtDate(outletId, selectedDate);
+    }
+    
+    try {
+      // Query current stock from showcase_allocations with showcase_product mapping
       final response = await _client
           .from('showcase_allocations')
-          .select('quantity, showcase_products(product_id)')
+          .select('quantity, showcase_product_id')
           .eq('outlet_id', outletId);
+
+      // Get all showcase products to map showcase_product_id -> product_id
+      final showcaseProducts = await _client
+          .from('showcase_products')
+          .select('id, product_id');
+      
+      final showcaseProductMap = <String, String>{};
+      for (final sp in showcaseProducts) {
+        final id = sp['id'] as String?;
+        final productId = sp['product_id'] as String?;
+        if (id != null && productId != null) {
+          showcaseProductMap[id] = productId;
+        }
+      }
 
       // Build stock map keyed by product_id
       final stockMap = <String, int>{};
       for (final row in response) {
         final quantity = row['quantity'] as int? ?? 0;
-        final showcaseProduct = row['showcase_products'] as Map<String, dynamic>?;
+        final showcaseProductId = row['showcase_product_id'] as String?;
         
-        if (showcaseProduct != null) {
-          final productId = showcaseProduct['product_id'] as String?;
-          if (productId != null) {
-            stockMap[productId] = (stockMap[productId] ?? 0) + quantity;
-          }
+        if (showcaseProductId != null && showcaseProductMap.containsKey(showcaseProductId)) {
+          final productId = showcaseProductMap[showcaseProductId]!;
+          stockMap[productId] = (stockMap[productId] ?? 0) + quantity;
         }
       }
       
@@ -954,17 +1125,33 @@ class SupabaseService {
 
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
 
-      // Convert selectedDate to UTC first (it comes as local Jakarta time from DateTime.now())
-      final selectedDateUtc = selectedDate.toUtc();
+      // selectedDate comes as LOCAL time from DateTime.now() on device
+      // Calculate business day in LOCAL time first, then convert to UTC for query
+      final year = selectedDate.year;
+      final month = selectedDate.month;
+      final day = selectedDate.day;
       
-      // Calculate business day dates in UTC
-      final dailyStart = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
-          .subtract(const Duration(days: 1))
-          .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-      final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
-          .subtract(const Duration(milliseconds: 1));
+      DateTime businessDayStartLocal;
+      DateTime businessDayEndLocal;
+      
+      if (businessDayStartHour >= 12) {
+        // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
+        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+      } else {
+        // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+      }
+      
+      businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
+
+      // Convert to UTC for database query
+      final dailyStart = businessDayStartLocal.toUtc();
+      final dailyEnd = businessDayEndLocal.toUtc();
 
       print('📊 getSoldQuantityToday - outlet: $outletId');
+      print('   Business day (LOCAL): ${businessDayStartLocal.toIso8601String()} to ${businessDayEndLocal.toIso8601String()}');
       print('   Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
 
       // Query sales for this outlet on this business day
@@ -1029,17 +1216,33 @@ class SupabaseService {
 
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
 
-      // Convert selectedDate to UTC first (it comes as local Jakarta time from DateTime.now())
-      final selectedDateUtc = selectedDate.toUtc();
+      // selectedDate comes as LOCAL time from DateTime.now() on device
+      // Calculate business day in LOCAL time first, then convert to UTC for query
+      final year = selectedDate.year;
+      final month = selectedDate.month;
+      final day = selectedDate.day;
       
-      // Calculate business day dates in UTC
-      final dailyStart = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
-          .subtract(const Duration(days: 1))
-          .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-      final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
-          .subtract(const Duration(milliseconds: 1));
+      DateTime businessDayStartLocal;
+      DateTime businessDayEndLocal;
+      
+      if (businessDayStartHour >= 12) {
+        // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
+        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+      } else {
+        // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+      }
+      
+      businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
+
+      // Convert to UTC for database query
+      final dailyStart = businessDayStartLocal.toUtc();
+      final dailyEnd = businessDayEndLocal.toUtc();
 
       print('📊 getReturnedQuantityToday - outlet: $outletId');
+      print('   Business day (LOCAL): ${businessDayStartLocal.toIso8601String()} to ${businessDayEndLocal.toIso8601String()}');
       print('   Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
 
       // Query product_returns for this outlet on this business day
@@ -1093,17 +1296,33 @@ class SupabaseService {
 
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
 
-      // Convert selectedDate to UTC first
-      final selectedDateUtc = selectedDate.toUtc();
+      // selectedDate comes as LOCAL time from DateTime.now() on device
+      // Calculate business day in LOCAL time first, then convert to UTC for query
+      final year = selectedDate.year;
+      final month = selectedDate.month;
+      final day = selectedDate.day;
       
-      // Calculate business day dates in UTC
-      final dailyStart = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
-          .subtract(const Duration(days: 1))
-          .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-      final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
-          .subtract(const Duration(milliseconds: 1));
+      DateTime businessDayStartLocal;
+      DateTime businessDayEndLocal;
+      
+      if (businessDayStartHour >= 12) {
+        // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
+        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+      } else {
+        // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+      }
+      
+      businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
+
+      // Convert to UTC for database query
+      final dailyStart = businessDayStartLocal.toUtc();
+      final dailyEnd = businessDayEndLocal.toUtc();
 
       print('📤 getProductTransferStats - outlet: $outletId');
+      print('   Business day (LOCAL): ${businessDayStartLocal.toIso8601String()} to ${businessDayEndLocal.toIso8601String()}');
       print('   Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
 
       // Initialize transfer stats map
@@ -1826,18 +2045,49 @@ class SupabaseService {
   }
 
   // Get product returns (pengembalian) for an outlet
-  Future<List<Map<String, dynamic>>> getProductReturns(String outletId) async {
+  Future<List<Map<String, dynamic>>> getProductReturns(String outletId, {DateTime? selectedDate}) async {
     if (!_isInitialized) {
       return [];
     }
 
     try {
-      // Query product_returns
-      final response = await _client
+      // Get outlet's business_day_start_hour if filtering by date
+      int businessDayStartHour = 4; // default
+      if (selectedDate != null) {
+        try {
+          final outletData = await _client
+              .from('outlets')
+              .select('business_day_start_hour')
+              .eq('id', outletId)
+              .single();
+          businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+        } catch (e) {
+          print('⚠️ Could not get business_day_start_hour: $e');
+        }
+      }
+
+      // Build query
+      var query = _client
           .from('product_returns')
           .select('*')
-          .eq('outlet_id', outletId)
-          .order('return_date', ascending: false);
+          .eq('outlet_id', outletId);
+
+      // Add date filter if provided
+      if (selectedDate != null) {
+        final selectedDateUtc = selectedDate.toUtc();
+        final dailyStart = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
+            .subtract(const Duration(days: 1))
+            .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
+        final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
+            .subtract(const Duration(milliseconds: 1));
+        
+        print('📋 getProductReturns - outlet: $outletId, Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
+        query = query
+            .gte('return_date', dailyStart.toIso8601String())
+            .lte('return_date', dailyEnd.toIso8601String());
+      }
+
+      final response = await query.order('return_date', ascending: false);
 
       if (response.isEmpty) {
         print('⚠️ No product returns found for outlet: $outletId');
@@ -2083,7 +2333,7 @@ class SupabaseService {
   }
 
   // Get product transfers for an outlet
-  Future<List<Map<String, dynamic>>> getProductTransfers(String outletId) async {
+  Future<List<Map<String, dynamic>>> getProductTransfers(String outletId, {DateTime? selectedDate}) async {
     if (!_isInitialized) {
       return [];
     }
@@ -2091,8 +2341,23 @@ class SupabaseService {
     try {
       print('📦 Fetching product transfers from database...');
       
-      // Fetch transfers with their items
-      final response = await _client
+      // Get outlet's business_day_start_hour if filtering by date
+      int businessDayStartHour = 4; // default
+      if (selectedDate != null) {
+        try {
+          final outletData = await _client
+              .from('outlets')
+              .select('business_day_start_hour')
+              .eq('id', outletId)
+              .single();
+          businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+        } catch (e) {
+          print('⚠️ Could not get business_day_start_hour: $e');
+        }
+      }
+      
+      // Build query
+      var query = _client
           .from('stock_transfers')
           .select('''
             id,
@@ -2105,8 +2370,24 @@ class SupabaseService {
               quantity_int
             )
           ''')
-          .or('from_outlet_id.eq.$outletId,to_outlet_id.eq.$outletId')
-          .order('created_at', ascending: false);
+          .or('from_outlet_id.eq.$outletId,to_outlet_id.eq.$outletId');
+
+      // Add date filter if provided
+      if (selectedDate != null) {
+        final selectedDateUtc = selectedDate.toUtc();
+        final dailyStart = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
+            .subtract(const Duration(days: 1))
+            .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
+        final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
+            .subtract(const Duration(milliseconds: 1));
+        
+        print('📤 getProductTransfers - outlet: $outletId, Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
+        query = query
+            .gte('created_at', dailyStart.toIso8601String())
+            .lte('created_at', dailyEnd.toIso8601String());
+      }
+      
+      final response = await query.order('created_at', ascending: false);
 
       print('📦 Fetched ${response.length} transfers from database');
 
@@ -2214,7 +2495,7 @@ class SupabaseService {
   }
 
   /// Get transfers RECEIVED by this outlet (transfers where to_outlet_id == outletId)
-  Future<List<Map<String, dynamic>>> getReceivedTransfers(String outletId) async {
+  Future<List<Map<String, dynamic>>> getReceivedTransfers(String outletId, {DateTime? selectedDate}) async {
     if (!_isInitialized) {
       throw Exception('SupabaseService not initialized');
     }
@@ -2222,12 +2503,43 @@ class SupabaseService {
     try {
       print('📥 Fetching received transfers for outlet: $outletId');
       
-      // Query transfers where this outlet is the RECEIVER (to_outlet_id)
-      final response = await _client
+      // Get outlet's business_day_start_hour if filtering by date
+      int businessDayStartHour = 4; // default
+      if (selectedDate != null) {
+        try {
+          final outletData = await _client
+              .from('outlets')
+              .select('business_day_start_hour')
+              .eq('id', outletId)
+              .single();
+          businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+        } catch (e) {
+          print('⚠️ Could not get business_day_start_hour: $e');
+        }
+      }
+      
+      // Build query
+      var query = _client
           .from('stock_transfers')
           .select()
-          .eq('to_outlet_id', outletId)
-          .order('created_at', ascending: false);
+          .eq('to_outlet_id', outletId);
+
+      // Add date filter if provided
+      if (selectedDate != null) {
+        final selectedDateUtc = selectedDate.toUtc();
+        final dailyStart = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
+            .subtract(const Duration(days: 1))
+            .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
+        final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
+            .subtract(const Duration(milliseconds: 1));
+        
+        print('📥 getReceivedTransfers - outlet: $outletId, Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
+        query = query
+            .gte('created_at', dailyStart.toIso8601String())
+            .lte('created_at', dailyEnd.toIso8601String());
+      }
+      
+      final response = await query.order('created_at', ascending: false);
 
       print('📦 Found ${response.length} received transfers');
 

@@ -727,7 +727,7 @@ child: TabBarView(
           itemCount: products.length,
           itemBuilder: (context, index) {
             final productItem = products[index];
-            final isOutOfStock = productItem.stock <= 0;
+            final isOutOfStock = productItem.tersedia <= 0;
             
             return InkWell(
               onTap: isOutOfStock ? null : () {
@@ -752,6 +752,14 @@ child: TabBarView(
                   color: isOutOfStock 
                     ? AppColors.surface.withValues(alpha: 0.5) 
                     : AppColors.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                      spreadRadius: 0,
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -803,28 +811,45 @@ child: TabBarView(
                             ),
                           ),
                           const SizedBox(height: 4),
-                          // Stock Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6, 
-                              vertical: 2
-                            ),
-                            decoration: BoxDecoration(
-                              color: isOutOfStock 
-                                ? AppColors.error.withValues(alpha: 0.15) 
-                                : AppColors.success.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              isOutOfStock ? 'Habis' : 'Stok: ${productItem.stock}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: isOutOfStock 
-                                  ? AppColors.error 
-                                  : AppColors.success,
+                          // Stock Badge & Available Quantity Row
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Stock Badge (quantity from showcase_allocations)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, 
+                                  vertical: 2
+                                ),
+                                decoration: BoxDecoration(
+                                  color: productItem.stock <= 0
+                                    ? AppColors.error.withValues(alpha: 0.15) 
+                                    : AppColors.success.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  productItem.stock <= 0 ? 'Habis' : 'Stok: ${productItem.stock}',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: productItem.stock <= 0
+                                      ? AppColors.error 
+                                      : AppColors.success,
+                                  ),
+                                ),
                               ),
-                            ),
+                              // Tersedia (available after deductions)
+                              Text(
+                                'Tersedia: ${productItem.tersedia}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isOutOfStock 
+                                    ? AppColors.textSecondary 
+                                    : AppColors.accent,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

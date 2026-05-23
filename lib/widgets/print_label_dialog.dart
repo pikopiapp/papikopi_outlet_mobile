@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
-import 'dart:typed_data';
+// import 'dart:typed_data';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../models/product.dart';
-import 'package:bluetooth_print/bluetooth_print.dart';
-import 'package:bluetooth_print/bluetooth_print_model.dart';
+// import 'package:bluetooth_print/bluetooth_print.dart';
+// import 'package:bluetooth_print/bluetooth_print_model.dart';
 
 class PrintLabelDialog extends StatefulWidget {
   final Product product;
@@ -26,10 +26,11 @@ class PrintLabelDialog extends StatefulWidget {
 }
 
 class _PrintLabelDialogState extends State<PrintLabelDialog> {
-  final BluetoothPrint _bluetoothPrint = BluetoothPrint.instance;
+  // final BluetoothPrint _bluetoothPrint = BluetoothPrint.instance;
   bool _isConnected = false;
   bool _isPrinting = false;
-  List<BluetoothDevice> _devices = [];
+  // List<BluetoothDevice> _devices = [];
+  List<dynamic> _devices = [];
 
   @override
   void initState() {
@@ -38,32 +39,33 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
   }
 
   Future<void> _initPrinter() async {
-    // Initialize Bluetooth printer
-    bool? isConnected = await _bluetoothPrint.isConnected;
-    setState(() {
-      _isConnected = isConnected ?? false;
-    });
+    // Initialize Bluetooth printer (disabled - needs compatibility fix)
+    // bool? isConnected = await _bluetoothPrint.isConnected;
+    // setState(() {
+    //   _isConnected = isConnected ?? false;
+    // });
 
     // Get paired devices
-    final devices = await _bluetoothPrint.getDevices();
-    setState(() {
-      _devices = devices ?? [];
-    });
+    // final devices = await _bluetoothPrint.getDevices();
+    // setState(() {
+    //   _devices = devices ?? [];
+    // });
   }
 
-  Future<void> _connectPrinter(BluetoothDevice device) async {
+  Future<void> _connectPrinter(dynamic device) async {
     try {
-      bool? result = await _bluetoothPrint.connect(device);
-      if (result ?? false) {
-        setState(() => _isConnected = true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('✓ Terhubung ke ${device.name}')),
-        );
-      }
+      // Bluetooth printer disabled - needs compatibility fix
+      // bool? result = await _bluetoothPrint.connect(device);
+      // if (result ?? false) {
+      //   setState(() => _isConnected = true);
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     SnackBar(content: Text('✓ Terhubung ke ${device.name}')),
+      //   );
+      // }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Gagal terhubung: $e')),
-      );
+      // ScaffoldMessenger.of(context).showSnackBar(
+      //   SnackBar(content: Text('❌ Gagal terhubung: $e')),
+      // );
     }
   }
 
@@ -138,12 +140,12 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
       // Cut paper
       bytes.addAll([0x1D, 0x56, 0x00]); // GS V 0 (full cut)
 
-      // Send to printer
-      await _bluetoothPrint.writeBytes(Uint8List.fromList(bytes));
+      // Send to printer (disabled - needs compatibility fix)
+      // await _bluetoothPrint.writeBytes(Uint8List.fromList(bytes));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✓ Label berhasil dicetak')),
+          const SnackBar(content: Text('✓ Label berhasil dicetak (demo mode)')),
         );
         Navigator.pop(context);
       }

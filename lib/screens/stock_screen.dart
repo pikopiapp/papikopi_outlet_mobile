@@ -32,11 +32,13 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
   late String _outletId;
   bool _isRefreshing = false;
   bool _showReceivedTransfers = false; // Toggle untuk Dikirim/Diterima
+  late DateTime _selectedDate; // Date picker for viewing stock by date
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _selectedDate = DateTime.now();
     
     // Initialize refresh animation controller
     _refreshAnimationController = AnimationController(
@@ -61,38 +63,38 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     final supabaseService = SupabaseService();
     
     setState(() {
-      _stockFuture = _getEnrichedProductStock(supabaseService);
+      _stockFuture = _getEnrichedProductStock(supabaseService, _selectedDate);
     });
   }
 
   /// Get product stock enriched with product details (name, price)
   Future<List<Map<String, dynamic>>> _getEnrichedProductStock(
-      SupabaseService supabaseService) async {
+      SupabaseService supabaseService, DateTime selectedDate) async {
     try {
-      // Get stock map from showcase_allocations
-      final stockMap = await supabaseService.getProductStock(_outletId);
+      // Get stock map from showcase_allocations (filtered by selected date)
+      final stockMap = await supabaseService.getProductStock(_outletId, selectedDate: selectedDate);
       
       if (stockMap.isEmpty) {
         print('⚠️ No stock data found for outlet: $_outletId');
         return [];
       }
 
-      // Get sold quantity for today (business day)
+      // Get sold quantity for selected date (business day)
       final soldMap = await supabaseService.getSoldQuantityToday(
         outletId: _outletId,
-        selectedDate: DateTime.now(),
+        selectedDate: selectedDate,
       );
 
-      // Get returned quantity for today (business day)
+      // Get returned quantity for selected date (business day)
       final returnedMap = await supabaseService.getReturnedQuantityToday(
         outletId: _outletId,
-        selectedDate: DateTime.now(),
+        selectedDate: selectedDate,
       );
 
-      // Get transfer statistics for today (business day)
+      // Get transfer statistics for selected date (business day)
       final transferStats = await supabaseService.getProductTransferStats(
         outletId: _outletId,
-        selectedDate: DateTime.now(),
+        selectedDate: selectedDate,
       );
 
       // Get all products to enriched with product details
@@ -108,10 +110,10 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
         final transfers = transferStats[product.id] ?? {'dikirim': 0, 'diterima': 0};
         
         // Calculate remaining stock (Sisa)
-        // Formula: Stok - Terjual + Kembali - Dikirim + Diterima
+        // Formula: Stok - Terjual - Kembali - Dikirim + Diterima
         final dikirim = (transfers['dikirim'] ?? 0) as num;
         final diterima = (transfers['diterima'] ?? 0) as num;
-        final sisa = quantity - sold + returned - dikirim.toInt() + diterima.toInt();
+        final sisa = quantity - sold - returned - dikirim.toInt() + diterima.toInt();
         
         // Only include products that have stock in this outlet or all products
         enrichedStock.add({
@@ -270,8 +272,106 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     );
   }
 
+  Future<void> _selectDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2024),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+        _loadData();
+      });
+    }
+  }
+
+  /// Widget untuk menampilkan date picker
+  Widget _buildDateFilterWidget({
+    VoidCallback? onDateSelected,
+  }) {
+    // Calculate business day range for display
+    const businessDayStartHour = 21; // Default 21:00
+    final year = _selectedDate.year;
+    final month = _selectedDate.month;
+    final day = _selectedDate.day;
+
+    DateTime businessDayStart;
+    DateTime businessDayEnd;
+
+    if (businessDayStartHour >= 12) {
+      businessDayStart = DateTime(year, month, day - 1, businessDayStartHour);
+      businessDayEnd = DateTime(year, month, day, businessDayStartHour);
+    } else {
+      businessDayStart = DateTime(year, month, day, businessDayStartHour);
+      businessDayEnd = DateTime(year, month, day + 1, businessDayStartHour);
+    }
+
+    final businessDayDisplay = '${businessDayStart.day}/${businessDayStart.month} ${businessDayStart.hour}:00 - ${businessDayEnd.day}/${businessDayEnd.month} ${businessDayEnd.hour}:00';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      color: AppColors.background,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.calendar_today, size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Tanggal: ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      'Hari Bisnis: $businessDayDisplay',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: onDateSelected ?? _selectDate,
+                icon: const Icon(Icons.date_range, size: 18),
+                label: const Text('Pilih'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  backgroundColor: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
 Widget _buildStockTab() {
+    return Column(
+      children: [
+        _buildDateFilterWidget(),
+        // Stock Data
+        Expanded(
+          child: _buildStockContent(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStockContent() {
     return FutureBuilder<List<Map<String, dynamic>>>(
+      key: ValueKey<DateTime>(_selectedDate), // ← KEY to force rebuild when date changes
       future: _stockFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -364,18 +464,20 @@ Widget _buildStockTab() {
                 ],
               ),
             ),
-            // Data Table with Header
+            // Data Table with Header - Both vertical and horizontal scroll
             Expanded(
               child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                          columnSpacing: 16,
-                          horizontalMargin: 12,
-                          headingRowColor: MaterialStateProperty.all(AppColors.background),
-                          dataRowColor: MaterialStateProperty.all(AppColors.surface),
-                          headingRowHeight: 50,
-                          dataRowHeight: 56,
-                          columns: [
+                scrollDirection: Axis.vertical,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                            columnSpacing: 16,
+                            horizontalMargin: 12,
+                            headingRowColor: MaterialStateProperty.all(AppColors.background),
+                            dataRowColor: MaterialStateProperty.all(AppColors.surface),
+                            headingRowHeight: 50,
+                            dataRowHeight: 56,
+                            columns: [
                             DataColumn(
                               label: Text(
                                 'Produk',
@@ -407,6 +509,16 @@ Widget _buildStockTab() {
                             ),
                             DataColumn(
                               label: Text(
+                                'Sisa',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                              numeric: true,
+                            ),
+                            DataColumn(
+                              label: Text(
                                 'Terjual',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
@@ -431,16 +543,6 @@ Widget _buildStockTab() {
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: Colors.orange,
-                                ),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: Text(
-                                'Sisa',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
                                 ),
                               ),
                               numeric: true,
@@ -506,6 +608,25 @@ Widget _buildStockTab() {
                                       : isLowStock
                                       ? Colors.red
                                       : AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '$unsold',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
                                 ),
                               ),
                             ),
@@ -603,28 +724,10 @@ Widget _buildStockTab() {
                               ),
                             ),
                           ),
-                          DataCell(
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '$unsold',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       );
                     }).toList(),
+                  ),
                 ),
               ),
             ),
@@ -676,7 +779,8 @@ Widget _buildStockTab() {
 
 Widget _buildTransferTab() {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _getEnrichedProductStock(SupabaseService()),
+      key: ValueKey<DateTime>(_selectedDate), // ← KEY to force rebuild when date changes
+      future: _getEnrichedProductStock(SupabaseService(), _selectedDate),
       builder: (context, stockSnapshot) {
         if (stockSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -685,9 +789,10 @@ Widget _buildTransferTab() {
         final availableStock = stockSnapshot.data ?? [];
 
         return FutureBuilder<List<Map<String, dynamic>>>(
+          key: ValueKey<String>('${_outletId}_${_selectedDate}_${_showReceivedTransfers}'), // ← KEY to force rebuild
           future: _showReceivedTransfers 
-              ? SupabaseService().getReceivedTransfers(_outletId)
-              : SupabaseService().getProductTransfers(_outletId),
+              ? SupabaseService().getReceivedTransfers(_outletId, selectedDate: _selectedDate)
+              : SupabaseService().getProductTransfers(_outletId, selectedDate: _selectedDate),
           builder: (context, transferSnapshot) {
             if (transferSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -709,6 +814,9 @@ Widget _buildTransferTab() {
             return SingleChildScrollView(
               child: Column(
                 children: [
+                  // Date Filter
+                  _buildDateFilterWidget(),
+                  
                   // Toggle Dikirim / Diterima
                   Padding(
                     padding: const EdgeInsets.all(16),
@@ -792,6 +900,7 @@ Widget _buildTransferTab() {
     final productName = transfer['product_name'] ?? 'Unknown';
     final quantity = transfer['quantity'] ?? 0;
     final createdAt = transfer['created_at'];
+    final status = transfer['status'] ?? 'completed'; // Default status
     
     // Get stock info based on transfer direction
     final currentStockSending = transfer['current_stock_at_sending_outlet'] as int? ?? 0;
@@ -835,13 +944,13 @@ Widget _buildTransferTab() {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
+                  color: _getStatusColor(status).withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  'Selesai',
+                child: Text(
+                  _getStatusLabel(status),
                   style: TextStyle(
-                    color: Colors.green,
+                    color: _getStatusColor(status),
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -862,9 +971,14 @@ Widget _buildTransferTab() {
               children: [
                 Text(
                   'Tanggal: ${createdAt != null ? createdAt.toString().split(' ')[0] : '-'}',
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 4),
+                Text(
+                  'Waktu: ${createdAt != null ? _formatTime(createdAt.toString()) : '-'}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
                 Text(
                   'Dari: $fromOutletName',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
@@ -924,7 +1038,8 @@ Widget _buildTransferTab() {
 
 Widget _buildReturnTab() {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _getEnrichedProductStock(SupabaseService()),
+      key: ValueKey<DateTime>(_selectedDate), // ← KEY to force rebuild when date changes
+      future: _getEnrichedProductStock(SupabaseService(), _selectedDate),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -950,6 +1065,9 @@ Widget _buildReturnTab() {
 
         return Column(
           children: [
+            // Date Filter
+            _buildDateFilterWidget(),
+            
             // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -978,7 +1096,8 @@ Widget _buildReturnTab() {
             // List return history
             Expanded(
               child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: SupabaseService().getProductReturns(_outletId),
+                key: ValueKey<DateTime>(_selectedDate), // ← KEY to force rebuild when date changes
+                future: SupabaseService().getProductReturns(_outletId, selectedDate: _selectedDate),
                 builder: (context, returnSnapshot) {
                   if (returnSnapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
@@ -1117,6 +1236,50 @@ Widget _buildReturnTab() {
       return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return '-';
+    }
+  }
+
+  String _formatTime(String? timeStr) {
+    if (timeStr == null) return '-';
+    try {
+      final dateTime = DateTime.parse(timeStr);
+      return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return '-';
+    }
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'in_progress':
+        return Colors.blue;
+      case 'completed':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      case 'rejected':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getStatusLabel(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return 'Menunggu';
+      case 'in_progress':
+        return 'Proses';
+      case 'completed':
+        return 'Selesai';
+      case 'cancelled':
+        return 'Dibatalkan';
+      case 'rejected':
+        return 'Ditolak';
+      default:
+        return 'Selesai';
     }
   }
 

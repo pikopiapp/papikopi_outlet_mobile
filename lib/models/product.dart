@@ -29,7 +29,8 @@ class Product {
   final double price;
   final double? hpp; // Harga pokok penjualan
   final bool isActive;
-  final int stock; // Available stock from product_batches
+  final int stock; // Quantity from showcase_allocations in business day (no deductions)
+  final int tersedia; // Available after deductions (sold, returned, transfers)
   final String? imageUrl;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -43,12 +44,13 @@ class Product {
     this.hpp,
     required this.isActive,
     this.stock = 0,
+    this.tersedia = 0,
     this.imageUrl,
     required this.createdAt,
     this.updatedAt,
   });
 
-factory Product.fromJson(Map<String, dynamic> json) {
+  factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['id'] as String,
       categoryId: json['category_id'] as String,
@@ -58,6 +60,7 @@ factory Product.fromJson(Map<String, dynamic> json) {
       hpp: json['hpp'] != null ? (json['hpp'] as num).toDouble() : null,
       isActive: json['is_active'] as bool? ?? true,
       stock: (json['stock'] as num?)?.toInt() ?? 0,
+      tersedia: (json['tersedia'] as num?)?.toInt() ?? 0,
       imageUrl: json['image_url'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: json['updated_at'] != null 
@@ -75,6 +78,8 @@ factory Product.fromJson(Map<String, dynamic> json) {
       'price': price,
       'hpp': hpp,
       'is_active': isActive,
+      'stock': stock,
+      'tersedia': tersedia,
       'image_url': imageUrl,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
