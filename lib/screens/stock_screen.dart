@@ -33,6 +33,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
   bool _isRefreshing = false;
   bool _showReceivedTransfers = false; // Toggle untuk Dikirim/Diterima
   late DateTime _selectedDate; // Date picker for viewing stock by date
+  int _businessDayStartHour = 4; // Business day start hour (default 4 AM)
 
   @override
   void initState() {
@@ -56,7 +57,23 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
       _outletId = '844a73e9-3673-4eaf-bd8e-2f661624f6b0';
     }
     
+    _loadBusinessDayStartHour();
     _loadData();
+  }
+
+  Future<void> _loadBusinessDayStartHour() async {
+    try {
+      final supabaseService = SupabaseService();
+      final businessDayStartHour = await supabaseService.getBusinessDayStartHour(outletId: _outletId);
+      if (mounted) {
+        setState(() {
+          _businessDayStartHour = businessDayStartHour;
+        });
+      }
+    } catch (e) {
+      print('⚠️ Error loading business day start hour: $e');
+      // Use default (4 AM)
+    }
   }
 
   void _loadData() {
@@ -292,7 +309,8 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     VoidCallback? onDateSelected,
   }) {
     // Calculate business day range for display
-    const businessDayStartHour = 21; // Default 21:00
+    // Use the loaded business day start hour from outlet
+    final businessDayStartHour = _businessDayStartHour; // Default to 4 AM if not loaded
     final year = _selectedDate.year;
     final month = _selectedDate.month;
     final day = _selectedDate.day;
@@ -308,7 +326,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
       businessDayEnd = DateTime(year, month, day + 1, businessDayStartHour);
     }
 
-    final businessDayDisplay = '${businessDayStart.day}/${businessDayStart.month} ${businessDayStart.hour}:00 - ${businessDayEnd.day}/${businessDayEnd.month} ${businessDayEnd.hour}:00';
+    final businessDayDisplay = '${businessDayStart.day}/${businessDayStart.month} ${businessDayStart.hour.toString().padLeft(2, '0')}:00 - ${businessDayEnd.day}/${businessDayEnd.month} ${businessDayEnd.hour.toString().padLeft(2, '0')}:59 WIB';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

@@ -255,6 +255,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return '${jakartaTime.hour.toString().padLeft(2, '0')}:${jakartaTime.minute.toString().padLeft(2, '0')}';
   }
 
+  /// Format business day hours
+  /// If business day starts at hour H, it runs from H:00 to (H-1):59 the next day
+  String _buildBusinessDayText() {
+    final startHour = _businessDayStartHour.toString().padLeft(2, '0');
+    final endHour = (_businessDayStartHour - 1 < 0 
+        ? 23 
+        : _businessDayStartHour - 1).toString().padLeft(2, '0');
+    return 'Jam Bisnis: $startHour:00 - $endHour:59 (WIB)';
+  }
+
   String _formatCompactCurrency(double amount) {
     if (amount >= 1000000) {
       return 'Rp${(amount / 1000000).toStringAsFixed(1)}M';
@@ -664,7 +674,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'Jam Bisnis: ${_businessDayStartHour.toString().padLeft(2, '0')}:00 - ${(_businessDayStartHour - 1).toString().padLeft(2, '0')}:59 (WIB)',
+            _buildBusinessDayText(),
             style: TextStyle(
               fontSize: 10,
               color: AppColors.textSecondary,
