@@ -2374,12 +2374,17 @@ class SupabaseService {
 
       // Add date filter if provided
       if (selectedDate != null) {
-        final selectedDateUtc = selectedDate.toUtc();
-        final dailyStart = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
-            .subtract(const Duration(days: 1))
-            .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-        final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
-            .subtract(const Duration(milliseconds: 1));
+        // Convert selected date to UTC
+        // selectedDate is DateTime.now() or picked by user (no time component)
+        // Business day starts at businessDayStartHour on selectedDate
+        // and ends at (businessDayStartHour - 1):59 on selectedDate + 1 day
+        
+        final year = selectedDate.year;
+        final month = selectedDate.month;
+        final day = selectedDate.day;
+        
+        final dailyStart = DateTime.utc(year, month, day, businessDayStartHour, 0, 0);
+        final dailyEnd = DateTime.utc(year, month, day + 1, businessDayStartHour, 0, 0).subtract(const Duration(seconds: 1));
         
         print('📤 getProductTransfers - outlet: $outletId, Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
         query = query
@@ -2526,12 +2531,17 @@ class SupabaseService {
 
       // Add date filter if provided
       if (selectedDate != null) {
-        final selectedDateUtc = selectedDate.toUtc();
-        final dailyStart = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
-            .subtract(const Duration(days: 1))
-            .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-        final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
-            .subtract(const Duration(milliseconds: 1));
+        // Convert selected date to UTC
+        // selectedDate is DateTime.now() or picked by user (no time component)
+        // Business day starts at businessDayStartHour on selectedDate
+        // and ends at (businessDayStartHour - 1):59 on selectedDate + 1 day
+        
+        final year = selectedDate.year;
+        final month = selectedDate.month;
+        final day = selectedDate.day;
+        
+        final dailyStart = DateTime.utc(year, month, day, businessDayStartHour, 0, 0);
+        final dailyEnd = DateTime.utc(year, month, day + 1, businessDayStartHour, 0, 0).subtract(const Duration(seconds: 1));
         
         print('📥 getReceivedTransfers - outlet: $outletId, Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
         query = query
