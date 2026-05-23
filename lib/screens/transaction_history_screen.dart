@@ -36,11 +36,13 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
 
     try {
       final auth = context.read<AuthProvider>();
+      // Load sales for current outlet only (not filtered by barista)
+      // This ensures all sales from the outlet are visible regardless of who made them
       final sales = await _supabase.getSales(
-        baristaId: auth.currentUser!.id,
+        outletId: auth.currentUser!.outletId,
       );
 
-      print('📋 Loaded ${sales.length} transactions');
+      print('📋 Loaded ${sales.length} transactions for outlet ${auth.currentUser!.outletId}');
       for (var sale in sales) {
         print('   - Sale #${sale.id.substring(0, 8)}: ${sale.items.length} items');
         // Special tracking for transaction #540ef8d3
@@ -370,7 +372,7 @@ class TransactionCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               DateFormat('dd MMM yyyy HH:mm', 'id_ID')
-                  .format(transaction.createdAt),
+                  .format(transaction.createdAt.add(const Duration(hours: 7))),
               style: const TextStyle(fontSize: 12),
             ),
             Text(
@@ -403,7 +405,7 @@ class TransactionCard extends StatelessWidget {
                     // 🔧 NEW: Show edited date if edited
                     if (transaction.isEdited && transaction.editedAt != null)
                       Text(
-                        DateFormat('dd MMM', 'id_ID').format(transaction.editedAt!),
+                        DateFormat('dd MMM', 'id_ID').format(transaction.editedAt!.add(const Duration(hours: 7))),
                         style: const TextStyle(
                           fontSize: 9,
                           color: Colors.orange,
@@ -682,7 +684,7 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                     ),
                     Text(
                       DateFormat('dd MMM yyyy HH:mm', 'id_ID')
-                          .format(widget.transaction.createdAt),
+                          .format(widget.transaction.createdAt.add(const Duration(hours: 7))),
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
