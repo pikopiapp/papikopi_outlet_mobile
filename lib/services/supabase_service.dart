@@ -2232,7 +2232,7 @@ class SupabaseService {
         print('📝 Creating transfer record in stock_transfers table with PENDING status...');
         // Don't use .select() here to avoid "single row" issues
         // Just insert without returning data, then query it
-        final insertResult = await _client
+        await _client
             .from('stock_transfers')
             .insert({
               'from_outlet_id': fromOutletId,
@@ -2260,56 +2260,53 @@ class SupabaseService {
         
         final transferId = transferQuery[0]['id'] as String;
         print('✅ Created stock_transfers record: $transferId');
+        
+        // Insert transfer item details
+        try {
+          print('📝 Preparing to insert into stock_transfer_items...');
+          print('   transfer_id: $transferId');
+          print('   product_id: $productId');
+          print('   quantity_int: $quantity');
           
-          // Insert transfer item details
-          try {
-            print('📝 Preparing to insert into stock_transfer_items...');
-            print('   transfer_id: $transferId');
-            print('   product_id: $productId');
-            print('   quantity_int: $quantity');
-            
-            final itemResponse = await _client
-                .from('stock_transfer_items')
-                .insert({
-                  'transfer_id': transferId,
-                  'product_id': productId,
-                  'quantity': quantity.toDouble(), // Fill the DECIMAL quantity column
-                  'quantity_int': quantity, // Also fill quantity_int for integer reference
-                  'created_at': DateTime.now().toIso8601String(),
-                })
-                .select('id');
-            
-            if (itemResponse.isNotEmpty) {
-              print('✅ Created stock_transfer_items record successfully');
-              print('   Item ID: ${itemResponse[0]['id']}');
-            } else {
-              print('⚠️ stock_transfer_items insert returned empty response (might still be created)');
-            }
-          } catch (itemError) {
-            print('❌ CRITICAL ERROR inserting into stock_transfer_items:');
-            print('   Error type: ${itemError.runtimeType}');
-            print('   Error message: $itemError');
-            print('📝 Debugging info:');
-            print('   - Check if ingredient_id constraint is blocking (it should be nullable)');
-            print('   - Check if RLS is actually disabled');
-            print('   - Check if product_id foreign key is valid');
-            
-            // Try to insert without select to see if error is clearer
-            try {
-              print('📝 Retrying insert without .select()...');
-              await _client.from('stock_transfer_items').insert({
+          final itemResponse = await _client
+              .from('stock_transfer_items')
+              .insert({
                 'transfer_id': transferId,
                 'product_id': productId,
-                'quantity': quantity.toDouble(),
-                'quantity_int': quantity,
-              });
-              print('✅ Insert succeeded on retry!');
-            } catch (retryError) {
-              print('❌ Retry also failed: $retryError');
-            }
+                'quantity': quantity.toDouble(), // Fill the DECIMAL quantity column
+                'quantity_int': quantity, // Also fill quantity_int for integer reference
+                'created_at': DateTime.now().toIso8601String(),
+              })
+              .select('id');
+          
+          if (itemResponse.isNotEmpty) {
+            print('✅ Created stock_transfer_items record successfully');
+            print('   Item ID: ${itemResponse[0]['id']}');
+          } else {
+            print('⚠️ stock_transfer_items insert returned empty response (might still be created)');
           }
-        } else {
-          print('❌ stock_transfers insert returned no ID - insertion may have failed');
+        } catch (itemError) {
+          print('❌ CRITICAL ERROR inserting into stock_transfer_items:');
+          print('   Error type: ${itemError.runtimeType}');
+          print('   Error message: $itemError');
+          print('📝 Debugging info:');
+          print('   - Check if ingredient_id constraint is blocking (it should be nullable)');
+          print('   - Check if RLS is actually disabled');
+          print('   - Check if product_id foreign key is valid');
+          
+          // Try to insert without select to see if error is clearer
+          try {
+            print('📝 Retrying insert without .select()...');
+            await _client.from('stock_transfer_items').insert({
+              'transfer_id': transferId,
+              'product_id': productId,
+              'quantity': quantity.toDouble(),
+              'quantity_int': quantity,
+            });
+            print('✅ Insert succeeded on retry!');
+          } catch (retryError) {
+            print('❌ Retry also failed: $retryError');
+          }
         }
       } catch (e) {
         print('❌ CRITICAL ERROR in transfer creation:');
