@@ -2213,58 +2213,53 @@ class SupabaseService {
         return false;
       }
 
-      // Step 2: Update source outlet (decrease quantity)
+      // Step 2: Update source outlet (decrease quantity) - RESERVED
       await _client
           .from('showcase_allocations')
           .update({'quantity': currentQty - quantity})
           .eq('id', sourceAllocation['id']);
 
-      print('✅ Decreased source outlet quantity');
+      print('✅ Decreased source outlet quantity (reserved for transfer)');
 
-      // Step 3: Get or create allocation for destination outlet
-      final destAllocation = await _client
-          .from('showcase_allocations')
-          .select('id, quantity')
-          .eq('outlet_id', toOutletId)
-          .eq('showcase_product_id', showcaseProductId)
-          .maybeSingle();
+      // Step 3: DO NOT update destination outlet quantity yet - only update when approved
+      // For now, just create the transfer record with 'pending' status
+      print('⏳ Destination outlet quantity will be updated when transfer is approved');
 
-      if (destAllocation == null) {
-        // Create new allocation for destination outlet
-        await _client.from('showcase_allocations').insert({
-          'outlet_id': toOutletId,
-          'showcase_product_id': showcaseProductId,
-          'quantity': quantity,
-        });
-        print('✅ Created new allocation for destination outlet');
-      } else {
-        // Update existing allocation (increase quantity)
-        final destQty = destAllocation['quantity'] as int? ?? 0;
-        await _client
-            .from('showcase_allocations')
-            .update({'quantity': destQty + quantity})
-            .eq('id', destAllocation['id']);
-        print('✅ Increased destination outlet quantity');
-      }
+      print('📊 Source allocation updated. Now creating transfer record...');
 
-      print('📊 Allocations updated successfully. Now attempting to save to cache/database...');
-
-      // Step 4: Create transfer record for audit trail
+      // Step 4: Create transfer record with 'pending' status (awaiting approval)
       try {
-        print('📝 Creating transfer record in stock_transfers table...');
-        final transferResponse = await _client
+        print('📝 Creating transfer record in stock_transfers table with PENDING status...');
+        // Don't use .select() here to avoid "single row" issues
+        // Just insert without returning data, then query it
+        final insertResult = await _client
             .from('stock_transfers')
             .insert({
               'from_outlet_id': fromOutletId,
               'to_outlet_id': toOutletId,
-              'status': 'received',
+              'status': 'pending',
               'created_at': DateTime.now().toIso8601String(),
-            })
-            .select('id');
+            });
         
-        if (transferResponse.isNotEmpty) {
-          final transferId = transferResponse[0]['id'] as String;
-          print('✅ Created stock_transfers record: $transferId');
+        print('✅ Inserted transfer record');
+        
+        // Get the ID of the newly created transfer by querying the latest one
+        final transferQuery = await _client
+            .from('stock_transfers')
+            .select('id')
+            .eq('from_outlet_id', fromOutletId)
+            .eq('to_outlet_id', toOutletId)
+            .eq('status', 'pending')
+            .order('created_at', ascending: false)
+            .limit(1);
+        
+        if (transferQuery.isEmpty) {
+          print('❌ Could not find created transfer record');
+          return false;
+        }
+        
+        final transferId = transferQuery[0]['id'] as String;
+        print('✅ Created stock_transfers record: $transferId');
           
           // Insert transfer item details
           try {
@@ -3585,6 +3580,151 @@ class SupabaseService {
       print('   Result: $result');
     } catch (e) {
       print('⚠️ Error seeding test assignments: $e');
+    }
+  }
+
+  /// Update transfer status (approve, reject, cancel)
+  Future<bool> updateTransferStatus(String transferId, String newStatus) async {
+    if (!_isInitialized) {
+      return false;
+    }
+
+    try {
+      print('🔄 Updating transfer $transferId status to $newStatus...');
+      
+      // Get transfer details to know from/to outlets
+      final transfer = await _client
+          .from('stock_transfers')
+          .select('from_outlet_id, to_outlet_id, status')
+          .eq('id', transferId)
+          .single();
+      
+      final fromOutletId = transfer['from_outlet_id'] as String;
+      final toOutletId = transfer['to_outlet_id'] as String;
+      final currentStatus = transfer['status'] as String;
+      
+      print('📦 Transfer: $fromOutletId → $toOutletId, Current: $currentStatus, New: $newStatus');
+      
+      // If approving transfer (pending → received), update destination outlet quantity
+      if (currentStatus.toLowerCase() == 'pending' && newStatus.toLowerCase() == 'received') {
+        print('✅ Approving transfer - adding quantity to destination outlet...');
+        
+        // Get all items in this transfer
+        final items = await _client
+            .from('stock_transfer_items')
+            .select('product_id, quantity_int')
+            .eq('transfer_id', transferId);
+        
+        // For each item, add to destination outlet
+        for (final item in items) {
+          final productId = item['product_id'] as String;
+          final quantity = item['quantity_int'] as int;
+          
+          print('   📦 Adding $quantity of product $productId to $toOutletId');
+          
+          // Get showcase_product_id
+          final showcaseProduct = await _client
+              .from('showcase_products')
+              .select('id')
+              .eq('product_id', productId)
+              .maybeSingle();
+          
+          if (showcaseProduct == null) {
+            print('   ⚠️ Showcase product not found for $productId');
+            continue;
+          }
+          
+          final showcaseProductId = showcaseProduct['id'] as String;
+          
+          // Get or create destination allocation
+          final destAllocation = await _client
+              .from('showcase_allocations')
+              .select('id, quantity')
+              .eq('outlet_id', toOutletId)
+              .eq('showcase_product_id', showcaseProductId)
+              .maybeSingle();
+          
+          if (destAllocation == null) {
+            // Create new allocation
+            await _client.from('showcase_allocations').insert({
+              'outlet_id': toOutletId,
+              'showcase_product_id': showcaseProductId,
+              'quantity': quantity,
+            });
+            print('   ✅ Created new allocation for destination outlet');
+          } else {
+            // Update existing allocation
+            final destQty = destAllocation['quantity'] as int? ?? 0;
+            await _client
+                .from('showcase_allocations')
+                .update({'quantity': destQty + quantity})
+                .eq('id', destAllocation['id']);
+            print('   ✅ Updated destination outlet quantity');
+          }
+        }
+      }
+      // If rejecting/canceling transfer, add quantity back to source outlet
+      else if ((newStatus.toLowerCase() == 'rejected' || newStatus.toLowerCase() == 'cancelled') 
+               && currentStatus.toLowerCase() == 'pending') {
+        print('❌ Rejecting/Canceling transfer - returning quantity to source outlet...');
+        
+        // Get all items in this transfer
+        final items = await _client
+            .from('stock_transfer_items')
+            .select('product_id, quantity_int')
+            .eq('transfer_id', transferId);
+        
+        // For each item, add back to source outlet
+        for (final item in items) {
+          final productId = item['product_id'] as String;
+          final quantity = item['quantity_int'] as int;
+          
+          print('   📦 Returning $quantity of product $productId to $fromOutletId');
+          
+          // Get showcase_product_id
+          final showcaseProduct = await _client
+              .from('showcase_products')
+              .select('id')
+              .eq('product_id', productId)
+              .maybeSingle();
+          
+          if (showcaseProduct == null) {
+            print('   ⚠️ Showcase product not found for $productId');
+            continue;
+          }
+          
+          final showcaseProductId = showcaseProduct['id'] as String;
+          
+          // Get source allocation
+          final sourceAllocation = await _client
+              .from('showcase_allocations')
+              .select('id, quantity')
+              .eq('outlet_id', fromOutletId)
+              .eq('showcase_product_id', showcaseProductId)
+              .maybeSingle();
+          
+          if (sourceAllocation != null) {
+            final sourceQty = sourceAllocation['quantity'] as int? ?? 0;
+            await _client
+                .from('showcase_allocations')
+                .update({'quantity': sourceQty + quantity})
+                .eq('id', sourceAllocation['id']);
+            print('   ✅ Returned quantity to source outlet');
+          }
+        }
+      }
+      
+      // Update transfer status
+      await _client
+          .from('stock_transfers')
+          .update({'status': newStatus})
+          .eq('id', transferId);
+      
+      print('✅ Transfer status updated to $newStatus');
+      return true;
+    } catch (e) {
+      print('❌ Error updating transfer status: $e');
+      return false;
     }
   }
 }

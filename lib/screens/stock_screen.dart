@@ -914,6 +914,9 @@ Widget _buildTransferTab() {
   }
 
   Widget _buildTransferCard(BuildContext context, Map<String, dynamic> transfer) {
+    final fromOutletId = transfer['from_outlet_id'] ?? '';
+    final toOutletId = transfer['to_outlet_id'] ?? '';
+    final transferId = transfer['id'] ?? '';
     final fromOutletName = transfer['from_outlet_name'] ?? 'Unknown';
     final toOutletName = transfer['to_outlet_name'] ?? 'Unknown';
     final productName = transfer['product_name'] ?? 'Unknown';
@@ -925,12 +928,20 @@ Widget _buildTransferTab() {
     final currentStockSending = transfer['current_stock_at_sending_outlet'] as int? ?? 0;
     final currentStockReceiving = transfer['current_stock_at_receiving_outlet'] as int? ?? 0;
 
+    // Determine if current user is sender or receiver
+    final isSender = _outletId == fromOutletId;
+    final isReceiver = _outletId == toOutletId;
+    final isPending = status.toLowerCase() == 'pending';
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border.all(color: AppColors.altSurface),
+        border: Border.all(
+          color: isPending ? Colors.orange : AppColors.altSurface,
+          width: isPending ? 2 : 1,
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1026,6 +1037,51 @@ Widget _buildTransferTab() {
               ],
             ),
           ),
+          // Action buttons (only show if pending and user is involved)
+          if (isPending && (isSender || isReceiver)) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                if (isReceiver) ...[
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _approveTransfer(context, transferId),
+                      icon: const Icon(Icons.check_circle),
+                      label: const Text('Terima'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _rejectTransfer(context, transferId),
+                      icon: const Icon(Icons.cancel),
+                      label: const Text('Tolak'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ] else if (isSender) ...[
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _cancelTransfer(context, transferId),
+                      icon: const Icon(Icons.delete),
+                      label: const Text('Batalkan'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1342,6 +1398,105 @@ Widget _buildReturnTab() {
       default:
         return status ?? '-';
     }
+  }
+
+  /// Approve transfer (called by receiving outlet)
+  void _approveTransfer(BuildContext context, String transferId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Terima Transfer?'),
+        content: const Text('Apakah Anda yakin ingin menerima transfer stok ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batalkan'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await SupabaseService().updateTransferStatus(transferId, 'received');
+              if (success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Transfer diterima!')),
+                );
+                setState(() {}); // Refresh UI
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+            ),
+            child: const Text('Terima'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Reject transfer (called by receiving outlet)
+  void _rejectTransfer(BuildContext context, String transferId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tolak Transfer?'),
+        content: const Text('Apakah Anda yakin ingin menolak transfer stok ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batalkan'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await SupabaseService().updateTransferStatus(transferId, 'rejected');
+              if (success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Transfer ditolak!')),
+                );
+                setState(() {}); // Refresh UI
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Tolak'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Cancel transfer (called by sending outlet)
+  void _cancelTransfer(BuildContext context, String transferId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Batalkan Transfer?'),
+        content: const Text('Apakah Anda yakin ingin membatalkan transfer stok ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tidak'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await SupabaseService().updateTransferStatus(transferId, 'cancelled');
+              if (success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Transfer dibatalkan!')),
+                );
+                setState(() {}); // Refresh UI
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Batalkan'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showTransferDialog(BuildContext context, List<Map<String, dynamic>> availableStock) {
