@@ -34,6 +34,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
   bool _showReceivedTransfers = false; // Toggle untuk Dikirim/Diterima
   late DateTime _selectedDate; // Date picker for viewing stock by date
   int _businessDayStartHour = 4; // Business day start hour (default 4 AM)
+  int _transferRefreshCounter = 0; // Counter to force FutureBuilder refresh
 
   @override
   void initState() {
@@ -81,6 +82,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     
     setState(() {
       _stockFuture = _getEnrichedProductStock(supabaseService, _selectedDate);
+      _transferRefreshCounter++; // Increment counter to trigger FutureBuilder rebuild
     });
   }
 
@@ -808,7 +810,7 @@ Widget _buildTransferTab() {
         final availableStock = stockSnapshot.data ?? [];
 
         return FutureBuilder<List<Map<String, dynamic>>>(
-          key: ValueKey<String>('${_outletId}_${_selectedDate}_${_showReceivedTransfers}'), // ← KEY to force rebuild
+          key: ValueKey<String>('${_outletId}_${_selectedDate}_${_showReceivedTransfers}_${_transferRefreshCounter}'), // ← KEY includes refresh counter
           future: _showReceivedTransfers 
               ? SupabaseService().getReceivedTransfers(_outletId, selectedDate: _selectedDate)
               : SupabaseService().getProductTransfers(_outletId, selectedDate: _selectedDate),
