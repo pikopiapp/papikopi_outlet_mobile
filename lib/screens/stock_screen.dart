@@ -326,7 +326,8 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
       businessDayEnd = DateTime(year, month, day + 1, businessDayStartHour);
     }
 
-    final businessDayDisplay = '${businessDayStart.day}/${businessDayStart.month} ${businessDayStart.hour.toString().padLeft(2, '0')}:00 - ${businessDayEnd.day}/${businessDayEnd.month} ${businessDayEnd.hour.toString().padLeft(2, '0')}:59 WIB';
+    final endHour = (businessDayStartHour - 1 < 0 ? 23 : businessDayStartHour - 1).toString().padLeft(2, '0');
+    final businessDayDisplay = '${businessDayStart.day}/${businessDayStart.month} ${businessDayStart.hour.toString().padLeft(2, '0')}:00 - ${businessDayEnd.day}/${businessDayEnd.month} $endHour:59 WIB';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
