@@ -367,7 +367,7 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
   void initState() {
     super.initState();
     // 🔧 Validate payment method from database
-    const validMethods = ['CASH', 'QRIS'];
+    const validMethods = ['CASH', 'QRIS', 'GRATIS'];
     _paymentMethod = validMethods.contains(widget.transaction.paymentMethod)
         ? widget.transaction.paymentMethod
         : 'CASH'; // Default to CASH if invalid
@@ -614,6 +614,7 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                   items: const [
                     DropdownMenuItem(value: 'CASH', child: Text('Tunai')),
                     DropdownMenuItem(value: 'QRIS', child: Text('QRIS')),
+                    DropdownMenuItem(value: 'GRATIS', child: Text('Gratis')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
