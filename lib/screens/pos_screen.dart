@@ -11,9 +11,12 @@ import '../utils/number_formatter.dart';
 import '../widgets/cart_summary.dart';
 import '../widgets/header.dart';
 import '../theme/thema.dart';
+import '../widgets/screen_skeleton.dart';
 import 'profile_screen.dart';
+
 import 'transaction_history_screen.dart';
 import 'qr_camera_screen.dart';
+
 
 class POSScreen extends StatefulWidget {
   const POSScreen({super.key});
@@ -63,7 +66,6 @@ class _POSScreenState extends State<POSScreen>
     }
     // Refresh transaction history when switching to Riwayat tab (tab 2)
     else if (_tabController.index == 2) {
-      print('📋 Switching to transaction history tab, refreshing data...');
       setState(() {});
     }
     
@@ -77,10 +79,9 @@ class _POSScreenState extends State<POSScreen>
 
       if (auth.currentUser != null) {
         await product.loadProductsWithStock(auth.currentUser!.outletId);
-        print('✅ Products refreshed quietly');
       }
     } catch (e) {
-      print('⚠️ Error refreshing products: $e');
+      // Error refreshing products silently
     }
   }
 
@@ -217,8 +218,6 @@ class _POSScreenState extends State<POSScreen>
   }
 
   Future<void> _refreshData() async {
-    print('🔄 Refreshing POS screen data...');
-    
     // Prevent multiple simultaneous refreshes
     if (_isRefreshing) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -261,7 +260,6 @@ class _POSScreenState extends State<POSScreen>
         );
       }
     } catch (e) {
-      print('❌ Error refreshing data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -697,8 +695,9 @@ child: TabBarView(
             : product.getProductsByCategory(_selectedCategoryId!);
 
         if (product.isLoading) {
-          return const Center(child: CircularProgressIndicator());
+          return const ScreenSkeleton(lineCount: 10, showTitle: false);
         }
+
 
         if (products.isEmpty) {
           return Center(

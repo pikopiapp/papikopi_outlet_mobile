@@ -39,7 +39,6 @@ class AuthProvider extends ChangeNotifier {
     while (attempt < retryCount) {
       try {
         // Use Supabase authentication with custom database login
-        print('🔐 Attempting login via Supabase for: $email (attempt ${attempt + 1}/$retryCount)');
         _currentUser = await _supabaseService.signIn(
           email: email,
           password: password,
@@ -47,18 +46,15 @@ class AuthProvider extends ChangeNotifier {
         
         // Save user locally for offline access
         await _authService.saveUser(_currentUser!);
-        print('✅ Login successful: $email');
         _isLoading = false;
         notifyListeners();
         return;
       } catch (e) {
         attempt++;
         _error = e.toString();
-        print('❌ Login attempt $attempt failed: $_error');
         
         // If last attempt failed, stop retrying
         if (attempt >= retryCount) {
-          print('❌ All login attempts failed after $retryCount tries');
           _isLoading = false;
           notifyListeners();
           rethrow;

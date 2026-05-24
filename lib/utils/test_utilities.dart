@@ -95,7 +95,6 @@ class TestUtilities {
       await Future.delayed(timeout);
       return true;
     } catch (e) {
-      print('❌ Home screen data load failed: $e');
       return false;
     }
   }
@@ -117,10 +116,8 @@ class TestUtilities {
       await Future.delayed(timeout);
       
       // In real test, would verify in database
-      print('✅ Message sent: $message');
       return true;
     } catch (e) {
-      print('❌ Message send failed: $e');
       return false;
     }
   }
@@ -133,10 +130,8 @@ class TestUtilities {
   }) async {
     try {
       await Future.delayed(timeout);
-      print('✅ Outlet status changed: $outletId → $newStatus');
       return true;
     } catch (e) {
-      print('❌ Status change failed: $e');
       return false;
     }
   }
@@ -156,10 +151,8 @@ class TestUtilities {
       await Future.delayed(timeout);
       Navigator.pop(context);
       
-      print('✅ Navigation verified');
       return true;
     } catch (e) {
-      print('❌ Navigation failed: $e');
       return false;
     }
   }
@@ -177,14 +170,11 @@ class TestUtilities {
       final acceptable = variance < 100; // 100ms tolerance
       
       if (acceptable) {
-        print('✅ Animation performance: ${stopwatch.elapsedMilliseconds}ms (expected: ${expectedDuration.inMilliseconds}ms)');
         return true;
       } else {
-        print('⚠️ Animation slower than expected: ${stopwatch.elapsedMilliseconds}ms');
         return false;
       }
     } catch (e) {
-      print('❌ Animation test failed: $e');
       return false;
     }
   }
@@ -196,10 +186,8 @@ class TestUtilities {
   ) async {
     try {
       // This would normally show error in ErrorHandler
-      print('✅ Error handling test: "$errorMessage"');
       return true;
     } catch (e) {
-      print('❌ Error handling test failed: $e');
       return false;
     }
   }
@@ -208,12 +196,10 @@ class TestUtilities {
   static Future<Map<String, bool>> runAllTests({
     required BuildContext context,
   }) async {
-    print('🧪 Running comprehensive tests...\n');
     
     final results = <String, bool>{};
 
     // Test 1: Data generation
-    print('Test 1: Mock data generation...');
     try {
       final user = generateMockUser();
       final message = generateMockMessage();
@@ -224,63 +210,44 @@ class TestUtilities {
                                    message.isNotEmpty && 
                                    sales.isNotEmpty &&
                                    products.isNotEmpty;
-      print('✅ Data generation: PASSED\n');
     } catch (e) {
       results['Data Generation'] = false;
-      print('❌ Data generation: FAILED - $e\n');
     }
 
     // Test 2: Home screen load
-    print('Test 2: Home screen data load...');
     results['Home Screen Load'] = await verifyHomeScreenDataLoad(context);
-    print('');
 
     // Test 3: Message sending
-    print('Test 3: Message sending...');
     results['Message Send'] = await verifyMessageSend(
       senderId: 'user_001',
       recipientId: 'user_002',
       messageText: 'Test message',
     );
-    print('');
 
     // Test 4: Outlet status
-    print('Test 4: Outlet status change...');
     results['Outlet Status'] = await verifyOutletStatusChange(
       outletId: 'outlet_001',
       newStatus: 'active',
     );
-    print('');
 
     // Test 5: Animation performance
-    print('Test 5: Animation performance...');
     results['Animation Performance'] = await verifyAnimationPerformance();
-    print('');
 
     // Test 6: Error handling
-    print('Test 6: Error handling...');
     results['Error Handling'] = await verifyErrorHandling(
       context,
       'Test error message',
     );
-    print('');
 
     // Print summary
-    print('═' * 50);
-    print('TEST SUMMARY');
-    print('═' * 50);
     
     int passed = results.values.where((v) => v).length;
     int total = results.length;
     
     results.forEach((test, result) {
       final status = result ? '✅ PASSED' : '❌ FAILED';
-      print('$status: $test');
     });
     
-    print('═' * 50);
-    print('Result: $passed/$total tests passed');
-    print('═' * 50 + '\n');
 
     return results;
   }

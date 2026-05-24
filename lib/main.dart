@@ -100,25 +100,17 @@ class _InitialScreenState extends State<_InitialScreen>
 
   Future<void> _initializeApp() async {
     try {
-      print('🚀 Starting app initialization...');
-
       if (!mounted) return;
 
-      print('📦 Initializing AuthProvider...');
       final authProvider = context.read<AuthProvider>();
 
       // Add timeout to initialization
       await authProvider.initialize().timeout(
         const Duration(seconds: 5),
-        onTimeout: () {
-          print('⏱️ Auth initialization timeout - continuing anyway');
-        },
+        onTimeout: () {},
       );
 
       if (!mounted) return;
-
-      print('👤 Checking authentication status...');
-      print('   Is authenticated: ${authProvider.isAuthenticated}');
 
       // Wait for animations to finish before navigation
       await Future.delayed(const Duration(seconds: 2));
@@ -127,7 +119,6 @@ class _InitialScreenState extends State<_InitialScreen>
 
       if (authProvider.isAuthenticated) {
         final role = authProvider.currentUser?.role;
-        print('✅ User authenticated, role=$role');
 
         if (role == 'manager') {
           Navigator.of(context).pushReplacementNamed('/manager');
@@ -138,11 +129,9 @@ class _InitialScreenState extends State<_InitialScreen>
           Navigator.of(context).pushReplacementNamed('/shell');
         }
       } else {
-        print('❌ User not authenticated, navigating to login');
         Navigator.of(context).pushReplacementNamed('/login');
       }
     } catch (e) {
-      print('❌ Initialization error: $e');
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/login');
       }

@@ -47,7 +47,6 @@ class _QRCameraScreenState extends State<QRCameraScreen>
       final code = barcode.rawValue;
       if (code != null && code.isNotEmpty) {
         _hasScanned = true;
-        print('✅ QR Code Scanned: $code');
         Navigator.pop(context, code);
         return;
       }

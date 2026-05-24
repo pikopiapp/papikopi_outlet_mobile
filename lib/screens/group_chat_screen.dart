@@ -4,13 +4,15 @@ import 'package:intl/intl.dart';
 import '../theme/thema.dart';
 import '../providers/auth_provider.dart';
 import '../services/supabase_service.dart';
+import '../widgets/screen_skeleton.dart';
 
 class GroupChatScreen extends StatefulWidget {
-  const GroupChatScreen({Key? key}) : super(key: key);
+  const GroupChatScreen({super.key});
 
   @override
   State<GroupChatScreen> createState() => _GroupChatScreenState();
 }
+
 
 class _GroupChatScreenState extends State<GroupChatScreen> {
   late SupabaseService supabaseService;
@@ -46,7 +48,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       
       if (groupChatResponse.isEmpty) {
         // Create group chat if it doesn't exist
-        print('DEBUG: Creating new group chat in _loadMessages');
         final createResponse = await supabaseService.client
             .from('group_chats')
             .insert({
@@ -71,11 +72,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           .eq('group_chat_id', groupChatId)
           .order('created_at', ascending: true);
 
-      print('DEBUG: Group chat ID: $groupChatId');
-      print('DEBUG: Messages response count: ${messagesResponse.length}');
       if (messagesResponse.isNotEmpty) {
-        print('DEBUG: First message: ${messagesResponse[0]}');
-        print('DEBUG: Last message: ${messagesResponse[messagesResponse.length - 1]}');
       }
       
       // Fetch sender info separately if needed
@@ -87,7 +84,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         senderIds.add(msg['sender_id']);
       }
       
-      print('DEBUG: Unique senders: ${senderIds.length}');
       
       // Fetch all senders in one query
       Map<String, Map<String, dynamic>> senderMap = {};
@@ -101,9 +97,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           for (var sender in sendersResponse) {
             senderMap[sender['id']] = sender;
           }
-          print('DEBUG: Fetched ${senderMap.length} senders');
         } catch (e) {
-          print('Error fetching senders: $e');
         }
       }
       
@@ -117,7 +111,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         });
       }
 
-      print('DEBUG: Total messages with senders: ${messagesWithSenders.length}');
       
       setState(() {
         messages = messagesWithSenders;
@@ -126,7 +119,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
       _scrollToBottom();
     } catch (e) {
-      print('Error loading messages: $e');
       setState(() => isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -158,7 +150,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       
       if (groupChatResponse.isEmpty) {
         // Create group chat if it doesn't exist
-        print('DEBUG: Creating new group chat');
         final createResponse = await supabaseService.client
             .from('group_chats')
             .insert({
@@ -175,7 +166,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         groupChatId = groupChatResponse[0]['id'];
       }
 
-      print('DEBUG: Sending message to group chat: $groupChatId');
       
       // Send message
       await supabaseService.client.from('group_chat_messages').insert({
@@ -184,12 +174,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'message': messageText,
       });
 
-      print('DEBUG: Message sent successfully');
       
       // Reload messages
       await _loadMessages();
     } catch (e) {
-      print('Error sending message: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
@@ -245,7 +233,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           // Messages
           Expanded(
             child: isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const ScreenSkeleton(lineCount: 10, showTitle: false)
                 : messages.isEmpty
                     ? Center(
                         child: Column(
@@ -276,7 +264,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                           final timeString =
                               DateFormat('HH:mm', 'id_ID').format(timestamp);
                           
-                          print('DEBUG: Rendering message - Sender: $senderName, Role: $senderRole, Text: $messageText');
 
                           return Padding(
                             padding: const EdgeInsets.symmetric(

@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/supabase_service.dart';
 import '../theme/thema.dart';
+import '../widgets/screen_skeleton.dart';
+
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -59,7 +61,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         'leaderboard': leaderboard,
       };
     } catch (e) {
-      print('🔴 Error loading leaderboard: $e');
       rethrow;
     }
   }
@@ -70,7 +71,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         _leaderboardWithOutletFuture = _fetchLeaderboardWithOutlet();
       });
     } catch (e) {
-      print('🔴 Error in _loadLeaderboard: $e');
       setState(() {
         _leaderboardWithOutletFuture = Future.error(e);
       });
@@ -99,11 +99,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         future: _leaderboardWithOutletFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const ScreenSkeleton(lineCount: 10, showTitle: false);
           }
 
+
           if (snapshot.hasError) {
-            print('🔴 Snapshot error: ${snapshot.error}');
             return const Center(
               child: Text('Terjadi kesalahan saat memuat leaderboard'),
             );

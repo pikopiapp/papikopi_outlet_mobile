@@ -51,7 +51,6 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
         isLoading = false;
       });
     } catch (e) {
-      print('Error loading users: $e');
       setState(() => isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

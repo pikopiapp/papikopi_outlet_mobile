@@ -86,13 +86,11 @@ class _ApprovalScreenState extends State<ApprovalScreen>
         _isLoading = false;
       });
     } catch (e) {
-      print('❌ Error loading handovers: $e');
       setState(() => _isLoading = false);
     }
   }
 
   Future<void> _refreshData() async {
-    print('🔄 Refreshing Approval screen data...');
     
     // Prevent multiple simultaneous refreshes
     if (_isRefreshing) {
@@ -125,7 +123,6 @@ class _ApprovalScreenState extends State<ApprovalScreen>
         );
       }
     } catch (e) {
-      print('❌ Error refreshing data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

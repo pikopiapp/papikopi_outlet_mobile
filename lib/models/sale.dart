@@ -87,13 +87,6 @@ class Sale {
             .toList() ??
         [];
     
-    print('📦 Sale.fromJson() - ID: ${(json['id'] as String).substring(0, 8)}, items count: ${itemsList.length}');
-    if (itemsList.isNotEmpty) {
-      for (var i = 0; i < itemsList.length; i++) {
-        print('   Item $i: ${itemsList[i].productName} x${itemsList[i].quantity}');
-      }
-    }
-    
     return Sale(
       id: json['id'] as String,
       outletId: json['outlet_id'] as String,

@@ -7,6 +7,8 @@ import '../services/supabase_service.dart';
 import '../theme/thema.dart';
 import '../utils/number_formatter.dart';
 import '../models/sale.dart';
+import '../widgets/screen_skeleton.dart';
+
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -42,29 +44,11 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         outletId: auth.currentUser!.outletId,
       );
 
-      print('📋 Loaded ${sales.length} transactions for outlet ${auth.currentUser!.outletId}');
-      for (var sale in sales) {
-        print('   - Sale #${sale.id.substring(0, 8)}: ${sale.items.length} items');
-        // Special tracking for transaction #540ef8d3
-        if (sale.id.startsWith('540ef8d3')) {
-          print('   ⭐ Found target transaction #540ef8d3:');
-          print('      Total Amount: ${sale.totalAmount}');
-          print('      Items: ${sale.items.length}');
-          print('      Is Edited: ${sale.isEdited}');
-        }
-        for (var item in sale.items) {
-          print('     • ${item.productName} (ID: ${item.productId}) x${item.quantity}');
-        }
-      }
-
-      print('🔄 Calling setState to update _transactions list...');
       setState(() {
         _transactions = sales;
         _isLoading = false;
       });
-      print('✅ setState completed, CardList should rebuild now');
     } catch (e) {
-      print('❌ Error loading transactions: $e');
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -77,12 +61,6 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    print('🎨 TransactionHistoryScreen.build() called with ${_transactions.length} transactions');
-    // Special tracking for target transaction
-    final targetTx = _transactions.where((t) => t.id.startsWith('540ef8d3')).firstOrNull;
-    if (targetTx != null) {
-      print('   ⭐ Target transaction #540ef8d3 in build(): amount=${targetTx.totalAmount}, items=${targetTx.items.length}');
-    }
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primary,
@@ -98,9 +76,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ScreenSkeleton(lineCount: 8, showTitle: false)
           : _transactions.isEmpty
               ? Center(
+
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -125,11 +104,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                   itemBuilder: (context, index) {
                     final transaction = _transactions[index];
                     final itemCountStr = transaction.items.length.toString();
-                    print('🔄 Building TransactionCard ${index+1}/${_transactions.length} for ${transaction.id.substring(0, 8)}: amount=${transaction.totalAmount}, items=$itemCountStr, isEdited=${transaction.isEdited}');
                     // Special tracking for target transaction
-                    if (transaction.id.startsWith('540ef8d3')) {
-                      print('   ⭐ Building target card #540ef8d3 with items=$itemCountStr, totalAmount=${transaction.totalAmount}');
-                    }
                     return TransactionCard(
                       key: ValueKey('${transaction.id}-${transaction.totalAmount}-${itemCountStr}-${transaction.isEdited}'), // Include all data in key
                       transaction: transaction,
@@ -147,13 +122,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         transaction: transaction,
         onSave: (editedTransaction) async {
           // Update transaction in database
-          print('💾 Starting transaction update...');
           await _updateTransaction(editedTransaction);
-          print('✅ Transaction update completed');
           
           // Close dialog only after update is done
           if (mounted && Navigator.canPop(context)) {
-            print('🚪 Closing dialog...');
             Navigator.pop(context);
           }
         },
@@ -163,22 +135,6 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
 
   Future<void> _updateTransaction(Sale transaction) async {
     try {
-      // Find original transaction in list for comparison
-      final originalTx = _transactions.firstWhere(
-        (t) => t.id == transaction.id,
-        orElse: () => transaction,
-      );
-      
-      print('🔧 Updating transaction ${transaction.id}');
-      print('   BEFORE UPDATE:');
-      print('     Amount: ${originalTx.totalAmount}');
-      print('     Items: ${originalTx.items.length}');
-      print('     Is Edited: ${originalTx.isEdited}');
-      print('   AFTER UPDATE (new values):');
-      print('     Amount: ${transaction.totalAmount}');
-      print('     Items: ${transaction.items.length}');
-      print('     Is Edited: ${transaction.isEdited}');
-      
       // Update sales table with new payment method and edit tracking
       final updatedData = {
         'is_edited': true,
@@ -189,18 +145,12 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         'profit': transaction.profit,
       };
 
-      print('   Payment method: ${transaction.paymentMethod}');
-      print('   Total HPP: ${transaction.totalHpp}');
-      print('   Profit: ${transaction.profit}');
-      print('   Items count: ${transaction.items.length}');
-
       await _supabase.client
           .from('sales')
           .update(updatedData)
           .eq('id', transaction.id);
 
       // Update sale items - update each existing item with new values
-      print('🔧 Updating ${transaction.items.length} items in sale_items table');
       for (var item in transaction.items) {
         final itemSubtotal = item.quantity * item.unitPrice;
         final itemTotalHpp = item.quantity * item.hpp;
@@ -212,12 +162,6 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         
         if (isNewItem) {
           // 🆕 INSERT new item
-          print('   - Inserting NEW item:');
-          print('     Product ID: ${item.productId}');
-          print('     Quantity: ${item.quantity}');
-          print('     Price: ${item.unitPrice}');
-          print('     Subtotal: $itemSubtotal');
-          print('     Total HPP: $itemTotalHpp');
           
           try {
             await _supabase.client
@@ -230,18 +174,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                   'hpp': item.hpp,
                   'created_at': DateTime.now().toIso8601String(),
                 });
-            print('     ✅ Inserted successfully');
           } catch (e) {
-            print('   ⚠️ Error inserting new item: $e');
           }
         } else {
           // Update existing item
-          print('   - Updating existing item ${item.id}:');
-          print('     Product ID: ${item.productId}');
-          print('     Quantity: ${item.quantity}');
-          print('     Price: ${item.unitPrice}');
-          print('     Subtotal: $itemSubtotal');
-          print('     Total HPP: $itemTotalHpp');
           
           try {
             // Update sale_items with the columns that exist in the table:
@@ -255,34 +191,16 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                   'hpp': item.hpp,
                 })
                 .eq('id', item.id);
-            
-            print('     ✅ Updated successfully');
           } catch (e) {
-            print('   ⚠️ Error updating item ${item.id}: $e');
           }
         }
       }
 
-      print('✅ All items updated in sale_items table');
-
       // Add delay to ensure all updates are committed to database
-      print('⏳ Waiting for database sync (1 second)...');
       await Future.delayed(const Duration(seconds: 1));
 
       // Reload transactions
-      print('🔄 Reloading transaction list...');
       await _loadTransactions();
-      print('✅ Transaction list reloaded successfully');
-      
-      // Verify updated transaction is in the list
-      final updatedTx = _transactions.firstWhere(
-        (t) => t.id == transaction.id,
-        orElse: () => transaction,
-      );
-      print('   📊 VERIFICATION - Updated transaction in CardList:');
-      print('      Amount: ${updatedTx.totalAmount}');
-      print('      Items: ${updatedTx.items.length}');
-      print('      Is Edited: ${updatedTx.isEdited}');
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -290,7 +208,6 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         );
       }
     } catch (e) {
-      print('❌ Error updating transaction: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
@@ -313,15 +230,6 @@ class TransactionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final itemCount = transaction.items.length;
-    print('📊 TransactionCard.build() - ID: ${transaction.id.substring(0, 8)}, Amount: ${transaction.totalAmount}, Items: $itemCount, IsEdited: ${transaction.isEdited}');
-    
-    // Debug: print all items in this transaction
-    if (itemCount > 0) {
-      for (var i = 0; i < itemCount; i++) {
-        final item = transaction.items[i];
-        print('   Item $i: ${item.productName} (ID: ${item.productId}) x${item.quantity}');
-      }
-    }
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -472,9 +380,7 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
     _itemHppByProduct = {};
     _newItems = []; // 🆕 Initialize new items list
     
-    print('🔧 Transaction items count: ${widget.transaction.items.length}');
     for (var item in widget.transaction.items) {
-      print('   - Item: ${item.productName} x${item.quantity}');
       final key = item.productName;
       _itemQuantitiesByProduct.putIfAbsent(key, () => 0);
       _itemQuantitiesByProduct[key] = _itemQuantitiesByProduct[key]! + item.quantity;
@@ -487,7 +393,6 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
       }
       _itemIdsByProduct[key]!.add(item.id);
     }
-    print('🔧 Initialized aggregated items: $_itemQuantitiesByProduct');
   }
 
   // 🔧 NEW: Aggregate items by product name
@@ -516,12 +421,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
         );
         _itemUnitPriceByProduct[originalProductName] = newProduct.price.toDouble();
         _itemHppByProduct[originalProductName] = (newProduct.hpp ?? 0).toDouble();
-        print('✅ Updated price for $originalProductName -> $newProductName: Rp ${newProduct.price}');
       } catch (e) {
-        print('⚠️ Could not find new product price for $newProductName: $e');
       }
     } catch (e) {
-      print('⚠️ ProductProvider not available: $e');
     }
   }
 
@@ -640,7 +542,6 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                           ));
                         });
                         Navigator.pop(context);
-                        print('✅ Added new product: ${product.name} x$quantity');
                       }
                     : null,
                 child: const Text('Tambah'),
@@ -786,8 +687,6 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                                 _itemProductNamesByProduct[originalProductName] = currentProductName;
                               }
                               
-                              print('🔧 Dropdown for product $originalProductName (index $index):');
-                              print('   current: $currentProductName');
                               
                               // Create dropdown items from products
                               final dropdownItems = <DropdownMenuItem<String>>[];
@@ -1051,7 +950,6 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                     _itemQuantitiesByProduct.forEach((originalProductName, newQuantity) {
                       final originalItemIds = _itemIdsByProduct[originalProductName] ?? [];
                       if (originalItemIds.isEmpty) {
-                        print('⚠️ No items found for product $originalProductName');
                         return;
                       }
                       
@@ -1073,18 +971,10 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                             (p) => p.name == newProductName,
                           );
                           newProductId = newProduct.id;
-                          print('✅ Product changed from ${originalItem.productName} to $newProductName');
-                          print('   New price: Rp ${newUnitPrice.toInt()}');
-                          print('   New HPP: Rp ${newHpp.toInt()}');
                         } catch (e) {
-                          print('⚠️ Could not find product ID for $newProductName, keeping original');
                         }
                       }
-                      
-                      print('🔄 Item ${originalItem.id}:');
-                      print('   Original: ${originalItem.productName} (ID: ${originalItem.productId}) @ Rp ${originalItem.unitPrice.toInt()}');
-                      print('   New: $newProductName (ID: $newProductId) @ Rp ${newUnitPrice.toInt()}');
-                      print('   Quantity: $newQuantity');
+
                       
                       // Create new item with updated quantity and product info
                       updatedItems.add(SaleItem(
@@ -1111,18 +1001,12 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                         hpp: newItem.hpp,
                         createdAt: DateTime.now(),
                       ));
-                      print('🆕 Added new item: ${newItem.productName} x${newItem.quantity}');
                     }
 
                     // Calculate new totals
                     final newTotalAmount = updatedItems.fold(0.0, (sum, item) => sum + item.subtotal);
                     final newTotalHpp = updatedItems.fold(0.0, (sum, item) => sum + item.totalHpp);
                     final newProfit = newTotalAmount - newTotalHpp;
-                    
-                    print('💾 Saving updated sale:');
-                    print('   Total Amount: $newTotalAmount');
-                    print('   Total HPP: $newTotalHpp');
-                    print('   Profit: $newProfit');
                     
                     // Create updated sale
                     final updatedSale = Sale(

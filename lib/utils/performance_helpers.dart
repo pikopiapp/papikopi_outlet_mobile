@@ -87,13 +87,10 @@ class ResponseTimer {
 
   void stop() {
     _stopwatch.stop();
-    final ms = _stopwatch.elapsedMilliseconds;
-    print('⏱️ [$name] took ${ms}ms');
   }
 
   void log(String event) {
-    final ms = _stopwatch.elapsedMilliseconds;
-    print('⏱️ [$name] $event at ${ms}ms');
+    // Performance logging disabled in production
   }
 }
 
@@ -112,23 +109,20 @@ class CacheWithTTL<T> {
 
   T? get() {
     if (isValid) {
-      print('✅ Cache hit');
       return _value;
     }
-    print('❌ Cache miss or expired');
     return null;
   }
 
   void set(T value) {
     _value = value;
     _timestamp = DateTime.now();
-    print('💾 Cache set');
   }
 
   void clear() {
     _value = null;
     _timestamp = null;
-    print('🗑️ Cache cleared');
+
   }
 }
 
@@ -188,14 +182,12 @@ class LazyLoader<T> {
     // Return cached value if still valid
     if (_cachedValue != null && _cacheTime != null && cacheFor != null) {
       if (DateTime.now().difference(_cacheTime!).compareTo(cacheFor!) < 0) {
-        print('📦 Using cached value');
         return _cachedValue as T;
       }
     }
 
     // Prevent multiple concurrent loads
     if (_isLoading) {
-      print('⏳ Already loading, waiting...');
       while (_isLoading) {
         await Future.delayed(const Duration(milliseconds: 100));
       }
@@ -206,7 +198,6 @@ class LazyLoader<T> {
     try {
       _cachedValue = await loader();
       _cacheTime = DateTime.now();
-      print('✅ Loaded fresh value');
       return _cachedValue as T;
     } finally {
       _isLoading = false;

@@ -45,8 +45,6 @@ class SupabaseService {
     try {
       // Check if credentials are configured
       if (supabaseUrl.startsWith('YOUR_') || supabaseAnonKey.startsWith('YOUR_')) {
-        print('⚠️ Warning: Supabase credentials not configured');
-        print('App will run in offline mode. Configure credentials in lib/services/supabase_service.dart');
         _isInitialized = false;
         return;
       }
@@ -61,13 +59,10 @@ class SupabaseService {
         
         _client = Supabase.instance.client;
         _isInitialized = true;
-        print('✅ Supabase initialized successfully');
       } on TimeoutException {
-        print('⚠️ Supabase initialization timeout');
         _isInitialized = false;
       }
     } catch (e) {
-      print('❌ Supabase initialization error: $e');
       _isInitialized = false;
     }
   }
@@ -88,7 +83,6 @@ class SupabaseService {
       final result = await InternetAddress.lookup('hmihxkmrsmztuyvtykrj.supabase.co');
       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
     } catch (e) {
-      print('⚠️ Supabase DNS lookup failed: $e');
       return false;
     }
   }
@@ -131,23 +125,18 @@ class SupabaseService {
     }
     
     // Check network connectivity first
-    print('🌐 Checking network connectivity...');
     final isNetworkUp = await isNetworkAvailable();
     if (!isNetworkUp) {
       throw Exception('Tidak ada koneksi internet. Periksa WiFi/data Anda');
     }
-    print('✅ Network connectivity OK');
     
     // Check Supabase connectivity
-    print('🔍 Checking Supabase connectivity...');
     final isSupabaseUp = await isSupabaseReachable();
     if (!isSupabaseUp) {
-      print('⚠️ Supabase DNS resolution failed, attempting connection anyway...');
     }
     
     // 1) Pastikan session Supabase Auth terbentuk (karena RLS SELECT untuk authenticated).
     try {
-      print('🔐 Attempting Supabase auth sign-in for: $email');
       final res = await _client.auth.signInWithPassword(
         email: email,
         password: password,
@@ -176,10 +165,6 @@ class SupabaseService {
                 ? dynamicInvestorId
                 : null;
 
-        print('🧩 signIn profile.id=${profile['id']}');
-        print('🧩 signIn parsed user.id=${user.id}');
-        print('🧩 signIn profileRole=$profileRole');
-        print('🧩 signIn profile[investor_id]=$dynamicInvestorId');
 
         if (profileRole == 'investor' && investorIdFromProfile != null) {
           _cachedUser = user_model.User(
@@ -191,17 +176,14 @@ class SupabaseService {
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
           );
-          print('✅ signIn remapped investor user.id=${_cachedUser?.id}');
           return _cachedUser!;
         }
 
         _cachedUser = user;
-        print('⚠️ signIn no remap, using user.id=${_cachedUser?.id}');
         return user;
       }
     } catch (e) {
       // 2) Fallback ke RPC verifikasi (legacy) jika auth sign-in gagal.
-      print('⚠️ Supabase auth sign-in failed, fallback to RPC: $e');
 
       final response = await _client.rpc(
         'verify_user_password',
@@ -218,7 +200,6 @@ class SupabaseService {
         final success = response['success'] as bool? ?? false;
 
         if (success) {
-          print('✅ Custom database login successful for: $email');
 
           final userData = response['user'] as Map<String, dynamic>;
           final user = user_model.User.fromJson(userData);
@@ -240,8 +221,6 @@ class SupabaseService {
                     ? dynamicInvestorId
                     : null;
 
-            print('🧩 rpc profileRole=$profileRole');
-            print('🧩 rpc profile[investor_id]=$dynamicInvestorId');
 
             if (profileRole == 'investor' && investorIdFromProfile != null) {
               _cachedUser = user_model.User(
@@ -253,15 +232,12 @@ class SupabaseService {
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt,
               );
-              print('✅ rpc remapped investor user.id=${_cachedUser?.id}');
               return _cachedUser!;
             }
           } catch (e) {
-            print('⚠️ rpc remap lookup failed: $e');
           }
 
           _cachedUser = user;
-          print('⚠️ rpc no remap, using user.id=${_cachedUser?.id}');
           return user;
         } else {
           final message = response['message'] as String? ?? 'Login gagal - alasan tidak diketahui';
@@ -325,7 +301,6 @@ class SupabaseService {
       createdAt: DateTime.parse(session.user.createdAt),
     );
 
-    print('🧩 getCurrentUserWithProfile baseline.id=${baseline.id} role=${baseline.role}');
 
     try {
       final profile = await _client
@@ -335,8 +310,6 @@ class SupabaseService {
           .single();
 
       // Debug: show all columns returned by users so we can find which one maps to investor_assignments.investor_id
-      print('🧩 getCurrentUserWithProfile users row keys=${profile.keys.toList()}');
-      print('🧩 getCurrentUserWithProfile users row raw=${profile}');
 
       final parsed = user_model.User.fromJson(profile);
 
@@ -347,7 +320,6 @@ class SupabaseService {
               ? dynamicInvestorId
               : null;
 
-      print('🧩 getCurrentUserWithProfile profile.id=${profile['id']} role=$profileRole investor_id=$dynamicInvestorId');
 
       if (profileRole == 'investor' && investorIdFromProfile != null) {
         _cachedUser = user_model.User(
@@ -359,16 +331,13 @@ class SupabaseService {
           createdAt: parsed.createdAt,
           updatedAt: parsed.updatedAt,
         );
-        print('✅ getCurrentUserWithProfile remapped id=${_cachedUser?.id}');
         return _cachedUser;
       }
 
       _cachedUser = parsed;
-      print('⚠️ getCurrentUserWithProfile no remap, using id=${_cachedUser?.id}');
       return _cachedUser;
     } catch (e) {
       // If profile lookup fails, fallback to baseline.
-      print('❌ getCurrentUserWithProfile profile lookup failed: $e');
       return baseline;
     }
   }
@@ -422,7 +391,6 @@ class SupabaseService {
     required List<Map<String, dynamic>> items,
   }) async {
     try {
-      print('💾 Creating sale: outletId=$outletId, payment=$paymentMethod, total=$totalAmount');
       
       final response = await _client.from('sales').insert({
         'outlet_id': outletId,
@@ -432,18 +400,27 @@ class SupabaseService {
         'hpp_total': totalHpp,
         'bonus_amount': totalBonus,
         'profit': profit,
-      }).select().single();
+      });
 
-      final saleId = response['id'] as String;
-      print('✅ Sale created with ID: $saleId');
+      // Get the ID of the newly created sale by querying the latest one
+      final latestSale = await _client
+          .from('sales')
+          .select('id')
+          .eq('outlet_id', outletId)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if (latestSale.isEmpty) {
+        throw Exception('Could not retrieve created sale ID');
+      }
+
+      final saleId = latestSale[0]['id'] as String;
 
       // Insert sale items
-      print('📝 Inserting ${items.length} sale items...');
       for (final item in items) {
         final price = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
         final hpp = (item['hpp'] as num?)?.toDouble() ?? 0.0;
         
-        print('  - ${item['product_name']}: qty=${item['quantity']}, price=$price, hpp=$hpp');
         
         await _client.from('sale_items').insert({
           'sale_id': saleId,
@@ -453,12 +430,9 @@ class SupabaseService {
           'hpp': hpp,
         });
       }
-      print('✅ All sale items inserted successfully');
 
       return saleId;
     } catch (e, stackTrace) {
-      print('❌ Error in createSale: $e');
-      print('Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -478,11 +452,8 @@ class SupabaseService {
 
     final response = await query.order('created_at', ascending: false);
 
-    print('📊 getSales response:');
-    print('   Total records: ${(response as List<dynamic>).length}');
     if ((response as List<dynamic>).isNotEmpty) {
       final firstRecord = response[0];
-      print('   First record: $firstRecord');
     }
 
     return (response as List<dynamic>)
@@ -516,7 +487,6 @@ class SupabaseService {
         'gratis_count': gratisCount,
       };
     } catch (e) {
-      print('❌ Error getting gratis stats: $e');
       return {'total': 0, 'gratis_count': 0};
     }
   }
@@ -555,7 +525,6 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('❌ Error fetching baristas by outlet: $e');
       return [];
     }
   }
@@ -572,7 +541,6 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('❌ Error fetching all baristas: $e');
       return [];
     }
   }
@@ -585,7 +553,6 @@ class SupabaseService {
     required DateTime endDate,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - returning empty leaderboard');
       return [];
     }
     
@@ -600,7 +567,6 @@ class SupabaseService {
           .map((item) => item as Map<String, dynamic>)
           .toList();
     } catch (e) {
-      print('❌ Error fetching leaderboard: $e');
       return [];
     }
   }
@@ -611,7 +577,6 @@ class SupabaseService {
     required DateTime selectedDate,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - returning empty leaderboard');
       return [];
     }
     
@@ -621,13 +586,14 @@ class SupabaseService {
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
-          .single();
+          .maybeSingle();
+      
+      if (outletData == null) {
+        return [];
+      }
       
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
       
-      print('🏆 getGlobalLeaderboard - Starting');
-      print('   Selected Date: ${selectedDate.toIso8601String()}');
-      print('   Business Day Start Hour: $businessDayStartHour');
       
       // Convert selectedDate to UTC first (it comes as local Jakarta time from DateTime.now())
       final selectedDateUtc = selectedDate.toUtc();
@@ -640,26 +606,20 @@ class SupabaseService {
       final endDate = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
           .subtract(const Duration(milliseconds: 1));
       
-      print('📅 Business day range (UTC): ${startDate.toIso8601String()} to ${endDate.toIso8601String()}');
       
       final params = {
         'start_date': startDate.toIso8601String(),
         'end_date': endDate.toIso8601String(),
       };
       
-      print('📤 Sending to RPC:');
-      print('   start_date: ${params['start_date']}');
-      print('   end_date: ${params['end_date']}');
       
       final response = await _client.rpc('get_global_leaderboard', params: params);
 
-      print('✅ RPC response received: ${(response as List).length} items');
       
       return response
           .map((item) => item as Map<String, dynamic>)
           .toList();
     } catch (e) {
-      print('❌ Error fetching global leaderboard: $e');
       return [];
     }
   }
@@ -668,12 +628,10 @@ class SupabaseService {
   // Returns product stock with names - for displaying in stock screen
   Future<List<Map<String, dynamic>>> getProductBatchStock(String outletId) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - returning empty stock');
       return [];
     }
     
     try {
-      print('📊 Fetching product batches for outlet: $outletId');
       
       // Get product batches - first without join to see if we have data
       final batchesResponse = await _client
@@ -681,10 +639,8 @@ class SupabaseService {
           .select()
           .eq('outlet_id', outletId);
 
-      print('✅ Fetched ${batchesResponse.length} batches from product_batches table');
 
       if (batchesResponse.isEmpty) {
-        print('⚠️ No product batches found for outlet: $outletId');
         return [];
       }
 
@@ -693,7 +649,6 @@ class SupabaseService {
           .from('products')
           .select();
 
-      print('✅ Fetched ${productsResponse.length} products');
 
       // Build product map for quick lookup
       final productMap = <String, Map<String, dynamic>>{};
@@ -709,7 +664,6 @@ class SupabaseService {
           .from('sale_items')
           .select('product_id, quantity');
 
-      print('✅ Fetched ${salesResponse.length} sale items');
 
       // Build a map of sold quantities by product
       final soldMap = <String, int>{};
@@ -720,7 +674,6 @@ class SupabaseService {
         soldMap[productId] = (soldMap[productId] ?? 0) + quantity;
       }
 
-      print('📦 Sold map: $soldMap');
 
       // Get batch damages (cacat & dikembalikan) - map by batch_id
       final damagesMap = <String, Map<String, int>>{};
@@ -730,7 +683,6 @@ class SupabaseService {
             .select()
             .eq('outlet_id', outletId);
 
-        print('✅ Fetched ${damagesResponse.length} batch damages');
 
         // Build damage maps by batch_id
         for (final damage in damagesResponse) {
@@ -743,11 +695,9 @@ class SupabaseService {
           }
         }
       } catch (e) {
-        print('⚠️ batch_damages table not found yet (table will be created): $e');
         // If table doesn't exist, just use empty damages map
       }
 
-      print('🔴 Damages map: $damagesMap');
 
       // Aggregate by product - include all statuses except expired
       final stockMap = <String, Map<String, dynamic>>{};
@@ -757,7 +707,6 @@ class SupabaseService {
         final batchId = row['id'] as String?;
         
         if (productId == null) {
-          print('⚠️ Batch without product_id found, skipping');
           continue;
         }
 
@@ -775,11 +724,9 @@ class SupabaseService {
         final cacatQty = batchDamages?['cacat'] ?? 0;
         final dikembalikanQty = batchDamages?['dikembalikan'] ?? 0;
 
-        print('  - Batch: $batchCode, Product: $productName (ID: $productId), Qty: $quantity, Status: $status, Cacat: $cacatQty, Dikembalikan: $dikembalikanQty');
 
         // Skip only expired batches
         if (status == 'expired') {
-          print('    └─ Skipping expired batch');
           continue;
         }
         
@@ -808,14 +755,11 @@ class SupabaseService {
         }
       }
 
-      print('🎯 Final stock map with ${stockMap.length} products');
       for (final entry in stockMap.entries) {
-        print('   - ${entry.value['product_name']}: ${entry.value['quantity']} unit (sold: ${entry.value['sold']}, cacat: ${entry.value['cacat']}, dikembalikan: ${entry.value['dikembalikan']})');
       }
       
       return stockMap.values.toList();
     } catch (e) {
-      print('❌ Error fetching product batch stock: $e');
       return [];
     }
   }
@@ -824,7 +768,6 @@ class SupabaseService {
   // Calculate product stock at a specific date (historical stock)
   Future<Map<String, int>> getProductStockAtDate(String outletId, DateTime selectedDate) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - returning empty stock');
       return {};
     }
     
@@ -834,7 +777,12 @@ class SupabaseService {
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
-          .single();
+          .maybeSingle();
+      
+      if (outletData == null) {
+        return {};
+      }
+      
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
 
       // IMPORTANT: selectedDate comes as local time from DateTime.now() on device
@@ -852,10 +800,6 @@ class SupabaseService {
       final nowUtc = nowLocal.toUtc();
       final deviceTimezoneOffset = nowLocal.difference(nowUtc);
       
-      print('📱 Device Timezone Info:');
-      print('   Now (Local): ${nowLocal.toIso8601String()}');
-      print('   Now (UTC): ${nowUtc.toIso8601String()}');
-      print('   Device TZ Offset: ${deviceTimezoneOffset.inHours}h ${(deviceTimezoneOffset.inMinutes % 60)}m');
 
       // selectedDate is in local time (what user sees on screen)
       // Business day calculation should be based on local wall-clock time
@@ -888,20 +832,6 @@ class SupabaseService {
       final businessDayStartUtc = businessDayStartLocal.toUtc();
       final businessDayEndUtc = businessDayEndLocal.toUtc();
 
-      print('═══════════════════════════════════════════════════════════════');
-      print('📊 getProductStockAtDate - STOCK CALCULATION');
-      print('   User Selected Date (Local): ${selectedDate.toIso8601String()}');
-      print('   Outlet ID: $outletId');
-      print('   Business Day Start Hour: $businessDayStartHour:00');
-      print('   ');
-      print('   📅 Business Day Range (LOCAL TIME - device screen):');
-      print('   Start: ${businessDayStartLocal.toIso8601String()}');
-      print('   End:   ${businessDayEndLocal.toIso8601String()}');
-      print('   ');
-      print('   🌍 Business Day Range (UTC - for database query):');
-      print('   Start: ${businessDayStartUtc.toIso8601String()}');
-      print('   End:   ${businessDayEndUtc.toIso8601String()}');
-      print('═══════════════════════════════════════════════════════════════');
 
       // Query: Get allocations created within the business day range (UTC)
       final currentResponse = await _client
@@ -911,22 +841,12 @@ class SupabaseService {
           .gte('created_at', businessDayStartUtc.toIso8601String())
           .lte('created_at', businessDayEndUtc.toIso8601String());
 
-      print('🔍 Database Query:');
-      print('   SELECT showcase_allocations WHERE');
-      print('   ├─ outlet_id = "$outletId"');
-      print('   ├─ created_at >= "${businessDayStartUtc.toIso8601String()}"');
-      print('   └─ created_at <= "${businessDayEndUtc.toIso8601String()}"');
-      print('   ');
-      print('   ✅ Results: ${(currentResponse as List).length} allocations');
       
       if ((currentResponse as List).isNotEmpty) {
-        print('   ');
-        print('   📋 Allocation Details:');
         for (int i = 0; i < currentResponse.length && i < 5; i++) {
           final row = currentResponse[i];
           final allocTime = DateTime.parse(row['created_at'] as String);
           final allocTimeLocal = allocTime.toLocal();
-          print('     [$i] ${row['created_at']} (Local: ${allocTimeLocal.toIso8601String()}), qty: ${row['quantity']}');
         }
       }
 
@@ -957,28 +877,19 @@ class SupabaseService {
       }
       
       if (stockMap.isEmpty) {
-        print('');
-        print('⚠️ NO STOCK FOUND for this business day');
-        print('');
         return {};
       }
 
-      print('');
-      print('✅ Final Stock (Aggregated by Product):');
       for (final entry in stockMap.entries) {
-        print('   - Product: $entry.key, Total Quantity: ${entry.value}');
       }
-      print('');
       return stockMap;
     } catch (e) {
-      print('❌ Error calculating historical stock: $e');
       return {};
     }
   }
 
   Future<Map<String, int>> getProductStock(String outletId, {DateTime? selectedDate}) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - returning empty stock');
       return {};
     }
     
@@ -1020,11 +931,8 @@ class SupabaseService {
         }
       }
       
-      print('✅ Fetched product stock from showcase_allocations for outlet: $outletId');
-      print('📊 Stock map: $stockMap');
       return stockMap;
     } catch (e) {
-      print('❌ Error fetching product stock: $e');
       return {};
     }
   }
@@ -1036,7 +944,6 @@ class SupabaseService {
     required int quantitySold,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - cannot update showcase allocation');
       return;
     }
 
@@ -1062,7 +969,6 @@ class SupabaseService {
             .maybeSingle();
 
         if (showcaseProduct == null) {
-          print('⚠️ No showcase_product found for product $productId');
           return;
         }
 
@@ -1085,7 +991,6 @@ class SupabaseService {
               .update({'quantity': newQty})
               .eq('id', allocation['id']);
           
-          print('✅ Decreased showcase allocation: product=$productId, old=$currentQty, new=$newQty');
         }
       } else if (response.isNotEmpty) {
         final allocation = response.first;
@@ -1097,10 +1002,8 @@ class SupabaseService {
             .update({'quantity': newQty})
             .eq('id', allocation['id']);
         
-        print('✅ Decreased showcase allocation: product=$productId, old=$currentQty, new=$newQty');
       }
     } catch (e) {
-      print('⚠️ Error decreasing showcase allocation: $e');
       // Don't fail checkout if this fails
     }
   }
@@ -1111,7 +1014,6 @@ class SupabaseService {
     required DateTime selectedDate,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - returning empty sold data');
       return {};
     }
 
@@ -1121,7 +1023,11 @@ class SupabaseService {
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
-          .single();
+          .maybeSingle();
+
+      if (outletData == null) {
+        return {};
+      }
 
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
 
@@ -1150,9 +1056,6 @@ class SupabaseService {
       final dailyStart = businessDayStartLocal.toUtc();
       final dailyEnd = businessDayEndLocal.toUtc();
 
-      print('📊 getSoldQuantityToday - outlet: $outletId');
-      print('   Business day (LOCAL): ${businessDayStartLocal.toIso8601String()} to ${businessDayEndLocal.toIso8601String()}');
-      print('   Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
 
       // Query sales for this outlet on this business day
       final salesResponse = await _client
@@ -1163,13 +1066,11 @@ class SupabaseService {
           .lte('created_at', dailyEnd.toIso8601String());
 
       if (salesResponse.isEmpty) {
-        print('⚠️ No sales found for today');
         return {};
       }
 
       // Collect all sale IDs
       final saleIds = (salesResponse as List).map((s) => s['id'] as String).toList();
-      print('   Found ${saleIds.length} sales');
 
       // Query sale_items to get product quantities
       final itemsResponse = await _client
@@ -1188,10 +1089,8 @@ class SupabaseService {
         }
       }
 
-      print('✅ Fetched sold quantities: $soldMap');
       return soldMap;
     } catch (e) {
-      print('❌ Error fetching sold quantity: $e');
       return {};
     }
   }
@@ -1202,7 +1101,6 @@ class SupabaseService {
     required DateTime selectedDate,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - returning empty returned data');
       return {};
     }
 
@@ -1212,7 +1110,11 @@ class SupabaseService {
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
-          .single();
+          .maybeSingle();
+
+      if (outletData == null) {
+        return {};
+      }
 
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
 
@@ -1241,9 +1143,6 @@ class SupabaseService {
       final dailyStart = businessDayStartLocal.toUtc();
       final dailyEnd = businessDayEndLocal.toUtc();
 
-      print('📊 getReturnedQuantityToday - outlet: $outletId');
-      print('   Business day (LOCAL): ${businessDayStartLocal.toIso8601String()} to ${businessDayEndLocal.toIso8601String()}');
-      print('   Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
 
       // Query product_returns for this outlet on this business day
       final returnsResponse = await _client
@@ -1254,7 +1153,6 @@ class SupabaseService {
           .lte('return_date', dailyEnd.toIso8601String());
 
       if (returnsResponse.isEmpty) {
-        print('⚠️ No returns found for today');
         return {};
       }
 
@@ -1268,10 +1166,8 @@ class SupabaseService {
         }
       }
 
-      print('✅ Fetched returned quantities: $returnedMap');
       return returnedMap;
     } catch (e) {
-      print('❌ Error fetching returned quantity: $e');
       return {};
     }
   }
@@ -1282,7 +1178,6 @@ class SupabaseService {
     required DateTime selectedDate,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - returning empty transfer stats');
       return {};
     }
 
@@ -1292,7 +1187,11 @@ class SupabaseService {
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
-          .single();
+          .maybeSingle();
+
+      if (outletData == null) {
+        return {};
+      }
 
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
 
@@ -1321,9 +1220,6 @@ class SupabaseService {
       final dailyStart = businessDayStartLocal.toUtc();
       final dailyEnd = businessDayEndLocal.toUtc();
 
-      print('📤 getProductTransferStats - outlet: $outletId');
-      print('   Business day (LOCAL): ${businessDayStartLocal.toIso8601String()} to ${businessDayEndLocal.toIso8601String()}');
-      print('   Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
 
       // Initialize transfer stats map
       final transferStats = <String, Map<String, int>>{};
@@ -1336,7 +1232,6 @@ class SupabaseService {
           .gte('created_at', dailyStart.toIso8601String())
           .lte('created_at', dailyEnd.toIso8601String());
 
-      print('   Found ${sentResponse.length} transfers sent');
 
       if (sentResponse.isNotEmpty) {
         final sentTransferIds = (sentResponse as List).map((s) => s['id'] as String).toList();
@@ -1368,7 +1263,6 @@ class SupabaseService {
           .gte('created_at', dailyStart.toIso8601String())
           .lte('created_at', dailyEnd.toIso8601String());
 
-      print('   Found ${receivedResponse.length} transfers received');
 
       if (receivedResponse.isNotEmpty) {
         final receivedTransferIds = (receivedResponse as List).map((s) => s['id'] as String).toList();
@@ -1392,10 +1286,8 @@ class SupabaseService {
         }
       }
 
-      print('✅ Fetched transfer stats: $transferStats');
       return transferStats;
     } catch (e) {
-      print('❌ Error fetching transfer stats: $e');
       return {};
     }
   }
@@ -1417,7 +1309,6 @@ class SupabaseService {
           .map((item) => StockTransfer.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('❌ Error fetching stock transfers: $e');
       return [];
     }
   }
@@ -1448,17 +1339,28 @@ class SupabaseService {
     }
     
     try {
-      final transferResponse = await _client
+      await _client
           .from('stock_transfers')
           .insert({
             'from_outlet_id': fromOutletId,
             'to_outlet_id': toOutletId,
             'status': 'requested',
-          })
-          .select()
-          .single();
+          });
 
-      final transferId = transferResponse['id'];
+      // Get the ID of the newly created transfer by querying the latest one
+      final latestTransfer = await _client
+          .from('stock_transfers')
+          .select('id')
+          .eq('from_outlet_id', fromOutletId)
+          .eq('to_outlet_id', toOutletId)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if (latestTransfer.isEmpty) {
+        throw Exception('Could not retrieve created transfer ID');
+      }
+
+      final transferId = latestTransfer[0]['id'];
       for (final item in items) {
         await _client.from('stock_transfer_items').insert({
           'transfer_id': transferId,
@@ -1468,7 +1370,6 @@ class SupabaseService {
       }
       return transferId;
     } catch (e) {
-      print('❌ Error creating stock transfer: $e');
       return null;
     }
   }
@@ -1485,7 +1386,7 @@ class SupabaseService {
     }
     
     try {
-      final response = await _client
+      await _client
           .from('stock_returns')
           .insert({
             'outlet_id': outletId,
@@ -1493,13 +1394,22 @@ class SupabaseService {
             'quantity': quantity,
             'reason': reason,
             'status': 'pending',
-          })
-          .select()
-          .single();
+          });
 
-      return response['id'];
+      // Get the ID of the newly created return by querying the latest one
+      final latestReturn = await _client
+          .from('stock_returns')
+          .select('id')
+          .eq('outlet_id', outletId)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if (latestReturn.isEmpty) {
+        throw Exception('Could not retrieve created return ID');
+      }
+
+      return latestReturn[0]['id'];
     } catch (e) {
-      print('❌ Error creating stock return: $e');
       return null;
     }
   }
@@ -1507,12 +1417,10 @@ class SupabaseService {
   // DEBUG: Seed sample product batches for development
   Future<void> seedSampleProductBatches(String outletId) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized');
       return;
     }
 
     try {
-      print('🌱 Seeding sample product batches...');
       
       // Get all products
       final productsResponse = await _client
@@ -1521,7 +1429,6 @@ class SupabaseService {
           .limit(5);
 
       if (productsResponse.isEmpty) {
-        print('⚠️ No products found to seed');
         return;
       }
 
@@ -1550,12 +1457,9 @@ class SupabaseService {
               'notes': 'Sample batch for $productName',
             });
 
-        print('✅ Created batch for: $productName with qty: ${50 + (i * 10)}');
       }
 
-      print('🎉 Sample data seeded successfully!');
     } catch (e) {
-      print('❌ Error seeding sample data: $e');
     }
   }
 
@@ -1570,12 +1474,10 @@ class SupabaseService {
     String notes = '',
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized');
       return false;
     }
 
     try {
-      print('📝 Adding batch damage: batchId=$batchId, cacat=$cacatQty, dikembalikan=$dikembalikanQty');
 
       // Check if damage record already exists for this batch
       final existingResponse = await _client
@@ -1598,7 +1500,6 @@ class SupabaseService {
             })
             .eq('id', existingId);
 
-        print('✅ Updated batch damage record: $existingId');
       } else {
         // Create new record
         await _client
@@ -1613,12 +1514,10 @@ class SupabaseService {
               'created_by': userId,
             });
 
-        print('✅ Created new batch damage record');
       }
 
       return true;
     } catch (e) {
-      print('❌ Error adding batch damage: $e');
       return false;
     }
   }
@@ -1643,7 +1542,6 @@ class SupabaseService {
 
       return response[0];
     } catch (e) {
-      print('❌ Error fetching batch damage: $e');
       return null;
     }
   }
@@ -1680,7 +1578,6 @@ class SupabaseService {
 
       return outlets;
     } catch (e) {
-      print('❌ Error fetching active investor outlets: $e');
       return [];
     }
   }
@@ -1697,7 +1594,6 @@ class SupabaseService {
     int profitTrendDays = 30,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ getInvestorOutletsSummary: Supabase not initialized');
       return [];
     }
 
@@ -1707,7 +1603,6 @@ class SupabaseService {
       // antara id auth user vs id investor yang dipakai oleh tabel investor_assignments.
       final effectiveInvestorId = investorId.trim();
 
-      print('👤 getInvestorOutletsSummary START - investorId=$effectiveInvestorId');
 
       final endIso = DateTime.now().toUtc().toIso8601String();
       final startIso = DateTime.now()
@@ -1715,10 +1610,8 @@ class SupabaseService {
           .subtract(Duration(days: profitTrendDays))
           .toIso8601String();
 
-      print('📅 Date range: $startIso to $endIso');
 
       // 1) Fetch assignments (field spesifik seperti web)
-      print('🔍 Querying investor_assignments for investor_id=$effectiveInvestorId');
       final assignmentsResponse = await _client
           .from('investor_assignments')
           .select('outlet_id, investment_amount, margin_percentage, status')
@@ -1728,13 +1621,10 @@ class SupabaseService {
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      print('✅ Query result: ${assignmentsRows.length} assignments found');
       if (assignmentsRows.isNotEmpty) {
-        print('   First assignment: ${assignmentsRows.first}');
       }
 
       if (assignmentsRows.isEmpty) {
-        print('⚠️ No assignments found for investor_id=$effectiveInvestorId');
         return [];
       }
 
@@ -1745,15 +1635,12 @@ class SupabaseService {
           .toSet()
           .toList();
 
-      print('🔎 outletIds=${outletIds.length} => $outletIds');
 
       if (outletIds.isEmpty) {
-        print('⚠️ No valid outlet IDs extracted');
         return [];
       }
 
       // 2) Fetch outlets by ids
-      print('🏪 Querying outlets for ids: $outletIds');
       final outletResponse = await _client
           .from('outlets')
           .select('id, name')
@@ -1763,9 +1650,7 @@ class SupabaseService {
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      print('✅ Fetched ${outletRows.length} outlets');
       if (outletRows.isNotEmpty) {
-        print('   First outlet: ${outletRows.first}');
       }
 
       final outletMap = <String, Map<String, dynamic>>{
@@ -1774,7 +1659,6 @@ class SupabaseService {
       };
 
       // 3) Aggregate sales profit for those outlets
-      print('💰 Querying sales for outlets with profit calculation');
       final salesResponse = await _client
           .from('sales')
           .select('outlet_id, profit')
@@ -1786,7 +1670,6 @@ class SupabaseService {
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      print('✅ Fetched ${salesRows.length} sales records');
 
       final profitMap = <String, double>{};
       for (final sale in salesRows) {
@@ -1822,7 +1705,6 @@ class SupabaseService {
         };
       }).toList();
     } catch (e) {
-      print('❌ Error fetching investor outlets summary: $e');
       return [];
     }
   }
@@ -1832,13 +1714,11 @@ class SupabaseService {
     required String investorId,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ getInvestorAssignments: Supabase not initialized');
       return [];
     }
 
     try {
       final effectiveInvestorId = investorId.trim();
-      print('👤 getInvestorAssignments - fetching for investorId=$effectiveInvestorId');
 
       // First, verify investor exists in system
       try {
@@ -1849,54 +1729,39 @@ class SupabaseService {
             .maybeSingle();
         
         if (userData != null) {
-          print('✅ Investor found: ${userData['email']} (${userData['role']})');
         } else {
-          print('⚠️ Investor not found in users table');
         }
       } catch (e) {
-        print('⚠️ Error checking investor: $e');
       }
 
       // Query investor_assignments with direct outlet join
-      print('🔍 Querying investor_assignments with filter investor_id=$effectiveInvestorId');
       
       List<Map<String, dynamic>> response;
       try {
         // Try with outlet join first
-        print('   Attempting join query with outlets...');
         response = await _client
             .from('investor_assignments')
             .select('id, outlet_id, investment_amount, margin_percentage, status, created_at, outlets(id, name, type, address)')
             .eq('investor_id', effectiveInvestorId)
             .order('created_at', ascending: false);
-        print('✅ Query with join succeeded, response length: ${response.length}');
-        print('✅ Query with join succeeded');
       } catch (joinError) {
-        print('⚠️ Join query failed: $joinError');
-        print('   Trying query without join...');
         // Fallback: query without join
         response = await _client
             .from('investor_assignments')
             .select('id, outlet_id, investment_amount, margin_percentage, status, created_at')
             .eq('investor_id', effectiveInvestorId)
             .order('created_at', ascending: false);
-        print('✅ Query without join succeeded');
       }
 
-      print('📦 Query completed, response type: ${response.runtimeType}');
 
       final assignmentRows = (response as List<dynamic>)
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      print('✅ Fetched ${assignmentRows.length} assignments');
       if (assignmentRows.isNotEmpty) {
-        print('   First assignment: ${assignmentRows.first}');
       } else {
-        print('⚠️ No assignments found');
         
         // Fallback: Check all investor_ids in the table for debugging
-        print('   Checking all investor_ids in database...');
         try {
           final allAssignments = await _client
               .from('investor_assignments')
@@ -1909,11 +1774,9 @@ class SupabaseService {
             if (id != null) uniqueIds.add(id);
           });
           
-          print('   Sample investor_ids in database: $uniqueIds');
           
           // If we found investor_ids in database, query with first one for dev testing
           if (uniqueIds.isNotEmpty) {
-            print('   🔧 DEV MODE: Found other investor_ids, querying with first one for testing...');
             final firstInvestorId = uniqueIds.first;
             
             final devResponse = await _client
@@ -1926,10 +1789,8 @@ class SupabaseService {
                 .whereType<Map<String, dynamic>>()
                 .toList();
             
-            print('   ✅ DEV: Found ${devRows.length} assignments for investor $firstInvestorId');
             
             if (devRows.isNotEmpty) {
-              print('   ⚠️ NOTE: These are from a different investor! Use for UI testing only.');
               return devRows.map((assignment) {
                 return <String, dynamic>{
                   ...assignment,
@@ -1941,7 +1802,6 @@ class SupabaseService {
             }
           }
         } catch (e) {
-          print('   Error checking database: $e');
         }
       }
 
@@ -1958,7 +1818,6 @@ class SupabaseService {
         
         // If outlet data not in join, fetch it separately
         if (outlet == null || outlet.isEmpty) {
-          print('⚠️ Outlet data missing for assignment, fetching separately...');
           try {
             final outletData = await _client
                 .from('outlets')
@@ -1968,14 +1827,11 @@ class SupabaseService {
             
             if (outletData != null) {
               outlet = outletData;
-              print('✅ Fetched outlet separately: ${outlet['name']}');
             }
           } catch (e) {
-            print('⚠️ Error fetching outlet separately: $e');
           }
         }
 
-        print('🔗 Assignment outlet_id=$outletId => outlet_name=${outlet?['name'] ?? 'NOT FOUND'}');
 
         enrichedAssignments.add(<String, dynamic>{
           ...assignment,
@@ -1985,10 +1841,8 @@ class SupabaseService {
         });
       }
       
-      print('✅ Returning ${enrichedAssignments.length} enriched assignments');
       return enrichedAssignments;
     } catch (e) {
-      print('❌ Error fetching investor assignments: $e');
       return [];
     }
   }
@@ -2006,10 +1860,8 @@ class SupabaseService {
           .select('id, name')
           .order('name', ascending: true);
 
-      print('✅ Fetched ${response.length} outlets');
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('❌ Error fetching outlets: $e');
       return [];
     }
   }
@@ -2027,7 +1879,6 @@ class SupabaseService {
           .eq('outlet_id', outletId)
           .order('created_at', ascending: false);
 
-      print('✅ Fetched ${response.length} stock returns');
       
       // Map product name into response
       final returns = response.map((item) {
@@ -2039,7 +1890,6 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(returns);
     } catch (e) {
-      print('❌ Error fetching stock returns: $e');
       return [];
     }
   }
@@ -2059,10 +1909,11 @@ class SupabaseService {
               .from('outlets')
               .select('business_day_start_hour')
               .eq('id', outletId)
-              .single();
-          businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+              .maybeSingle();
+          if (outletData != null) {
+            businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+          }
         } catch (e) {
-          print('⚠️ Could not get business_day_start_hour: $e');
         }
       }
 
@@ -2081,7 +1932,6 @@ class SupabaseService {
         final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
             .subtract(const Duration(milliseconds: 1));
         
-        print('📋 getProductReturns - outlet: $outletId, Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
         query = query
             .gte('return_date', dailyStart.toIso8601String())
             .lte('return_date', dailyEnd.toIso8601String());
@@ -2090,11 +1940,9 @@ class SupabaseService {
       final response = await query.order('return_date', ascending: false);
 
       if (response.isEmpty) {
-        print('⚠️ No product returns found for outlet: $outletId');
         return [];
       }
 
-      print('📦 Fetched ${response.length} product returns');
       
       // Get all products to enrich with product names
       final products = await getProducts();
@@ -2112,10 +1960,8 @@ class SupabaseService {
         };
       }).toList();
 
-      print('✅ Enriched ${returns.length} returns with product names');
       return List<Map<String, dynamic>>.from(returns);
     } catch (e) {
-      print('❌ Error fetching product returns: $e');
       return [];
     }
   }
@@ -2129,13 +1975,10 @@ class SupabaseService {
     String? conditionNotes,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - cannot create return');
       return false;
     }
 
     try {
-      print('📝 Creating product return...');
-      print('   Product: $productId, Qty: $quantity, Reason: $returnReason');
 
       // Create product_returns records (one per unit returned)
       // Condition status must be one of: 'sellable', 'damaged', 'partially_damaged'
@@ -2154,10 +1997,8 @@ class SupabaseService {
 
       await _client.from('product_returns').insert(returnData);
 
-      print('✅ Product return created successfully');
       return true;
     } catch (e) {
-      print('❌ Error creating product return: $e');
       return false;
     }
   }
@@ -2168,158 +2009,139 @@ class SupabaseService {
     required String toOutletId,
     required String productId,
     required int quantity,
+    DateTime? selectedDate,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized - cannot create transfer');
       return false;
     }
 
     try {
-      print('📦 Creating product transfer...');
-      print('   From: $fromOutletId → To: $toOutletId');
-      print('   Product: $productId, Qty: $quantity');
 
-      // Step 0: Get showcase_product_id for this product
-      final showcaseProduct = await _client
-          .from('showcase_products')
-          .select('id')
-          .eq('product_id', productId)
-          .maybeSingle();
-
-      if (showcaseProduct == null) {
-        print('❌ Showcase product not found for product_id: $productId');
-        return false;
-      }
-
-      final showcaseProductId = showcaseProduct['id'] as String;
-      print('✅ Found showcase_product_id: $showcaseProductId');
-
-      // Step 1: Get current allocations for source outlet
-      final sourceAllocation = await _client
-          .from('showcase_allocations')
-          .select('id, quantity')
-          .eq('outlet_id', fromOutletId)
-          .eq('showcase_product_id', showcaseProductId)
-          .maybeSingle();
-
-      if (sourceAllocation == null) {
-        print('❌ Product not found in source outlet');
-        return false;
-      }
-
-      final currentQty = sourceAllocation['quantity'] as int? ?? 0;
-      if (currentQty < quantity) {
-        print('❌ Insufficient quantity in source outlet (available: $currentQty, requested: $quantity)');
-        return false;
-      }
-
-      // Step 2: Update source outlet (decrease quantity) - RESERVED
-      await _client
-          .from('showcase_allocations')
-          .update({'quantity': currentQty - quantity})
-          .eq('id', sourceAllocation['id']);
-
-      print('✅ Decreased source outlet quantity (reserved for transfer)');
-
-      // Step 3: DO NOT update destination outlet quantity yet - only update when approved
-      // For now, just create the transfer record with 'pending' status
-      print('⏳ Destination outlet quantity will be updated when transfer is approved');
-
-      print('📊 Source allocation updated. Now creating transfer record...');
-
-      // Step 4: Create transfer record with 'pending' status (awaiting approval)
+      // Step 0: Get showcase_allocation for source outlet to find showcase_product_id
       try {
-        print('📝 Creating transfer record in stock_transfers table with PENDING status...');
-        // Don't use .select() here to avoid "single row" issues
-        // Just insert without returning data, then query it
-        await _client
-            .from('stock_transfers')
-            .insert({
-              'from_outlet_id': fromOutletId,
-              'to_outlet_id': toOutletId,
-              'status': 'pending',
-              'created_at': DateTime.now().toIso8601String(),
-            });
-        
-        print('✅ Inserted transfer record');
-        
-        // Get the ID of the newly created transfer by querying the latest one
-        final transferQuery = await _client
-            .from('stock_transfers')
+        // First, get the showcase_product_id from showcase_products table
+        final showcaseProducts = await _client
+            .from('showcase_products')
             .select('id')
-            .eq('from_outlet_id', fromOutletId)
-            .eq('to_outlet_id', toOutletId)
-            .eq('status', 'pending')
-            .order('created_at', ascending: false)
-            .limit(1);
+            .eq('product_id', productId);
         
-        if (transferQuery.isEmpty) {
-          print('❌ Could not find created transfer record');
+        
+        if (showcaseProducts.isEmpty) {
           return false;
         }
-        
-        final transferId = transferQuery[0]['id'] as String;
-        print('✅ Created stock_transfers record: $transferId');
-        
-        // Insert transfer item details
-        try {
-          print('📝 Preparing to insert into stock_transfer_items...');
-          print('   transfer_id: $transferId');
-          print('   product_id: $productId');
-          print('   quantity_int: $quantity');
-          
-          final itemResponse = await _client
-              .from('stock_transfer_items')
-              .insert({
-                'transfer_id': transferId,
-                'product_id': productId,
-                'quantity': quantity.toDouble(), // Fill the DECIMAL quantity column
-                'quantity_int': quantity, // Also fill quantity_int for integer reference
-                'created_at': DateTime.now().toIso8601String(),
-              })
-              .select('id');
-          
-          if (itemResponse.isNotEmpty) {
-            print('✅ Created stock_transfer_items record successfully');
-            print('   Item ID: ${itemResponse[0]['id']}');
-          } else {
-            print('⚠️ stock_transfer_items insert returned empty response (might still be created)');
-          }
-        } catch (itemError) {
-          print('❌ CRITICAL ERROR inserting into stock_transfer_items:');
-          print('   Error type: ${itemError.runtimeType}');
-          print('   Error message: $itemError');
-          print('📝 Debugging info:');
-          print('   - Check if ingredient_id constraint is blocking (it should be nullable)');
-          print('   - Check if RLS is actually disabled');
-          print('   - Check if product_id foreign key is valid');
-          
-          // Try to insert without select to see if error is clearer
-          try {
-            print('📝 Retrying insert without .select()...');
-            await _client.from('stock_transfer_items').insert({
-              'transfer_id': transferId,
-              'product_id': productId,
-              'quantity': quantity.toDouble(),
-              'quantity_int': quantity,
-            });
-            print('✅ Insert succeeded on retry!');
-          } catch (retryError) {
-            print('❌ Retry also failed: $retryError');
-          }
+
+        // If multiple, just use the first one
+        final showcaseProductId = showcaseProducts[0]['id'] as String;
+
+        // Now query showcase_allocations using showcase_product_id
+        final allocations = await _client
+            .from('showcase_allocations')
+            .select('id, quantity, showcase_product_id')
+            .eq('outlet_id', fromOutletId)
+            .eq('showcase_product_id', showcaseProductId)
+            .limit(1);
+
+        if (allocations.isEmpty) {
+          return false;
         }
-      } catch (e) {
-        print('❌ CRITICAL ERROR in transfer creation:');
-        print('   Error: $e');
-        print('   Type: ${e.runtimeType}');
+
+        final sourceAllocation = allocations[0] as Map<String, dynamic>;
+        final currentQty = sourceAllocation['quantity'] as int? ?? 0;
+        
+        // Calculate "sisa" (remaining stock) using the same formula as UI:
+        // sisa = quantity - sold - returned - dikirim + diterima
+        final checkDate = selectedDate ?? DateTime.now();
+        final soldMap = await getSoldQuantityToday(outletId: fromOutletId, selectedDate: checkDate);
+        final returnedMap = await getReturnedQuantityToday(outletId: fromOutletId, selectedDate: checkDate);
+        final transferStats = await getProductTransferStats(outletId: fromOutletId, selectedDate: checkDate);
+        
+        final sold = soldMap[productId] ?? 0;
+        final returned = returnedMap[productId] ?? 0;
+        final transfers = transferStats[productId] ?? {'dikirim': 0, 'diterima': 0};
+        final dikirim = (transfers['dikirim'] ?? 0) as num;
+        final diterima = (transfers['diterima'] ?? 0) as num;
+        final sisa = currentQty - sold - returned - dikirim.toInt() + diterima.toInt();
+        
+        
+        if (sisa < quantity) {
+          return false;
+        }
+
+
+        // Step 1: DON'T decrease quantity yet - only check availability
+        // Quantity will be decreased when transfer is approved
+
+        // Step 2: DO NOT update destination outlet quantity - only update when approved
+
+
+        // Step 3: Create transfer record with 'requested' status (awaiting approval)
+        try {
+          // Don't use .select() here to avoid "single row" issues
+          // Just insert without returning data, then query it
+          try {
+            await _client
+                .from('stock_transfers')
+                .insert({
+                  'from_outlet_id': fromOutletId,
+                  'to_outlet_id': toOutletId,
+                  'status': 'requested',
+                  // Let database set created_at to ensure correct server time
+                });
+            
+          } catch (insertError) {
+            throw insertError;
+          }
+          
+          // Get the ID of the newly created transfer by querying the latest one
+          try {
+            final transferQuery = await _client
+                .from('stock_transfers')
+                .select('id')
+                .eq('from_outlet_id', fromOutletId)
+                .eq('to_outlet_id', toOutletId)
+                .eq('status', 'requested')
+                .order('created_at', ascending: false)
+                .limit(1);
+            
+            if (transferQuery.isEmpty) {
+              return false;
+            }
+            
+            final transferId = transferQuery[0]['id'] as String;
+            
+            // Insert transfer item details
+            try {
+              
+              // Just insert without .select() to avoid "single row" issues
+              try {
+                await _client
+                    .from('stock_transfer_items')
+                    .insert({
+                      'transfer_id': transferId,
+                      'product_id': productId,
+                      'quantity': quantity.toDouble(), // Fill the DECIMAL quantity column
+                      'quantity_int': quantity, // Also fill quantity_int for integer reference
+                      'created_at': DateTime.now().toIso8601String(),
+                    });
+                
+              } catch (itemInsertError) {
+                throw itemInsertError;
+              }
+            } catch (itemError) {
+              throw itemError;
+            }
+          } catch (queryError) {
+            throw queryError;
+          }
+        } catch (e) {
+          throw e;
+        }
+      } catch (allocError) {
+        throw allocError;
       }
       
-      print('✅ Product transfer completed successfully');
-      print('📊 Final state: Allocations updated + Database/Cache saved');
       return true;
     } catch (e) {
-      print('❌ Error creating product transfer: $e');
-      print('📊 Cache state on error: ${_recentTransfers.length} transfers');
       return false;
     }
   }
@@ -2331,7 +2153,6 @@ class SupabaseService {
     }
 
     try {
-      print('📦 Fetching product transfers from database...');
       
       // Get outlet's business_day_start_hour if filtering by date
       int businessDayStartHour = 4; // default
@@ -2341,10 +2162,11 @@ class SupabaseService {
               .from('outlets')
               .select('business_day_start_hour')
               .eq('id', outletId)
-              .single();
-          businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+              .maybeSingle();
+          if (outletData != null) {
+            businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+          }
         } catch (e) {
-          print('⚠️ Could not get business_day_start_hour: $e');
         }
       }
       
@@ -2356,21 +2178,12 @@ class SupabaseService {
             from_outlet_id,
             to_outlet_id,
             status,
-            created_at,
-            stock_transfer_items(
-              product_id,
-              quantity_int
-            )
+            created_at
           ''')
           .or('from_outlet_id.eq.$outletId,to_outlet_id.eq.$outletId');
 
-      // Add date filter if provided
+      // Filter by selected date (business day) if provided
       if (selectedDate != null) {
-        // Convert selected date to UTC
-        // selectedDate is DateTime.now() or picked by user (no time component)
-        // Business day starts at businessDayStartHour on selectedDate
-        // and ends at (businessDayStartHour - 1):59 on selectedDate + 1 day
-        
         final year = selectedDate.year;
         final month = selectedDate.month;
         final day = selectedDate.day;
@@ -2378,82 +2191,107 @@ class SupabaseService {
         final dailyStart = DateTime.utc(year, month, day, businessDayStartHour, 0, 0);
         final dailyEnd = DateTime.utc(year, month, day + 1, businessDayStartHour, 0, 0).subtract(const Duration(seconds: 1));
         
-        print('📤 getProductTransfers - outlet: $outletId, Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
         query = query
             .gte('created_at', dailyStart.toIso8601String())
             .lte('created_at', dailyEnd.toIso8601String());
+      } else {
       }
       
       final response = await query.order('created_at', ascending: false);
 
-      print('📦 Fetched ${response.length} transfers from database');
+      for (final t in response) {
+      }
 
       // Enrich with outlet names and product names
       final enrichedTransfers = <Map<String, dynamic>>[];
       
       for (final transfer in response) {
         try {
-          print('📝 Processing transfer: ${transfer['id']}');
           
-          final fromOutlet = await _client
-              .from('outlets')
-              .select('name')
-              .eq('id', transfer['from_outlet_id'])
-              .maybeSingle();
+          // Step 1: Get outlet names
+          late final String fromName;
+          late final String toName;
+          try {
+            final fromOutlet = await _client
+                .from('outlets')
+                .select('name')
+                .eq('id', transfer['from_outlet_id'])
+                .maybeSingle();
+            fromName = (fromOutlet?['name'] as String?) ?? 'Unknown';
+            
+            final toOutlet = await _client
+                .from('outlets')
+                .select('name')
+                .eq('id', transfer['to_outlet_id'])
+                .maybeSingle();
+            toName = (toOutlet?['name'] as String?) ?? 'Unknown';
+          } catch (e) {
+            continue;
+          }
           
-          final toOutlet = await _client
-              .from('outlets')
-              .select('name')
-              .eq('id', transfer['to_outlet_id'])
-              .maybeSingle();
+          // Step 2: Get transfer items
+          late final List<dynamic> itemsResponse;
+          try {
+            itemsResponse = await _client
+                .from('stock_transfer_items')
+                .select('product_id, quantity_int')
+                .eq('transfer_id', transfer['id']);
+          } catch (e) {
+            continue;
+          }
           
-          final fromName = (fromOutlet?['name'] as String?) ?? 'Unknown';
-          final toName = (toOutlet?['name'] as String?) ?? 'Unknown';
-          
-          // Get items from stock_transfer_items table directly (not nested)
-          final itemsResponse = await _client
-              .from('stock_transfer_items')
-              .select('product_id, quantity_int')
-              .eq('transfer_id', transfer['id']);
-          
-          print('   └─ Items found: ${itemsResponse.length}');
           
           if (itemsResponse.isNotEmpty) {
             final firstItem = itemsResponse[0];
-            print('   └─ First item: $firstItem');
             
             final productId = firstItem['product_id'] as String?;
             final quantity = firstItem['quantity_int'] as int? ?? 0;
             
-            print('   └─ Product ID: $productId, Quantity: $quantity');
             
             if (productId != null) {
-              final product = await _client
-                  .from('products')
-                  .select('name')
-                  .eq('id', productId)
-                  .maybeSingle();
-              
-              final productName = (product?['name'] as String?) ?? 'Unknown';
-              
-              // Get showcase_product_id for current stock lookup
-              final showcaseProduct = await _client
-                  .from('showcase_products')
-                  .select('id')
-                  .eq('product_id', productId)
-                  .maybeSingle();
-              
-              int currentStockSending = 0;
-              if (showcaseProduct != null) {
-                final showcaseProductId = showcaseProduct['id'] as String;
-                final sendingOutletStock = await _client
-                    .from('showcase_allocations')
-                    .select('quantity')
-                    .eq('outlet_id', transfer['from_outlet_id'])
-                    .eq('showcase_product_id', showcaseProductId)
+              // Step 3: Get product name
+              late final String productName;
+              try {
+                final product = await _client
+                    .from('products')
+                    .select('name')
+                    .eq('id', productId)
                     .maybeSingle();
+                productName = (product?['name'] as String?) ?? 'Unknown';
+              } catch (e) {
+                continue;
+              }
+              
+              // Step 4: Get showcase_product_id for current stock lookup
+              int currentStockSending = 0;
+              try {
+                final showcaseProduct = await _client
+                    .from('showcase_products')
+                    .select('id')
+                    .eq('product_id', productId)
+                    .limit(1);
                 
-                currentStockSending = (sendingOutletStock?['quantity'] as int?) ?? 0;
+                if (showcaseProduct.isNotEmpty) {
+                  final showcaseProductId = showcaseProduct[0]['id'] as String;
+                  
+                  // Step 5: Get current stock
+                  try {
+                    final sendingOutletStockList = await _client
+                        .from('showcase_allocations')
+                        .select('quantity')
+                        .eq('outlet_id', transfer['from_outlet_id'])
+                        .eq('showcase_product_id', showcaseProductId)
+                        .limit(1)
+                        .order('created_at', ascending: false);
+                    
+                    if (sendingOutletStockList.isNotEmpty) {
+                      currentStockSending = (sendingOutletStockList[0]['quantity'] as int?) ?? 0;
+                    }
+                  } catch (e) {
+                    currentStockSending = 0;
+                  }
+                }
+              } catch (e) {
               }
               
               final enrichedTransfer = {
@@ -2471,22 +2309,17 @@ class SupabaseService {
               };
               
               enrichedTransfers.add(enrichedTransfer);
-              print('✅ Enriched: $productName ($quantity unit) $fromName (Stock: $currentStockSending) → $toName');
             }
           } else {
-            print('⚠️ No items found in stock_transfer_items for this transfer');
           }
         } catch (e) {
-          print('❌ Error enriching transfer: $e');
         }
       }
       
-      print('✅ Enriched ${enrichedTransfers.length} transfers with details');
+      for (final t in enrichedTransfers) {
+      }
       return enrichedTransfers;
     } catch (e) {
-      print('❌ Error fetching product transfers: $e');
-      print('💡 This usually means RLS is enabled on stock_transfers table');
-      print('💡 Run: ALTER TABLE stock_transfers DISABLE ROW LEVEL SECURITY;');
       return [];
     }
   }
@@ -2498,7 +2331,6 @@ class SupabaseService {
     }
 
     try {
-      print('📥 Fetching received transfers for outlet: $outletId');
       
       // Get outlet's business_day_start_hour if filtering by date
       int businessDayStartHour = 4; // default
@@ -2508,10 +2340,11 @@ class SupabaseService {
               .from('outlets')
               .select('business_day_start_hour')
               .eq('id', outletId)
-              .single();
-          businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+              .maybeSingle();
+          if (outletData != null) {
+            businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+          }
         } catch (e) {
-          print('⚠️ Could not get business_day_start_hour: $e');
         }
       }
       
@@ -2535,7 +2368,6 @@ class SupabaseService {
         final dailyStart = DateTime.utc(year, month, day, businessDayStartHour, 0, 0);
         final dailyEnd = DateTime.utc(year, month, day + 1, businessDayStartHour, 0, 0).subtract(const Duration(seconds: 1));
         
-        print('📥 getReceivedTransfers - outlet: $outletId, Business day (UTC): ${dailyStart.toIso8601String()} to ${dailyEnd.toIso8601String()}');
         query = query
             .gte('created_at', dailyStart.toIso8601String())
             .lte('created_at', dailyEnd.toIso8601String());
@@ -2543,14 +2375,14 @@ class SupabaseService {
       
       final response = await query.order('created_at', ascending: false);
 
-      print('📦 Found ${response.length} received transfers');
+      for (final t in response) {
+      }
 
       // Enrich with outlet names and product names
       final enrichedTransfers = <Map<String, dynamic>>[];
       
       for (final transfer in response) {
         try {
-          print('📝 Processing received transfer: ${transfer['id']}');
           
           final fromOutlet = await _client
               .from('outlets')
@@ -2573,16 +2405,13 @@ class SupabaseService {
               .select('product_id, quantity_int')
               .eq('transfer_id', transfer['id']);
           
-          print('   └─ Items found: ${itemsResponse.length}');
           
           if (itemsResponse.isNotEmpty) {
             final firstItem = itemsResponse[0];
-            print('   └─ First item: $firstItem');
             
             final productId = firstItem['product_id'] as String?;
             final quantity = firstItem['quantity_int'] as int? ?? 0;
             
-            print('   └─ Product ID: $productId, Quantity: $quantity');
             
             if (productId != null) {
               final product = await _client
@@ -2628,20 +2457,17 @@ class SupabaseService {
               };
               
               enrichedTransfers.add(enrichedTransfer);
-              print('✅ Enriched: $productName ($quantity unit) $fromName → $toName (Stock now: $currentStockReceiving)');
             }
           } else {
-            print('⚠️ No items found in stock_transfer_items for this transfer');
           }
         } catch (e) {
-          print('❌ Error enriching transfer: $e');
         }
       }
       
-      print('✅ Enriched ${enrichedTransfers.length} received transfers with details');
+      for (final t in enrichedTransfers) {
+      }
       return enrichedTransfers;
     } catch (e) {
-      print('❌ Error fetching received transfers: $e');
       return [];
     }
   }
@@ -2660,7 +2486,6 @@ class SupabaseService {
     }
 
     try {
-      print('📊 Recording sale to warehouse - Batch: $batchId, Qty: $quantitySold');
       
       await _client.from('sales_records').insert({
         'batch_id': batchId,
@@ -2670,9 +2495,7 @@ class SupabaseService {
         'notes': notes ?? 'Dari POS mobile',
       });
 
-      print('✅ Sale recorded successfully to warehouse system');
     } catch (e) {
-      print('❌ Error recording sale to warehouse: $e');
       throw Exception('Gagal mencatat penjualan ke sistem warehouse: $e');
     }
   }
@@ -2680,12 +2503,10 @@ class SupabaseService {
 // Get available batches for an outlet
   Future<List<Map<String, dynamic>>> getAvailableBatches(String outletId) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized');
       return [];
     }
 
     try {
-      print('📦 Fetching available batches for outlet: $outletId');
       
       final response = await _client
           .from('product_batches')
@@ -2693,17 +2514,13 @@ class SupabaseService {
           .eq('outlet_id', outletId)
           .inFilter('status', ['ready', 'assigned']);
 
-      print('✅ Fetched ${response.length} available batches');
       
       final batches = List<Map<String, dynamic>>.from(response);
       for (final batch in batches) {
-        print('  - Batch ${batch['batch_code']}: product_id=${batch['product_id']}, qty=${batch['quantity']}');
       }
       
       return batches;
     } catch (e, stackTrace) {
-      print('❌ Error fetching batches: $e');
-      print('Stack trace: $stackTrace');
       return [];
     }
   }
@@ -2715,7 +2532,6 @@ class SupabaseService {
     required DateTime selectedDate,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ Supabase not initialized');
       return {
         'daily': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
         'weekly': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
@@ -2724,12 +2540,8 @@ class SupabaseService {
     }
 
     try {
-      print('💰 getRevenueData - Starting');
-      print('   Outlet ID: $outletId');
-      print('   Selected Date: ${selectedDate.toIso8601String()}');
       
       if (outletId.isEmpty) {
-        print('❌ ERROR: outletId is empty!');
         throw Exception('Outlet ID is empty');
       }
       
@@ -2738,10 +2550,17 @@ class SupabaseService {
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
-          .single();
+          .maybeSingle();
+      
+      if (outletData == null) {
+        return {
+          'daily': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
+          'weekly': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
+          'monthly': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
+        };
+      }
       
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
-      print('📅 Business day start hour: $businessDayStartHour:00');
       
       // Calculate business day dates
       // Business day: starts at businessDayStartHour of PREVIOUS day, ends at businessDayStartHour of selectedDate - 1 second
@@ -2752,9 +2571,6 @@ class SupabaseService {
       final dailyEndTime = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, businessDayStartHour, 0, 0)
           .subtract(const Duration(seconds: 1));
       
-      print('🔹 Daily range: ${dailyStart.toIso8601String()} to ${dailyEndTime.toIso8601String()}');
-      print('   Start: ${dailyStart.year}-${dailyStart.month.toString().padLeft(2, '0')}-${dailyStart.day.toString().padLeft(2, '0')} ${dailyStart.hour.toString().padLeft(2, '0')}:${dailyStart.minute.toString().padLeft(2, '0')}:${dailyStart.second.toString().padLeft(2, '0')}');
-      print('   End:   ${dailyEndTime.year}-${dailyEndTime.month.toString().padLeft(2, '0')}-${dailyEndTime.day.toString().padLeft(2, '0')} ${dailyEndTime.hour.toString().padLeft(2, '0')}:${dailyEndTime.minute.toString().padLeft(2, '0')}:${dailyEndTime.second.toString().padLeft(2, '0')}');
       
       // Query daily sales
       final dailyResponse = await _client.from('sales')
@@ -2763,14 +2579,12 @@ class SupabaseService {
           .gte('created_at', dailyStart.toIso8601String())
           .lte('created_at', dailyEndTime.toIso8601String());
       
-      print('📊 Daily: Found ${dailyResponse.length} sales');
       
       // Calculate weekly (last 7 business days)
       final weeklyStart = DateTime(selectedDate.year, selectedDate.month, selectedDate.day)
           .subtract(const Duration(days: 7))
           .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
       
-      print('🔹 Weekly range: ${weeklyStart.toIso8601String()} to ${dailyEndTime.toIso8601String()}');
       
       final weeklyResponse = await _client.from('sales')
           .select('payment_method, total_amount, created_at, outlet_id')
@@ -2778,14 +2592,12 @@ class SupabaseService {
           .gte('created_at', weeklyStart.toIso8601String())
           .lte('created_at', dailyEndTime.toIso8601String());
       
-      print('📊 Weekly: Found ${weeklyResponse.length} sales');
       
       // Calculate monthly (last 30 business days)
       final monthlyStart = DateTime(selectedDate.year, selectedDate.month, selectedDate.day)
           .subtract(const Duration(days: 30))
           .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
       
-      print('🔹 Monthly range: ${monthlyStart.toIso8601String()} to ${dailyEndTime.toIso8601String()}');
       
       final monthlyResponse = await _client.from('sales')
           .select('payment_method, total_amount, created_at, outlet_id')
@@ -2793,7 +2605,6 @@ class SupabaseService {
           .gte('created_at', monthlyStart.toIso8601String())
           .lte('created_at', dailyEndTime.toIso8601String());
       
-      print('📊 Monthly: Found ${monthlyResponse.length} sales');
       
       // Process daily data
       double dailyTotal = 0, dailyCash = 0, dailyQris = 0;
@@ -2831,10 +2642,6 @@ class SupabaseService {
         else if (method == 'QRIS') monthlyQris += amount;
       }
       
-      print('✅ Results:');
-      print('   Daily: Rp${dailyTotal.toStringAsFixed(0)} ($dailyCount txn)');
-      print('   Weekly: Rp${weeklyTotal.toStringAsFixed(0)} ($weeklyCount txn)');
-      print('   Monthly: Rp${monthlyTotal.toStringAsFixed(0)} ($monthlyCount txn)');
 
       return {
         'daily': {
@@ -2857,8 +2664,6 @@ class SupabaseService {
         },
       };
     } catch (e, stackTrace) {
-      print('❌ Error fetching revenue: $e');
-      print('Stack trace: $stackTrace');
       return {
         'daily': {'amount': 0.0, 'count': 0},
         'weekly': {'amount': 0.0, 'count': 0},
@@ -2873,7 +2678,6 @@ class SupabaseService {
     required DateTime date,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ Supabase not initialized');
       return {
         'cashAmount': 0.0,
         'cashCount': 0,
@@ -2888,13 +2692,9 @@ class SupabaseService {
     }
 
     try {
-      print('🔍 getCashDepositData - Starting query');
-      print('   Outlet ID: $outletId');
-      print('   Date: ${date.toIso8601String()}');
       
       // First: Check if outlet_id is valid
       if (outletId.isEmpty) {
-        print('❌ ERROR: outletId is empty!');
         throw Exception('Outlet ID is empty');
       }
       
@@ -2903,10 +2703,13 @@ class SupabaseService {
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
-          .single();
+          .maybeSingle();
+      
+      if (outletData == null) {
+        throw Exception('Outlet not found');
+      }
       
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
-      print('📅 Business day start hour: $businessDayStartHour:00');
       
       // Calculate business day date range
       // Business day: starts at businessDayStartHour of PREVIOUS day, ends at businessDayStartHour of date - 1 second
@@ -2916,9 +2719,6 @@ class SupabaseService {
       final dateEnd = DateTime(date.year, date.month, date.day, businessDayStartHour, 0, 0)
           .subtract(const Duration(seconds: 1));
       
-      print('⏰ Business day range:');
-      print('   Start: ${dateStart.year}-${dateStart.month.toString().padLeft(2, '0')}-${dateStart.day.toString().padLeft(2, '0')} ${dateStart.hour.toString().padLeft(2, '0')}:${dateStart.minute.toString().padLeft(2, '0')}:${dateStart.second.toString().padLeft(2, '0')}');
-      print('   End:   ${dateEnd.year}-${dateEnd.month.toString().padLeft(2, '0')}-${dateEnd.day.toString().padLeft(2, '0')} ${dateEnd.hour.toString().padLeft(2, '0')}:${dateEnd.minute.toString().padLeft(2, '0')}:${dateEnd.second.toString().padLeft(2, '0')}');
       
       // Query sales for this business day
       var query = _client.from('sales').select('payment_method, total_amount, created_at, outlet_id');
@@ -2931,7 +2731,6 @@ class SupabaseService {
           .gte('created_at', dateStart.toIso8601String())
           .lte('created_at', dateEnd.toIso8601String());
       
-      print('📊 getCashDepositData: Found ${response.length} sales for business day');
       
       double cashAmount = 0;
       int cashCount = 0;
@@ -2946,7 +2745,6 @@ class SupabaseService {
         
         totalOmset += amount;
         
-        print('  - Payment: $paymentMethod, Amount: $amount, CreatedAt: $createdAt');
         
         if (paymentMethod?.toUpperCase() == 'CASH') {
           cashAmount += amount;
@@ -3003,24 +2801,12 @@ class SupabaseService {
         if (handoversForDate.isNotEmpty) {
           handoverStatus = handoversForDate[0]['status'] as String? ?? 'pending';
         }
-        print('✅ Handover status for $dateStr: $handoverStatus');
       } catch (e) {
-        print('⚠️ Error checking handover status: $e');
         // Continue with default status
       }
       
-      print('💰 Cash deposit data:');
-      print('   - Total Omset: Rp${totalOmset.toStringAsFixed(0)}');
-      print('   - CASH: Rp${cashAmount.toStringAsFixed(0)} ($cashCount tx)');
-      print('   - QRIS: Rp${qrisAmount.toStringAsFixed(0)} ($qrisCount tx)');
-      print('   - Bonus (Bertahap): Rp${bonus.toStringAsFixed(0)}');
-      print('   - Uang Makan: Rp${mealAllowance.toStringAsFixed(0)}');
-      print('   - Handover Status: $handoverStatus');
       if (kekuranganUpah > 0) {
-        print('   - ⚠️ Kekurangan Upah: Rp${kekuranganUpah.toStringAsFixed(0)}');
-        print('   - Setoran (CASH - BONUS - MAKAN): Rp 0 (covered by shortfall)');
       } else {
-        print('   - Setoran (CASH - BONUS - MAKAN): Rp${depositAmount.toStringAsFixed(0)}');
       }
       
       return {
@@ -3036,7 +2822,6 @@ class SupabaseService {
         'handoverStatus': handoverStatus,
       };
     } catch (e) {
-      print('❌ Error fetching cash deposit data: $e');
       return {
         'cashAmount': 0.0,
         'cashCount': 0,
@@ -3058,7 +2843,6 @@ class SupabaseService {
     required int quantitySold,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized');
       return false;
     }
 
@@ -3073,7 +2857,6 @@ class SupabaseService {
       final currentQty = batch['quantity'] as int? ?? 0;
       final newQty = currentQty - quantitySold;
 
-      print('📝 Updating batch $batchId: $currentQty -> $newQty');
 
       // Update quantity
       await _client
@@ -3087,13 +2870,10 @@ class SupabaseService {
             .from('product_batches')
             .update({'status': 'sold'})
             .eq('id', batchId);
-        print('✅ Batch marked as sold');
       }
 
-      print('✅ Batch quantity updated successfully');
       return true;
     } catch (e) {
-      print('❌ Error updating batch quantity: $e');
       return false;
     }
   }
@@ -3112,15 +2892,11 @@ class SupabaseService {
     required DateTime date,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized');
       return false;
     }
 
     try {
-      print('📋 Submitting cash deposit handover...');
-      print('   - Deposit: Rp${depositAmount.toStringAsFixed(0)}');
       if (kekuranganUpah > 0) {
-        print('   - ⚠️ Kekurangan Upah: Rp${kekuranganUpah.toStringAsFixed(0)}');
       }
       
       await _client.from('cash_deposit_handovers').insert({
@@ -3137,10 +2913,8 @@ class SupabaseService {
         'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD format
       });
       
-      print('✅ Cash deposit handover submitted successfully');
       return true;
     } catch (e) {
-      print('❌ Error submitting cash deposit handover: $e');
       return false;
     }
   }
@@ -3171,7 +2945,6 @@ class SupabaseService {
       
       return List<Map<String, dynamic>>.from(response as List);
     } catch (e) {
-      print('❌ Error fetching cash deposit handover history: $e');
       return [];
     }
   }
@@ -3194,7 +2967,6 @@ class SupabaseService {
       
       return List<Map<String, dynamic>>.from(response as List);
     } catch (e) {
-      print('❌ Error fetching pending handovers: $e');
       return [];
     }
   }
@@ -3205,12 +2977,10 @@ class SupabaseService {
     required String approverId,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized');
       return false;
     }
 
     try {
-      print('✅ Approving cash deposit handover...');
       
       await _client
           .from('cash_deposit_handovers')
@@ -3221,10 +2991,8 @@ class SupabaseService {
           })
           .eq('id', handoverId);
       
-      print('✅ Cash deposit handover approved');
       return true;
     } catch (e) {
-      print('❌ Error approving cash deposit handover: $e');
       return false;
     }
   }
@@ -3235,12 +3003,10 @@ class SupabaseService {
     required String rejectionReason,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ SupabaseService not initialized');
       return false;
     }
 
     try {
-      print('❌ Rejecting cash deposit handover...');
       
       await _client
           .from('cash_deposit_handovers')
@@ -3250,10 +3016,8 @@ class SupabaseService {
           })
           .eq('id', handoverId);
       
-      print('✅ Cash deposit handover rejected');
       return true;
     } catch (e) {
-      print('❌ Error rejecting cash deposit handover: $e');
       return false;
     }
   }
@@ -3265,21 +3029,17 @@ class SupabaseService {
     }
 
     try {
-      print('📢 Fetching announcements from database...');
       final response = await _client
           .from('announcements')
           .select('id, title, description, created_at')
           .order('created_at', ascending: false)
           .limit(10);
       
-      print('📢 Announcements fetched: ${response.length} items');
       for (var ann in response) {
-        print('   - ${ann['title']}: ${ann['description']}');
       }
       
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('❌ Error fetching announcements: $e');
       throw Exception('Failed to fetch announcements: $e');
     }
   }
@@ -3300,7 +3060,6 @@ class SupabaseService {
       
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('❌ Error fetching private messages: $e');
       throw Exception('Failed to fetch private messages: $e');
     }
   }
@@ -3312,7 +3071,6 @@ class SupabaseService {
     }
 
     try {
-      print('💬 Fetching private messages for user: $userId');
       final response = await _client
           .from('private_messages')
           .select('id, sender_id, receiver_id, message, created_at')
@@ -3320,7 +3078,6 @@ class SupabaseService {
           .order('created_at', ascending: false)
           .limit(50);
       
-      print('💬 Messages fetched: ${response.length} items');
       
       // Enrich messages with sender info
       List<Map<String, dynamic>> messages = List<Map<String, dynamic>>.from(response);
@@ -3335,17 +3092,14 @@ class SupabaseService {
               .single();
           message['sender_name'] = senderData['name'] ?? 'Unknown';
           message['sender_email'] = senderData['email'] ?? '';
-          print('   - From ${message['sender_name']}: ${message['message']}');
         } catch (e) {
           message['sender_name'] = 'Unknown';
           message['sender_email'] = '';
-          print('   - Error fetching sender info: $e');
         }
       }
       
       return messages;
     } catch (e) {
-      print('❌ Error fetching private messages: $e');
       throw Exception('Failed to fetch private messages: $e');
     }
   }
@@ -3364,7 +3118,6 @@ class SupabaseService {
       
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('❌ Error fetching group chats: $e');
       throw Exception('Failed to fetch group chats: $e');
     }
   }
@@ -3387,10 +3140,8 @@ class SupabaseService {
             'created_at': DateTime.now().toIso8601String(),
           });
       
-      print('✅ Message sent successfully');
       return true;
     } catch (e) {
-      print('❌ Error sending private message: $e');
       return false;
     }
   }
@@ -3415,7 +3166,6 @@ class SupabaseService {
       
       return true;
     } catch (e) {
-      print('❌ Error sending group chat message: $e');
       return false;
     }
   }
@@ -3435,7 +3185,6 @@ class SupabaseService {
 
       return response['status'] ?? 'active';
     } catch (e) {
-      print('⚠️ Error fetching outlet status: $e');
       return 'active'; // Default to active
     }
   }
@@ -3457,10 +3206,8 @@ class SupabaseService {
         'updated_at': DateTime.now().toIso8601String(),
       });
 
-      print('✅ Outlet status updated to: $status');
       return true;
     } catch (e) {
-      print('❌ Error updating outlet status: $e');
       return false;
     }
   }
@@ -3490,7 +3237,6 @@ class SupabaseService {
         'count': (response?['daily']?['count'] as num?)?.toInt() ?? 0,
       };
     } catch (e) {
-      print('⚠️ Error fetching yesterday sales data: $e');
       return {'amount': 0.0, 'count': 0};
     }
   }
@@ -3514,7 +3260,6 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('⚠️ Error fetching recent transactions: $e');
       return [];
     }
   }
@@ -3529,13 +3274,15 @@ class SupabaseService {
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
-          .single();
+          .maybeSingle();
+
+      if (response == null) {
+        return 4;
+      }
 
       final hour = response['business_day_start_hour'] as int? ?? 4;
-      print('✅ Business Day Start Hour loaded: $hour');
       return hour;
     } catch (e) {
-      print('⚠️ Error fetching business day start hour: $e');
       return 4; // Default to 4 AM
     }
   }
@@ -3547,7 +3294,6 @@ class SupabaseService {
     if (!_isInitialized) return;
 
     try {
-      print('🌱 Seeding test investor assignments for investorId=$investorId');
 
       // Get first 2 outlets
       final outlets = await _client
@@ -3556,7 +3302,6 @@ class SupabaseService {
           .limit(2);
 
       if ((outlets as List<dynamic>).isEmpty) {
-        print('⚠️ No outlets found to create assignments');
         return;
       }
 
@@ -3573,154 +3318,55 @@ class SupabaseService {
 
       final result = await _client.from('investor_assignments').insert(assignments);
 
-      print('✅ Created ${assignments.length} test assignments');
-      print('   Result: $result');
     } catch (e) {
-      print('⚠️ Error seeding test assignments: $e');
     }
   }
 
   /// Update transfer status (approve, reject, cancel)
+  /// SIMPLIFIED: Only updates stock_transfers table, does NOT touch showcase_allocations
   Future<bool> updateTransferStatus(String transferId, String newStatus) async {
     if (!_isInitialized) {
       return false;
     }
 
     try {
-      print('🔄 Updating transfer $transferId status to $newStatus...');
       
-      // Get transfer details to know from/to outlets
-      final transfer = await _client
-          .from('stock_transfers')
-          .select('from_outlet_id, to_outlet_id, status')
-          .eq('id', transferId)
-          .single();
-      
-      final fromOutletId = transfer['from_outlet_id'] as String;
-      final toOutletId = transfer['to_outlet_id'] as String;
-      final currentStatus = transfer['status'] as String;
-      
-      print('📦 Transfer: $fromOutletId → $toOutletId, Current: $currentStatus, New: $newStatus');
-      
-      // If approving transfer (pending → received), update destination outlet quantity
-      if (currentStatus.toLowerCase() == 'pending' && newStatus.toLowerCase() == 'received') {
-        print('✅ Approving transfer - adding quantity to destination outlet...');
-        
-        // Get all items in this transfer
-        final items = await _client
-            .from('stock_transfer_items')
-            .select('product_id, quantity_int')
-            .eq('transfer_id', transferId);
-        
-        // For each item, add to destination outlet
-        for (final item in items) {
-          final productId = item['product_id'] as String;
-          final quantity = item['quantity_int'] as int;
-          
-          print('   📦 Adding $quantity of product $productId to $toOutletId');
-          
-          // Get showcase_product_id
-          final showcaseProduct = await _client
-              .from('showcase_products')
-              .select('id')
-              .eq('product_id', productId)
-              .maybeSingle();
-          
-          if (showcaseProduct == null) {
-            print('   ⚠️ Showcase product not found for $productId');
-            continue;
-          }
-          
-          final showcaseProductId = showcaseProduct['id'] as String;
-          
-          // Get or create destination allocation
-          final destAllocation = await _client
-              .from('showcase_allocations')
-              .select('id, quantity')
-              .eq('outlet_id', toOutletId)
-              .eq('showcase_product_id', showcaseProductId)
-              .maybeSingle();
-          
-          if (destAllocation == null) {
-            // Create new allocation
-            await _client.from('showcase_allocations').insert({
-              'outlet_id': toOutletId,
-              'showcase_product_id': showcaseProductId,
-              'quantity': quantity,
-            });
-            print('   ✅ Created new allocation for destination outlet');
+      // If cancelling/rejecting transfer, delete it
+      if ((newStatus.toLowerCase() == 'rejected' || newStatus.toLowerCase() == 'cancelled')) {
+        try {
+          await _client
+              .from('stock_transfers')
+              .delete()
+              .eq('id', transferId);
+          return true;
+        } on PostgrestException catch (e) {
+          if (e.code == '406' || e.code == 406) {
+            return true;
           } else {
-            // Update existing allocation
-            final destQty = destAllocation['quantity'] as int? ?? 0;
-            await _client
-                .from('showcase_allocations')
-                .update({'quantity': destQty + quantity})
-                .eq('id', destAllocation['id']);
-            print('   ✅ Updated destination outlet quantity');
-          }
-        }
-      }
-      // If rejecting/canceling transfer, add quantity back to source outlet
-      else if ((newStatus.toLowerCase() == 'rejected' || newStatus.toLowerCase() == 'cancelled') 
-               && currentStatus.toLowerCase() == 'pending') {
-        print('❌ Rejecting/Canceling transfer - returning quantity to source outlet...');
-        
-        // Get all items in this transfer
-        final items = await _client
-            .from('stock_transfer_items')
-            .select('product_id, quantity_int')
-            .eq('transfer_id', transferId);
-        
-        // For each item, add back to source outlet
-        for (final item in items) {
-          final productId = item['product_id'] as String;
-          final quantity = item['quantity_int'] as int;
-          
-          print('   📦 Returning $quantity of product $productId to $fromOutletId');
-          
-          // Get showcase_product_id
-          final showcaseProduct = await _client
-              .from('showcase_products')
-              .select('id')
-              .eq('product_id', productId)
-              .maybeSingle();
-          
-          if (showcaseProduct == null) {
-            print('   ⚠️ Showcase product not found for $productId');
-            continue;
-          }
-          
-          final showcaseProductId = showcaseProduct['id'] as String;
-          
-          // Get source allocation
-          final sourceAllocation = await _client
-              .from('showcase_allocations')
-              .select('id, quantity')
-              .eq('outlet_id', fromOutletId)
-              .eq('showcase_product_id', showcaseProductId)
-              .maybeSingle();
-          
-          if (sourceAllocation != null) {
-            final sourceQty = sourceAllocation['quantity'] as int? ?? 0;
-            await _client
-                .from('showcase_allocations')
-                .update({'quantity': sourceQty + quantity})
-                .eq('id', sourceAllocation['id']);
-            print('   ✅ Returned quantity to source outlet');
+            return false;
           }
         }
       }
       
-      // Update transfer status
-      await _client
-          .from('stock_transfers')
-          .update({'status': newStatus})
-          .eq('id', transferId);
+      // For approve or other statuses, just update stock_transfers status
+      // NO showcase_allocations changes
+      try {
+        await _client
+            .from('stock_transfers')
+            .update({'status': newStatus})
+            .eq('id', transferId);
+      } on PostgrestException catch (e) {
+        if (e.code == '406' || e.code == 406) {
+          return true;
+        } else {
+          return false;
+        }
+      } catch (e) {
+        return false;
+      }
       
-      print('✅ Transfer status updated to $newStatus');
       return true;
     } catch (e) {
-      print('❌ Error updating transfer status: $e');
       return false;
     }
   }

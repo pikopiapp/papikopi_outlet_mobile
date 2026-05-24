@@ -91,7 +91,6 @@ class _PrivateMessagesDetailScreenState
         isLoading = false;
       });
     } catch (e) {
-      print('Error loading conversation: $e');
       setState(() => isLoading = false);
     }
   }
@@ -125,7 +124,6 @@ class _PrivateMessagesDetailScreenState
         }
       }
     } catch (e) {
-      print('Error sending message: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),

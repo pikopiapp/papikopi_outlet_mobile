@@ -42,7 +42,6 @@ class _FinanceScreenState extends State<FinanceScreen>
   @override
   void initState() {
     super.initState();
-    print('🔵 FinanceScreen initState called');
     // Initialize future dulu
     _selectedDate = DateTime.now();
     _leaderboardFuture = Future.value([]);
@@ -60,7 +59,6 @@ class _FinanceScreenState extends State<FinanceScreen>
       final authProvider = context.read<AuthProvider>();
       if (authProvider.currentUser != null) {
         _outletId = authProvider.currentUser!.outletId;
-        print('🏪 Finance Screen - Outlet ID from AuthProvider: $_outletId');
         
         // Set loading states
         if (mounted) {
@@ -77,7 +75,6 @@ class _FinanceScreenState extends State<FinanceScreen>
         _loadCashDeposit();
       } else {
         _outletId = '';
-        print('⚠️ No user found in AuthProvider');
       }
     });
   }
@@ -127,11 +124,9 @@ class _FinanceScreenState extends State<FinanceScreen>
           
           // Check if status has updated
           final currentStatus = (data['handoverStatus'] as String?) ?? 'pending';
-          print('🔄 Reload attempt ${i + 1}: handoverStatus = $currentStatus');
           
           if (currentStatus != 'pending') {
             // Status has been updated, force rebuild and stop retrying
-            print('✅ Status updated to: $currentStatus, stopping retry');
             if (mounted) {
               setState(() {});
             }
@@ -140,7 +135,6 @@ class _FinanceScreenState extends State<FinanceScreen>
           
           // If this is the last retry, still update UI to stop loading
           if (i == retries - 1) {
-            print('⚠️ Max retries reached, stopping with status: $currentStatus');
             if (mounted) {
               setState(() {
                 _isLoadingCashDeposit = false;
@@ -148,11 +142,9 @@ class _FinanceScreenState extends State<FinanceScreen>
             }
           }
         } catch (e) {
-          print('❌ Retry attempt ${i + 1} failed: $e');
           
           // On last attempt, stop loading regardless of error
           if (i == retries - 1) {
-            print('⚠️ Max retries reached with error, stopping loading state');
             if (mounted) {
               setState(() {
                 _isLoadingCashDeposit = false;
@@ -162,7 +154,6 @@ class _FinanceScreenState extends State<FinanceScreen>
         }
       }
     } catch (e) {
-      print('❌ Fatal error in retry loop: $e');
       if (mounted) {
         setState(() {
           _isLoadingCashDeposit = false;
@@ -175,8 +166,6 @@ class _FinanceScreenState extends State<FinanceScreen>
     final supabaseService = SupabaseService();
     
     // Note: getRevenueData now takes selectedDate and calculates business day internally
-    print('💰 Loading revenue for outlet: $_outletId');
-    print('📅 Date: ${_selectedDate.toIso8601String()}');
 
     try {
       final data = await supabaseService.getRevenueData(
@@ -190,7 +179,6 @@ class _FinanceScreenState extends State<FinanceScreen>
         });
       }
     } catch (e) {
-      print('❌ Error loading revenue: $e');
       if (mounted) {
         setState(() {
           _isLoadingRevenue = false;
@@ -202,9 +190,6 @@ class _FinanceScreenState extends State<FinanceScreen>
   void _loadLeaderboard() {
     final supabaseService = SupabaseService();
 
-    print('🏆 _loadLeaderboard called');
-    print('   Outlet ID: $_outletId');
-    print('   Selected Date: ${_selectedDate.toIso8601String()}');
 
     // Fetch leaderboard from all outlets using business day
     setState(() {
@@ -213,13 +198,10 @@ class _FinanceScreenState extends State<FinanceScreen>
         outletId: _outletId,
         selectedDate: _selectedDate,
       ).then((data) {
-        print('✅ Leaderboard data received: ${data.length} items');
         for (var item in data) {
-          print('   - ${item['barista_name']}: Rp ${item['total_sales']}');
         }
         return data;
       }).catchError((error) {
-        print('❌ Leaderboard error: $error');
         return <Map<String, dynamic>>[];
       });
     });
@@ -233,7 +215,6 @@ class _FinanceScreenState extends State<FinanceScreen>
   }
 
   Future<void> _refreshData() async {
-    print('🔄 Refreshing finance screen data...');
     
     // Prevent multiple simultaneous refreshes
     if (_isRefreshing) {
@@ -264,7 +245,6 @@ class _FinanceScreenState extends State<FinanceScreen>
       
       _showSuccessSnackBar('✅ Data berhasil diperbarui');
     } catch (e) {
-      print('❌ Error refreshing data: $e');
       _showErrorSnackBar('❌ Gagal memperbarui data: $e');
     } finally {
       // Stop animation
@@ -1412,7 +1392,6 @@ class _FinanceScreenState extends State<FinanceScreen>
                   }
                 }
               } catch (e) {
-                print('❌ Error in _showShortfallReceipt: $e');
                 if (mounted) {
                   overlayEntry.remove();
                   _showErrorSnackBar('Error: $e');

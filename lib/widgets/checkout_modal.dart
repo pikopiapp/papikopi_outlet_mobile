@@ -103,7 +103,6 @@ class _CheckoutModalState extends State<CheckoutModal> {
         });
       }
     } catch (e) {
-      print('Warning: Could not check gratis limit: $e');
     }
   }
 
@@ -192,15 +191,8 @@ class _CheckoutModalState extends State<CheckoutModal> {
           .toList();
 
       // Create sale in POS system
-      print('💳 Creating sale in POS system...');
-      print('   Outlet: ${authProvider.currentUser!.outletId}');
-      print('   Barista: ${authProvider.currentUser!.id}');
-      print('   Payment: $_selectedPaymentMethod');
-      print('   Amount: $totalAmount');
       if (_selectedPaymentMethod == 'GRATIS') {
-        print('   Gratis Reason: $_gratiReason');
       }
-      print('   Items: ${items.length}');
       
       final saleId = await supabaseService.createSale(
         outletId: authProvider.currentUser!.outletId,
@@ -212,12 +204,9 @@ class _CheckoutModalState extends State<CheckoutModal> {
         profit: profit,
         items: items,
       );
-      print('✅ Sale created successfully with ID: $saleId');
-      print('   Check database: SELECT * FROM sales WHERE id = $saleId');
 
       // Record sales to warehouse system (sales_records table)
       // This tracks batch sales for inventory management
-      print('📊 Recording sales to warehouse system...');
       
       try {
         // Get available batches for this outlet
@@ -226,9 +215,7 @@ class _CheckoutModalState extends State<CheckoutModal> {
         );
         
         if (batches.isEmpty) {
-          print('⚠️ Warning: No batches found for outlet, skipping warehouse recording');
         } else {
-          print('📦 Found ${batches.length} available batches');
           
           // Record sales for each product in cart to matching batch
           for (final cartItem in cartProvider.items) {
@@ -243,7 +230,6 @@ class _CheckoutModalState extends State<CheckoutModal> {
             }
             
             if (matchingBatch != null) {
-              print('🛒 Recording ${cartItem.quantity} units of ${cartItem.product.name} from batch ${matchingBatch['batch_code']}');
               
               // Build notes with gratis reason if applicable
               String notes = 'Penjualan dari POS - ${cartItem.product.name} - Payment: $_selectedPaymentMethod';
@@ -265,30 +251,23 @@ class _CheckoutModalState extends State<CheckoutModal> {
                 quantitySold: cartItem.quantity,
               );
               
-              print('✅ Recorded sale for ${cartItem.product.name}');
             } else {
-              print('⚠️ Warning: No matching batch found for ${cartItem.product.name}');
             }
           }
           
-          print('✅ All sales recorded to warehouse system');
         }
       } catch (e) {
-        print('⚠️ Warning: Failed to record to warehouse: $e');
         // Don't fail checkout if warehouse recording fails - it's a secondary system
       }
 
       if (mounted) {
         // 🔧 Refresh product stock after sale
-        print('🔄 Refreshing product stock...');
         try {
           final productProvider = context.read<ProductProvider>();
           await productProvider.loadProductsWithStock(
             authProvider.currentUser!.outletId,
           );
-          print('✅ Product stock refreshed');
         } catch (e) {
-          print('⚠️ Warning: Could not refresh product stock: $e');
         }
 
         // Clear cart
@@ -310,8 +289,6 @@ class _CheckoutModalState extends State<CheckoutModal> {
         }
       }
     } catch (e, stackTrace) {
-      print('❌ Checkout error: $e');
-      print('Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}')),

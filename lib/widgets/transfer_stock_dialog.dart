@@ -41,7 +41,7 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
         _outlets = response;
       });
     } catch (e) {
-      print('Error loading outlets: $e');
+      // Error loading outlets silently
     }
   }
 

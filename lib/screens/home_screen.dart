@@ -6,6 +6,7 @@ import '../services/supabase_service.dart';
 import '../widgets/header.dart';
 import '../theme/thema.dart';
 import '../widgets/animated_card.dart';
+import '../widgets/screen_skeleton.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'private_messages_screen.dart';
@@ -56,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         final outletId = auth.currentUser!.outletId;
         final userId = auth.currentUser!.id;
         
-        print('🔍 Loading home data - User ID: $userId, Outlet: $outletId');
         
         // Get sales data for today, week, and month using business day
         final today = DateTime.now();
@@ -74,31 +74,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         
         try {
           announcements = await supabaseService.getAnnouncements();
-          print('✅ Announcements loaded: ${announcements.length} items');
           for (var ann in announcements) {
-            print('   - Title: ${ann['title']}, Description: ${ann['description']}');
           }
         } catch (e) {
-          print('⚠️ Announcements not available: $e');
           announcements = [];
         }
         
         try {
           privateMessages = await supabaseService.getPrivateMessagesWithSenderInfo(userId: userId);
-          print('✅ Private messages loaded: ${privateMessages.length} items');
           for (var msg in privateMessages) {
-            print('   - From ${msg['sender_id']} to ${msg['receiver_id']}: ${msg['message']}');
           }
         } catch (e) {
-          print('⚠️ Private messages not available: $e');
           privateMessages = [];
         }
         
         try {
           groupChats = await supabaseService.getGroupChats();
-          print('✅ Group chats loaded: ${groupChats.length} items');
         } catch (e) {
-          print('⚠️ Group chats not available: $e');
           groupChats = [];
         }
         
@@ -110,7 +102,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         }
       }
     } catch (e) {
-      print('❌ Error loading home data: $e');
     }
   }
 
@@ -132,7 +123,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         }
       }
     } catch (e) {
-      print('⚠️ Error loading outlet status: $e');
     }
   }
 
@@ -183,7 +173,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         }
       }
     } catch (e) {
-      print('⚠️ Error loading low stock products: $e');
     }
   }
 
@@ -206,7 +195,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         });
       }
     } catch (e) {
-      print('⚠️ Error loading yesterday sales data: $e');
     }
   }
 
@@ -230,7 +218,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         });
       }
     } catch (e) {
-      print('⚠️ Error loading recent transactions: $e');
     }
   }
 
@@ -276,7 +263,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _refreshData() async {
-    print('🔄 Refreshing Home screen data...');
     
     // Prevent multiple simultaneous refreshes
     if (_isRefreshing) {
@@ -306,7 +292,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         );
       }
     } catch (e) {
-      print('❌ Error refreshing data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -533,12 +518,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     )
                   else
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
+                    const ScreenSkeleton(lineCount: 6, showTitle: false),
+
                 ],
               ),
             ),
@@ -885,7 +866,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               }
             }
           } catch (e) {
-            print('❌ Error saving outlet status: $e');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

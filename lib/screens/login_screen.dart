@@ -46,14 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final rawEmail = _emailController.text;
       final rawPassword = _passwordController.text;
 
-      // Safe debug logs: never print full plaintext password.
-      final hasBang = rawPassword.contains('!');
-      final firstChar = rawPassword.isNotEmpty ? rawPassword[0] : '';
-      final lastChar = rawPassword.isNotEmpty ? rawPassword[rawPassword.length - 1] : '';
-
-      print('🔐 Login input: email=[$rawEmail], password_len=${rawPassword.length}, hasBang=$hasBang');
-      print('🔐 Password first_last: [$firstChar]..[$lastChar]');
-
       await authProvider.signIn(
         email: rawEmail,
         password: rawPassword,

@@ -131,11 +131,9 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
     final authProvider = context.read<AuthProvider>();
     final user = authProvider.currentUser;
     if (user == null) {
-      print('👤 _resolveInvestorOutlets user=null');
       return [];
     }
 
-    print('👤 _resolveInvestorOutlets using user.id=${user.id}');
     // Fetch investor assignments with outlet details
     return _supabaseService.getInvestorAssignments(investorId: user.id);
   }
@@ -211,9 +209,7 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
                 }
 
                 final rows = snap.data ?? [];
-                print('📊 Investor profile - received ${rows.length} outlets');
                 if (rows.isNotEmpty) {
-                  print('   First row: ${rows.first}');
                 }
                 
                 if (rows.isEmpty) {
@@ -566,7 +562,6 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
     try {
       return await _supabaseService.getInvestorAssignments(investorId: user.id);
     } catch (e) {
-      print('❌ Error fetching investor assignments: $e');
       return [];
     }
   }
@@ -1076,7 +1071,6 @@ class _InvestorReportOutletPlaceholderState
     try {
       return await _supabaseService.getInvestorAssignments(investorId: user.id);
     } catch (e) {
-      print('❌ Error fetching investor assignments: $e');
       return [];
     }
   }

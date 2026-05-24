@@ -5,6 +5,8 @@ import '../../models/outlet.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../../widgets/header.dart';
+import '../../widgets/screen_skeleton.dart';
+
 
 class ManagerOutletScreen extends StatefulWidget {
   const ManagerOutletScreen({super.key});
@@ -118,8 +120,9 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                 child: Builder(
                   builder: (context) {
                     if (_isLoading) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const ScreenSkeleton(lineCount: 8, showTitle: false);
                     }
+
                     if (_error != null) {
                       return Center(
                         child: Padding(

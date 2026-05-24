@@ -5,8 +5,13 @@ import '../services/auth_service.dart';
 import '../providers/product_provider.dart';
 import '../theme/thema.dart';
 import '../widgets/header.dart';
+import '../widgets/screen_skeleton.dart';
 import 'profile_screen.dart';
+
+
 import 'settings_screen.dart';
+
+
 
 // Format currency helper
 String formatCurrency(num value) {
@@ -72,7 +77,6 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
         });
       }
     } catch (e) {
-      print('⚠️ Error loading business day start hour: $e');
       // Use default (4 AM)
     }
   }
@@ -94,7 +98,6 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
       final stockMap = await supabaseService.getProductStock(_outletId, selectedDate: selectedDate);
       
       if (stockMap.isEmpty) {
-        print('⚠️ No stock data found for outlet: $_outletId');
         return [];
       }
 
@@ -149,21 +152,13 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
         });
       }
 
-      print('✅ Enriched stock data with ${enrichedStock.length} products');
-      print('   Quantities: $stockMap');
-      print('   Sold today: $soldMap');
-      print('   Returned today: $returnedMap');
-      print('   Transfers: $transferStats');
       return enrichedStock;
     } catch (e) {
-      print('❌ Error fetching enriched product stock: $e');
       rethrow;
     }
   }
 
   Future<void> _refreshData() async {
-    print('🔄 Refreshing Stock screen data...');
-    
     // Prevent multiple simultaneous refreshes
     if (_isRefreshing) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -195,7 +190,6 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
         );
       }
     } catch (e) {
-      print('❌ Error refreshing data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -226,6 +220,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
 
 @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       appBar: PapikopiAppBar(
         onLogout: _handleLogout,
@@ -379,6 +374,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
   }
 
 Widget _buildStockTab() {
+
     return Column(
       children: [
         _buildDateFilterWidget(),
@@ -390,14 +386,15 @@ Widget _buildStockTab() {
     );
   }
 
-  Widget _buildStockContent() {
+Widget _buildStockContent() {
     return FutureBuilder<List<Map<String, dynamic>>>(
       key: ValueKey<DateTime>(_selectedDate), // ← KEY to force rebuild when date changes
       future: _stockFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const ScreenSkeleton(lineCount: 10, showTitle: false);
         }
+
 
         if (snapshot.hasError) {
           return Center(
@@ -820,17 +817,12 @@ Widget _buildTransferTab() {
             }
 
             if (transferSnapshot.hasError) {
-              print('🔴 Transfer snapshot error: ${transferSnapshot.error}');
               return Center(
                 child: Text('Error: ${transferSnapshot.error}'),
               );
             }
 
             final transfers = transferSnapshot.data ?? [];
-            print('🟡 Transfer tab snapshot - outlet: $_outletId, transfers found: ${transfers.length}, mode: ${_showReceivedTransfers ? "Diterima" : "Dikirim"}');
-            for (final transfer in transfers) {
-              print('   └─ From: ${transfer['from_outlet_name']} → To: ${transfer['to_outlet_name']}');
-            }
 
             return SingleChildScrollView(
               child: Column(
@@ -848,12 +840,12 @@ Widget _buildTransferTab() {
                             segments: const [
                               ButtonSegment(
                                 value: false,
-                                label: Text('Dikirim'),
+                                label: Text('Yang Saya Kirim'),
                                 icon: Icon(Icons.arrow_upward),
                               ),
                               ButtonSegment(
                                 value: true,
-                                label: Text('Diterima'),
+                                label: Text('Yang Saya Terima'),
                                 icon: Icon(Icons.arrow_downward),
                               ),
                             ],
@@ -876,7 +868,7 @@ Widget _buildTransferTab() {
                       child: ElevatedButton.icon(
                         onPressed: () => _showTransferDialog(context, availableStock),
                         icon: const Icon(Icons.add),
-                        label: const Text('Pindah Stok Baru'),
+                        label: const Text('Buat Pindah Stok'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
@@ -892,8 +884,8 @@ Widget _buildTransferTab() {
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Text(_showReceivedTransfers 
-                            ? 'Belum ada transfer diterima'
-                            : 'Belum ada pindah stok'),
+                            ? 'Belum ada stok yang diterima'
+                            : 'Belum ada pindah stok yang dikirim'),
                       ),
                     )
                   else
@@ -933,7 +925,7 @@ Widget _buildTransferTab() {
     // Determine if current user is sender or receiver
     final isSender = _outletId == fromOutletId;
     final isReceiver = _outletId == toOutletId;
-    final isPending = status.toLowerCase() == 'pending';
+    final isPending = status.toLowerCase() == 'requested' || status.toLowerCase() == 'approved';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1119,8 +1111,9 @@ Widget _buildReturnTab() {
       future: _getEnrichedProductStock(SupabaseService(), _selectedDate),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const ScreenSkeleton(lineCount: 10, showTitle: false);
         }
+
 
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Center(
@@ -1328,6 +1321,14 @@ Widget _buildReturnTab() {
 
   Color _getStatusColor(String? status) {
     switch (status?.toLowerCase()) {
+      case 'requested':
+        return Colors.orange; // Tertunda - waiting for approval
+      case 'approved':
+        return Colors.blue; // Disetujui - approved but not sent yet
+      case 'sent':
+        return Colors.purple; // Dikirim - in transit
+      case 'received':
+        return Colors.green; // Diterima - completed
       case 'pending':
         return Colors.orange;
       case 'in_progress':
@@ -1345,6 +1346,14 @@ Widget _buildReturnTab() {
 
   String _getStatusLabel(String? status) {
     switch (status?.toLowerCase()) {
+      case 'requested':
+        return 'Tertunda';
+      case 'approved':
+        return 'Disetujui';
+      case 'sent':
+        return 'Dikirim';
+      case 'received':
+        return 'Diterima';
       case 'pending':
         return 'Menunggu';
       case 'in_progress':
@@ -1406,23 +1415,42 @@ Widget _buildReturnTab() {
   void _approveTransfer(BuildContext context, String transferId) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Terima Transfer?'),
         content: const Text('Apakah Anda yakin ingin menerima transfer stok ini?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+            },
             child: const Text('Batalkan'),
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
               final success = await SupabaseService().updateTransferStatus(transferId, 'received');
-              if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Transfer diterima!')),
-                );
-                setState(() {}); // Refresh UI
+              
+              // Close dialog first
+              if (mounted && dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+              
+              // Then show message
+              if (mounted) {
+                Future.delayed(const Duration(milliseconds: 100), () {
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Transfer diterima!')),
+                    );
+                    setState(() {
+                      _transferRefreshCounter++; // Force refresh FutureBuilder
+                    });
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Gagal menerima transfer'), backgroundColor: Colors.red),
+                    );
+                  }
+                });
               }
             },
             style: ElevatedButton.styleFrom(
@@ -1439,23 +1467,42 @@ Widget _buildReturnTab() {
   void _rejectTransfer(BuildContext context, String transferId) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Tolak Transfer?'),
-        content: const Text('Apakah Anda yakin ingin menolak transfer stok ini?'),
+        content: const Text('Apakah Anda yakin ingin menolak transfer stok ini? Stok akan dikembalikan ke pengirim.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+            },
             child: const Text('Batalkan'),
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
               final success = await SupabaseService().updateTransferStatus(transferId, 'rejected');
-              if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Transfer ditolak!')),
-                );
-                setState(() {}); // Refresh UI
+              
+              // Close dialog first
+              if (mounted && dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+              
+              // Then show message
+              if (mounted) {
+                Future.delayed(const Duration(milliseconds: 100), () {
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Transfer ditolak!')),
+                    );
+                    setState(() {
+                      _transferRefreshCounter++; // Force refresh FutureBuilder
+                    });
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Gagal menolak transfer'), backgroundColor: Colors.red),
+                    );
+                  }
+                });
               }
             },
             style: ElevatedButton.styleFrom(
@@ -1472,29 +1519,62 @@ Widget _buildReturnTab() {
   void _cancelTransfer(BuildContext context, String transferId) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Batalkan Transfer?'),
-        content: const Text('Apakah Anda yakin ingin membatalkan transfer stok ini?'),
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Batalkan Transfer?', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Apakah Anda yakin ingin membatalkan transfer stok ini? Stok akan dikembalikan ke outlet Anda.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        actionsPadding: const EdgeInsets.all(16),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Tidak'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final success = await SupabaseService().updateTransferStatus(transferId, 'cancelled');
-              if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Transfer dibatalkan!')),
-                );
-                setState(() {}); // Refresh UI
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text('Batalkan'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: const Text('Tidak', style: TextStyle(fontSize: 16)),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  // Update status without awaiting (fire and forget)
+                  final success = await SupabaseService().updateTransferStatus(transferId, 'cancelled');
+                  
+                  // Close dialog first
+                  if (mounted && dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+                  
+                  // Then show message
+                  if (mounted) {
+                    Future.delayed(const Duration(milliseconds: 100), () {
+                      if (success) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Transfer dibatalkan!')),
+                        );
+                        setState(() {
+                          _transferRefreshCounter++; // Force refresh FutureBuilder
+                        });
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Gagal membatalkan transfer'), backgroundColor: Colors.red),
+                        );
+                      }
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Batalkan', style: TextStyle(fontSize: 16, color: Colors.white)),
+              ),
+            ],
           ),
         ],
       ),
@@ -1529,15 +1609,17 @@ Widget _buildReturnTab() {
                     isExpanded: true,
                     hint: const Text('-- Pilih Produk --'),
                     value: selectedProductId,
-                    items: availableStock.map((stock) {
-                      final productId = stock['product_id'] as String;
-                      final productName = stock['product_name'] as String? ?? 'Unknown';
-                      final quantity = stock['quantity'] as int? ?? 0;
-                      return DropdownMenuItem(
-                        value: productId,
-                        child: Text('$productName (Stok: $quantity)'),
-                      );
-                    }).toList(),
+                    items: availableStock
+                        .where((stock) => (stock['unsold'] as int? ?? 0) > 0)  // ← Filter: only products with unsold > 0
+                        .map((stock) {
+                          final productId = stock['product_id'] as String;
+                          final productName = stock['product_name'] as String? ?? 'Unknown';
+                          final unsold = stock['unsold'] as int? ?? 0;  // ← Use 'unsold' instead of 'quantity'
+                          return DropdownMenuItem(
+                            value: productId,
+                            child: Text('$productName (Sisa: $unsold)'),  // ← Display 'Sisa' (remaining)
+                          );
+                        }).toList(),
                     onChanged: (value) {
                       setState(() {
                         selectedProductId = value;
@@ -1598,7 +1680,7 @@ Widget _buildReturnTab() {
                         ),
                       ),
                       child: Text(
-                        'Stok tersedia: ${availableStock.firstWhere((s) => s['product_id'] == selectedProductId)['quantity'] ?? 0}',
+                        'Sisa tersedia: ${availableStock.firstWhere((s) => s['product_id'] == selectedProductId)['unsold'] ?? 0}',
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                       ),
                     ),
@@ -1651,6 +1733,37 @@ Widget _buildReturnTab() {
                         );
                       },
                     ),
+                    const SizedBox(height: 20),
+                    
+                    // Show selected outlet confirmation
+                    if (targetOutletId != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Colors.blue.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: FutureBuilder<List<Map<String, dynamic>>>(
+                          future: SupabaseService().getOutlets(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData) {
+                              final selectedOutlet = snapshot.data!.firstWhere(
+                                (o) => o['id'] == targetOutletId,
+                                orElse: () => {'name': 'Unknown'},
+                              );
+                              return Text(
+                                '✅ Tujuan: ${selectedOutlet['name']}',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.blue),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
                   ],
                 ],
               ),
@@ -1673,11 +1786,20 @@ Widget _buildReturnTab() {
                       ? () async {
                           final supabaseService = SupabaseService();
                           
+                          // Get outlet names for debugging and display
+                          final outlets = await supabaseService.getOutlets();
+                          final selectedOutlet = outlets.firstWhere(
+                            (o) => o['id'] == targetOutletId,
+                            orElse: () => {'id': targetOutletId, 'name': 'Unknown'},
+                          );
+                          final selectedOutletName = selectedOutlet['name'] ?? 'Unknown';
+                          
                           final success = await supabaseService.createProductTransfer(
                             fromOutletId: _outletId,
                             toOutletId: targetOutletId!,
                             productId: selectedProductId!,
                             quantity: transferQuantity,
+                            selectedDate: _selectedDate,
                           );
 
                           if (mounted) {
@@ -1727,6 +1849,8 @@ Widget _buildReturnTab() {
                                             _buildDetailRow(label: 'Produk', value: productName),
                                             const SizedBox(height: 8),
                                             _buildDetailRow(label: 'Jumlah', value: '$transferQuantity unit'),
+                                            const SizedBox(height: 8),
+                                            _buildDetailRow(label: 'Tujuan', value: selectedOutletName),
                                             const SizedBox(height: 8),
                                             _buildDetailRow(label: 'Status', value: '✅ Selesai', valueColor: Colors.green),
                                           ],
@@ -1986,13 +2110,11 @@ Widget _buildReturnTab() {
 
                             if (success) {
                               // 🔧 FIX #7: Refresh product stock and cart after return
-                              print('🔄 Refreshing product stock and cart after return...');
                               try {
                                 final productProvider = context.read<ProductProvider>();
                                 await productProvider.loadProductsWithStock(_outletId);
-                                print('✅ Product stock refreshed');
                               } catch (e) {
-                                print('⚠️ Warning: Could not refresh product stock: $e');
+                                // Error refreshing product stock silently
                               }
                               
                               ScaffoldMessenger.of(context).showSnackBar(

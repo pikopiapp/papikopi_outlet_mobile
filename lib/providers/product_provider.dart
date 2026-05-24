@@ -223,35 +223,26 @@ class ProductProvider extends ChangeNotifier {
             .single();
         businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
       } catch (e) {
-        print('⚠️ Could not fetch business_day_start_hour, using default: $businessDayStartHour');
+        // Use default business day start hour
       }
       
-      print('🛒 POS loadProductsWithStock:');
-      print('   Today (Local): ${today.toIso8601String()}');
-      print('   Outlet: $outletId');
-      print('   Business Day Start Hour: $businessDayStartHour');
-      
+
       // Calculate business day range in LOCAL time (same as stock_screen)
       final year = today.year;
       final month = today.month;
       final day = today.day;
       
-      DateTime businessDayStartLocal;
       DateTime businessDayEndLocal;
       
       if (businessDayStartHour >= 12) {
         // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
         businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
       } else {
         // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
-        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
         businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
       }
       
       businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
-      
-      print('   Business Day (Local): ${businessDayStartLocal.toIso8601String()} to ${businessDayEndLocal.toIso8601String()}');
       
       final stockMap = await _supabaseService.getProductStock(
         outletId,
@@ -275,13 +266,7 @@ class ProductProvider extends ChangeNotifier {
       // tersedia = sisa after deductions (sold, returned, transfers)
       _products.clear();
       
-      print('🛒 POS loadProductsWithStock - Calculation Debug:');
-      print('   Today: ${today.toIso8601String()}');
-      print('   Stock Map (quantity): $stockMap');
-      print('   Sold Map: $soldMap');
-      print('   Returned Map: $returnedMap');
-      print('   Transfer Stats: $transferStats');
-      
+
       for (final product in products) {
         final quantity = stockMap[product.id] ?? 0;  // Stok allocated in business day
         final sold = soldMap[product.id] ?? 0;
@@ -292,8 +277,6 @@ class ProductProvider extends ChangeNotifier {
         final dikirim = (transfers['dikirim'] ?? 0) as num;
         final diterima = (transfers['diterima'] ?? 0) as num;
         final sisa = quantity - sold - returned - dikirim.toInt() + diterima.toInt();
-        
-        print('   📦 ${product.name}: stock=$quantity (no deductions), tersedia=$sisa (after sold=$sold, returned=$returned, dikirim=$dikirim, diterima=$diterima)');
         
         // Create product with both stock and tersedia values
         final productWithStock = Product(
@@ -311,9 +294,6 @@ class ProductProvider extends ChangeNotifier {
         );
         _products.add(productWithStock);
       }
-      
-      print('✅ Products loaded: ${_products.length} items');
-      print('   Note: stock = quantity (no deductions), tersedia = sisa (after sales/returns/transfers)');
     } catch (e) {
       _error = e.toString();
     } finally {
