@@ -5,7 +5,6 @@ import '../services/auth_service.dart';
 import '../providers/product_provider.dart';
 import '../theme/thema.dart';
 import '../widgets/header.dart';
-import '../widgets/screen_skeleton.dart';
 import 'profile_screen.dart';
 
 
@@ -211,6 +210,375 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     }
   }
 
+  // Skeleton loaders for smooth loading experience
+  Widget _buildStockProductTabSkeleton() {
+    return Column(
+      children: [
+        _buildDateFilterWidget(),
+        // Statistics Header - 4 Cards Skeleton
+        Container(
+          padding: const EdgeInsets.all(12),
+          color: AppColors.background,
+          child: Row(
+            children: List.generate(4, (i) {
+              return Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    border: Border.all(color: AppColors.altSurface),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        height: 14,
+                        width: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        height: 9,
+                        width: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+        // DataTable Skeleton
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.vertical,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 16,
+                horizontalMargin: 12,
+                headingRowColor: MaterialStateProperty.all(AppColors.background),
+                dataRowColor: MaterialStateProperty.all(AppColors.surface),
+                headingRowHeight: 50,
+                dataRowHeight: 56,
+                columns: const [
+                  DataColumn(label: Text('Produk')),
+                  DataColumn(label: Text('Harga'), numeric: true),
+                  DataColumn(label: Text('Stok'), numeric: true),
+                  DataColumn(label: Text('Sisa'), numeric: true),
+                  DataColumn(label: Text('Terjual'), numeric: true),
+                  DataColumn(label: Text('Kembali'), numeric: true),
+                  DataColumn(label: Text('Dikirim'), numeric: true),
+                  DataColumn(label: Text('Diterima'), numeric: true),
+                ],
+                rows: List.generate(8, (index) {
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Container(
+                          height: 12,
+                          width: 100,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          height: 12,
+                          width: 80,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          height: 12,
+                          width: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          height: 12,
+                          width: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          height: 12,
+                          width: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          height: 12,
+                          width: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          height: 12,
+                          width: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          height: 12,
+                          width: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTransferTabSkeleton() {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          _buildDateFilterWidget(),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ..._buildTransferCardSkeletons(5),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransferListSkeleton() {
+    return SingleChildScrollView(
+      child: Column(
+        children: _buildTransferCardSkeletons(5),
+      ),
+    );
+  }
+
+  List<Widget> _buildTransferCardSkeletons(int count) {
+    return List.generate(
+      count,
+      (index) => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.altSurface),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 16,
+                        width: 150,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 14,
+                        width: 100,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 80,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: List.generate(
+                  4,
+                  (i) => Padding(
+                    padding: EdgeInsets.only(bottom: i < 3 ? 8 : 0),
+                    child: Container(
+                      height: 12,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReturnListSkeleton() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 5,
+      itemBuilder: (context, index) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.altSurface),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 16,
+                        width: 150,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 12,
+                        width: 100,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 60,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              height: 12,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: 200,
+              height: 12,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -392,7 +760,7 @@ Widget _buildStockContent() {
       future: _stockFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const ScreenSkeleton(lineCount: 10, showTitle: false);
+          return _buildStockProductTabSkeleton();
         }
 
 
@@ -801,7 +1169,7 @@ Widget _buildTransferTab() {
       future: _getEnrichedProductStock(SupabaseService(), _selectedDate),
       builder: (context, stockSnapshot) {
         if (stockSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return _buildTransferTabSkeleton();
         }
 
         final availableStock = stockSnapshot.data ?? [];
@@ -813,7 +1181,7 @@ Widget _buildTransferTab() {
               : SupabaseService().getProductTransfers(_outletId, selectedDate: _selectedDate),
           builder: (context, transferSnapshot) {
             if (transferSnapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return _buildTransferListSkeleton();
             }
 
             if (transferSnapshot.hasError) {
@@ -1111,7 +1479,7 @@ Widget _buildReturnTab() {
       future: _getEnrichedProductStock(SupabaseService(), _selectedDate),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const ScreenSkeleton(lineCount: 10, showTitle: false);
+          return _buildReturnListSkeleton();
         }
 
 
@@ -1170,7 +1538,7 @@ Widget _buildReturnTab() {
                 future: SupabaseService().getProductReturns(_outletId, selectedDate: _selectedDate),
                 builder: (context, returnSnapshot) {
                   if (returnSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return _buildReturnListSkeleton();
                   }
 
                   if (!returnSnapshot.hasData || returnSnapshot.data!.isEmpty) {
