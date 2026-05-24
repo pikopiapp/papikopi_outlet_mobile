@@ -214,7 +214,6 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
   Widget _buildStockProductTabSkeleton() {
     return Column(
       children: [
-        _buildDateFilterWidget(),
         // Statistics Header - 4 Cards Skeleton
         Container(
           padding: const EdgeInsets.all(12),
