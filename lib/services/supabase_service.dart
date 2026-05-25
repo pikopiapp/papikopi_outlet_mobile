@@ -519,9 +519,9 @@ class SupabaseService {
     try {
       final response = await _client
           .from('users')
-          .select('id, name, email, role, outlet_assigment')
+          .select('id, name, email, role, outlet_id')
           .eq('role', 'barista')
-          .eq('outlet_assigment', outletId);
+          .eq('outlet_id', outletId);
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
@@ -536,7 +536,7 @@ class SupabaseService {
     try {
       final response = await _client
           .from('users')
-          .select('id, name, email, role, outlet_assigment')
+          .select('id, name, email, role, outlet_id')
           .eq('role', 'barista');
 
       return List<Map<String, dynamic>>.from(response);
@@ -803,25 +803,27 @@ class SupabaseService {
 
       // selectedDate is in local time (what user sees on screen)
       // Business day calculation should be based on local wall-clock time
-      // If it's May 23, 04:05 AM local time, and business day starts at 21:00,
-      // that's part of May 22's business day (21:00 May 22 to 21:00 May 23)
+      // Check if current hour is at or after the business day start hour
       
       final year = selectedDate.year;
       final month = selectedDate.month;
       final day = selectedDate.day;
+      final hour = selectedDate.hour;
       
       // Calculate business day start/end in LOCAL time
       DateTime businessDayStartLocal;
       DateTime businessDayEndLocal;
       
-      if (businessDayStartHour >= 12) {
-        // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-      } else {
-        // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+      if (hour >= businessDayStartHour) {
+        // Current time is at or after business day start hour
+        // So we're in TODAY's business day (start@hour today, end@hour tomorrow)
         businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
         businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+      } else {
+        // Current time is before business day start hour
+        // So we're in YESTERDAY's business day (start@hour yesterday, end@hour today)
+        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
       }
       
       // Subtract 1 millisecond from end to exclude the exact end time
@@ -1857,11 +1859,17 @@ class SupabaseService {
     try {
       final response = await _client
           .from('outlets')
-          .select('id, name')
+          .select('id, name, business_day_start_hour')
           .order('name', ascending: true);
 
+      print('[SupabaseService] getOutlets() - Total outlets: ${(response as List).length}');
+      for (final outlet in response as List) {
+        print('  - ${outlet['name']} (id: ${outlet['id']})');
+      }
+      
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
+      print('[SupabaseService] Error in getOutlets(): $e');
       return [];
     }
   }
@@ -3370,4 +3378,369 @@ class SupabaseService {
       return false;
     }
   }
+
+  // Showcase Allocation Methods
+
+  /// Fetch all showcase products with inventory
+  Future<List<Map<String, dynamic>>> fetchShowcaseProducts() async {
+    if (!_isInitialized) {
+      return [];
+    }
+
+    try {
+      final response = await _client
+          .from('showcase_products')
+          .select('id, product_id, product_name, total_quantity')
+          .order('product_name', ascending: true);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching showcase products: $e');
+      return [];
+    }
+  }
+
+  /// Fetch outlets for allocation
+  Future<List<Map<String, dynamic>>> fetchOutlets() async {
+    try {
+      return await getOutlets();
+    } catch (e) {
+      print('Error fetching outlets: $e');
+      return [];
+    }
+  }
+
+  /// Get settings including business day start hour
+  Future<Map<String, dynamic>?> getSettings() async {
+    if (!_isInitialized) {
+      return null;
+    }
+
+    try {
+      final response = await _client
+          .from('settings')
+          .select('*')
+          .limit(1)
+          .single();
+
+      return response;
+    } catch (e) {
+      print('Error fetching settings: $e');
+      return null;
+    }
+  }
+
+  /// Fetch assignments for a specific outlet and date range
+  Future<List<Map<String, dynamic>>> fetchAssignmentsForOutlet({
+    required String outletId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    if (!_isInitialized) {
+      return [];
+    }
+
+    try {
+      final startISO = startDate.toIso8601String();
+      final endISO = endDate.toIso8601String();
+
+      print('=== FETCH ASSIGNMENTS START ===');
+      print('Outlet: $outletId');
+      print('Start (UTC): $startISO');
+      print('End (UTC): $endISO');
+      
+      // Convert back to local to show user what range we're querying
+      final startLocal = startDate.toLocal();
+      final endLocal = endDate.toLocal();
+      print('Start (local): ${startLocal.toIso8601String()}');
+      print('End (local): ${endLocal.toIso8601String()}');
+
+      // First, fetch ALL allocations for this outlet to see what we have
+      print('--- Fetching ALL allocations (no filter) for comparison ---');
+      final allAllocations = await _client
+          .from('showcase_allocations')
+          .select('*')
+          .eq('outlet_id', outletId)
+          .order('created_at', ascending: false);
+      
+      print('Total allocations for outlet: ${(allAllocations as List).length}');
+      for (int i = 0; i < (allAllocations as List).length && i < 5; i++) {
+        final item = allAllocations[i];
+        final createdAt = item['created_at'];
+        print('  Alloc $i: created_at = $createdAt');
+      }
+
+      // Now fetch with date filter
+      print('--- Fetching with DATE FILTER ---');
+      final response = await _client
+          .from('showcase_allocations')
+          .select('*')
+          .eq('outlet_id', outletId)
+          .gte('created_at', startISO)
+          .lte('created_at', endISO)
+          .order('created_at', ascending: false);
+
+      print('Filtered query result count: ${(response as List).length}');
+      if ((response as List).isEmpty) {
+        print('No allocations found in date range');
+        print('Possible issue: Check if created_at values fall within range');
+      } else {
+        // Show first few results
+        for (int i = 0; i < (response as List).length && i < 3; i++) {
+          final item = response[i];
+          final createdAt = item['created_at'];
+          print('  - Item $i: created_at = $createdAt');
+        }
+      }
+
+      // Get showcase products mapping
+      final showcaseProductsResp = await _client
+          .from('showcase_products')
+          .select('id, product_name');
+      
+      final productMap = <String, String>{};
+      for (final sp in showcaseProductsResp as List<dynamic>) {
+        productMap[sp['id']] = sp['product_name'] as String;
+      }
+
+      // Build result with product_name
+      final result = <Map<String, dynamic>>[];
+      for (final item in response as List<dynamic>) {
+        final showcaseProductId = item['showcase_product_id'] as String?;
+        if (showcaseProductId != null && productMap.containsKey(showcaseProductId)) {
+          result.add({
+            'id': item['id'],
+            'showcase_product_id': showcaseProductId,
+            'product_name': productMap[showcaseProductId],
+            'quantity': item['quantity'],
+            'created_at': item['created_at'],
+          });
+        }
+      }
+
+      print('Final result: ${result.length} allocations');
+      for (int i = 0; i < result.length && i < 3; i++) {
+        print('  - ${result[i]['product_name']}: ${result[i]['quantity']} (created: ${result[i]['created_at']})');
+      }
+      print('=== FETCH ASSIGNMENTS END ===');
+      return result;
+    } catch (e) {
+      print('Error fetching assignments: $e');
+      return [];
+    }
+  }
+
+  /// Allocate a showcase product to an outlet
+  Future<Map<String, dynamic>> allocateShowcaseProduct({
+    required String showcaseProductId,
+    required String outletId,
+    required int quantity,
+  }) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    try {
+      print('=== ALLOCATE START ===');
+      print('showcaseProductId: $showcaseProductId');
+      print('outletId: $outletId');
+      print('quantity: $quantity');
+      
+      // Insert directly into showcase_allocations table
+      // IMPORTANT: Store created_at in UTC to match the business day range queries
+      final createdAtUtc = DateTime.now().toUtc().toIso8601String();
+      print('created_at (UTC): $createdAtUtc');
+      
+      final response = await _client
+          .from('showcase_allocations')
+          .insert({
+            'showcase_product_id': showcaseProductId,
+            'outlet_id': outletId,
+            'quantity': quantity,
+            'created_at': createdAtUtc,
+          });
+
+      print('Insert response: $response');
+      print('=== ALLOCATE END (success) ===');
+
+      return {
+        'success': true,
+        'message': 'Alokasi berhasil dilakukan',
+        'data': response,
+      };
+    } catch (e) {
+      print('=== ALLOCATE END (error) ===');
+      print('Error allocating product: $e');
+      return {
+        'success': false,
+        'message': 'Error: $e',
+      };
+    }
+  }
+
+  /// Delete a showcase allocation
+  Future<Map<String, dynamic>> deleteShowcaseAllocation(
+      String allocationId) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    try {
+      await _client
+          .from('showcase_allocations')
+          .delete()
+          .eq('id', allocationId);
+
+      return {
+        'success': true,
+        'message': 'Alokasi berhasil dihapus',
+      };
+    } catch (e) {
+      print('Error deleting allocation: $e');
+      return {
+        'success': false,
+        'message': 'Error: $e',
+      };
+    }
+  }
+
+  /// Fetch product returns for an outlet and date range
+  Future<List<Map<String, dynamic>>> fetchProductReturnsForOutlet({
+    required String outletId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    if (!_isInitialized) {
+      return [];
+    }
+
+    try {
+      final startISO = startDate.toIso8601String().split('T')[0];
+      final endISO = endDate.toIso8601String().split('T')[0];
+
+      print('=== FETCH PRODUCT RETURNS START ===');
+      print('Outlet: $outletId');
+      print('Start (Date): $startISO');
+      print('End (Date): $endISO');
+
+      // Fetch all product returns for this outlet within the date range
+      final response = await _client
+          .from('product_returns')
+          .select('*')
+          .eq('outlet_id', outletId)
+          .gte('return_date', startISO)
+          .lte('return_date', endISO)
+          .order('return_date', ascending: false);
+
+      print('Query result count: ${(response as List).length}');
+
+      // Get products mapping
+      final productsResp = await _client
+          .from('products')
+          .select('id, name');
+
+      final productMap = <String, String>{};
+      for (final p in productsResp as List<dynamic>) {
+        productMap[p['id']] = p['name'] as String;
+      }
+
+      // Build result with product_name
+      final result = <Map<String, dynamic>>[];
+      for (final item in response as List<dynamic>) {
+        final productId = item['product_id'] as String?;
+        if (productId != null && productMap.containsKey(productId)) {
+          result.add({
+            'id': item['id'],
+            'product_id': productId,
+            'product_name': productMap[productId],
+            'quantity': 1, // Each row represents one return instance
+            'return_reason': item['return_reason'] ?? '',
+            'condition_status': item['condition_status'] ?? 'good',
+            'resolution_status': item['resolution_status'] ?? 'pending',
+            'return_date': item['return_date'],
+          });
+        }
+      }
+
+      print('Final result: ${result.length} returns');
+      print('=== FETCH PRODUCT RETURNS END ===');
+      return result;
+    } catch (e) {
+      print('Error fetching product returns: $e');
+      return [];
+    }
+  }
+
+  /// Create a product return record for manager returns
+  Future<Map<String, dynamic>> recordProductReturn({
+    required String productId,
+    required String outletId,
+    required int quantity,
+    String returnReason = 'Tidak terjual',
+  }) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    try {
+      print('=== RECORD PRODUCT RETURN START ===');
+      print('productId: $productId');
+      print('outletId: $outletId');
+      print('quantity: $quantity');
+      print('returnReason: $returnReason');
+
+      // Insert into product_returns table with actual schema columns
+      // Schema: product_id, outlet_id, return_reason, condition_status, resolution_status, return_date
+      // Insert one record per unit (quantity) since the table tracks individual items
+      final today = DateTime.now().toUtc().toIso8601String().split('T')[0];
+      
+      for (int i = 0; i < quantity; i++) {
+        await _client.from('product_returns').insert({
+          'product_id': productId,
+          'outlet_id': outletId,
+          'return_reason': returnReason,
+          'condition_status': 'sellable',
+          'resolution_status': 'pending',
+          'return_date': today,
+        });
+      }
+
+      print('=== RECORD PRODUCT RETURN END (success) ===');
+
+      return {
+        'success': true,
+        'message': 'Pengembalian berhasil dicatat ($quantity unit)',
+      };
+    } catch (e) {
+      print('=== RECORD PRODUCT RETURN END (error) ===');
+      print('Error recording product return: $e');
+      return {
+        'success': false,
+        'message': 'Error: $e',
+      };
+    }
+  }
+
+  /// Delete a product return record
+  Future<Map<String, dynamic>> deleteProductReturn(String returnId) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    try {
+      await _client.from('product_returns').delete().eq('id', returnId);
+
+      return {
+        'success': true,
+        'message': 'Pengembalian berhasil dihapus',
+      };
+    } catch (e) {
+      print('Error deleting product return: $e');
+      return {
+        'success': false,
+        'message': 'Error: $e',
+      };
+    }
+  }
 }
+

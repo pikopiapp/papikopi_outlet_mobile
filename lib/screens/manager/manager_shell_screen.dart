@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../../widgets/header.dart';
-import 'manager_profile_screen.dart';
 import 'manager_settings_screen.dart';
 import 'manager_dashboard_screen.dart';
+import 'showcase_allocation_screen.dart';
+import 'manager_product_returns_screen.dart';
+import 'sales_outlet_manager_screen.dart';
 
 class ManagerShellScreen extends StatefulWidget {
   const ManagerShellScreen({super.key});
@@ -20,7 +22,9 @@ class _ManagerShellScreenState extends State<ManagerShellScreen> {
 
   final List<Widget> _screens = const [
     ManagerDashboardScreen(),
-    ManagerProfileScreen(),
+    ShowcaseAllocationScreen(),
+    ManagerProductReturnsScreen(),
+    SalesOutletManagerScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -35,12 +39,6 @@ class _ManagerShellScreenState extends State<ManagerShellScreen> {
     Navigator.of(context).pushReplacementNamed('/login');
   }
 
-  void _handleProfile() {
-    setState(() {
-      _selectedIndex = 1;
-    });
-  }
-
   void _handleSettings() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const ManagerSettingsScreen()),
@@ -50,13 +48,10 @@ class _ManagerShellScreenState extends State<ManagerShellScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _selectedIndex == 0
-          ? PapikopiAppBar(
-              onLogout: _handleLogout,
-              onProfile: _handleProfile,
-              onSettings: _handleSettings,
-            )
-          : null,
+      appBar: PapikopiAppBar(
+        onLogout: _handleLogout,
+        onSettings: _handleSettings,
+      ),
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -72,8 +67,16 @@ class _ManagerShellScreenState extends State<ManagerShellScreen> {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
+            icon: Icon(Icons.inventory_2),
+            label: 'Alokasi',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.assignment_return),
+            label: 'Kembalian',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.trending_up),
+            label: 'Penjualan',
           ),
         ],
       ),

@@ -216,37 +216,6 @@ class ManagerDashboardScreen extends StatelessWidget {
                   ),
                 ],
               ),
-
-              const SizedBox(height: 18),
-
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.altSurface),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Catatan',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Semua tombol masih placeholder. Hubungkan ke screen/route setelah fitur backend tersedia.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),

@@ -1557,6 +1557,11 @@ Widget _buildReturnTab() {
                   }
 
                   final returns = returnSnapshot.data!;
+                  
+                  // Create a map of product_id -> unsold for quick lookup
+                  final unsoldMap = {
+                    for (final stock in stocks) stock['product_id']: stock['unsold'] as int? ?? 0
+                  };
 
                   return ListView.builder(
                     padding: const EdgeInsets.all(16),
@@ -1564,10 +1569,12 @@ Widget _buildReturnTab() {
                     itemBuilder: (context, index) {
                       final returnItem = returns[index];
                       final conditionStatus = returnItem['condition_status'] ?? 'pending';
+                      final productId = returnItem['product_id'] as String?;
                       final productName = returnItem['product_name'] ?? 'Unknown';
                       final returnReason = returnItem['return_reason'] ?? '-';
                       final returnDate = returnItem['return_date'];
                       final conditionNotes = returnItem['condition_notes'];
+                      final unsoldQuantity = unsoldMap[productId] ?? 0;
                       
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -1621,6 +1628,37 @@ Widget _buildReturnTab() {
                                     ),
                                   ),
                                 ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Show unsold quantity in a box
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[50],
+                                  border: Border.all(color: Colors.blue[200]!),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Sisa Stok:',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[700],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Text(
+                                      '$unsoldQuantity unit',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               const SizedBox(height: 12),
                               // Alasan Pengembalian
@@ -2337,10 +2375,10 @@ Widget _buildReturnTab() {
                     items: stocks.map((stock) {
                       final productId = stock['product_id'] as String;
                       final productName = stock['product_name'] as String? ?? 'Unknown';
-                      final quantity = stock['quantity'] as int? ?? 0;
+                      final unsold = stock['unsold'] as int? ?? 0;
                       return DropdownMenuItem(
                         value: productId,
-                        child: Text('$productName (Stok: $quantity)'),
+                        child: Text('$productName - Sisa: $unsold unit'),
                       );
                     }).toList(),
                     onChanged: (value) {
@@ -2393,7 +2431,41 @@ Widget _buildReturnTab() {
                     ),
                     const SizedBox(height: 20),
 
-                    // Pilih Alasan
+                    // Show selected product info (name, unsold quantity, price)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        border: Border.all(color: AppColors.primary, width: 1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Stok Tersedia',
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                              Text(
+                                stocks.firstWhere(
+                                  (s) => s['product_id'] == selectedProductId,
+                                  orElse: () => {'unsold': 0},
+                                )['unsold'].toString() + ' unit',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     Text(
                       'Alasan Pengembalian',
                       style: Theme.of(context).textTheme.labelMedium,

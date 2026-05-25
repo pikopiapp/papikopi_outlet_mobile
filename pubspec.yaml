@@ -30,7 +30,7 @@ dependencies:
   intl: ^0.19.0
   
   # Local Storage
-  shared_preferences: ^2.2.0
+  shared_preferences: ^2.5.5
   
   # UI Components
   google_fonts: ^6.2.0

@@ -11,7 +11,6 @@ import '../utils/number_formatter.dart';
 import '../widgets/cart_summary.dart';
 import '../widgets/header.dart';
 import '../theme/thema.dart';
-import '../widgets/screen_skeleton.dart';
 import 'profile_screen.dart';
 
 import 'transaction_history_screen.dart';
@@ -90,6 +89,105 @@ class _POSScreenState extends State<POSScreen>
     _tabController.dispose();
     _refreshAnimationController.dispose();
     super.dispose();
+  }
+
+  // Skeleton loader matching product grid layout
+  Widget _buildProductGridSkeleton() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: 6,
+      itemBuilder: (context, index) {
+        return Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.altSurface),
+            borderRadius: BorderRadius.circular(12),
+            color: AppColors.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product Image Placeholder
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              // Product Info Skeleton
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Product Name Placeholder
+                    Container(
+                      height: 12,
+                      width: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // Price Placeholder
+                    Container(
+                      height: 12,
+                      width: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // Stock & Tersedia Placeholders
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          height: 10,
+                          width: 50,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        Container(
+                          height: 10,
+                          width: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _handleQRScan() async {
@@ -695,7 +793,7 @@ child: TabBarView(
             : product.getProductsByCategory(_selectedCategoryId!);
 
         if (product.isLoading) {
-          return const ScreenSkeleton(lineCount: 10, showTitle: false);
+          return _buildProductGridSkeleton();
         }
 
 

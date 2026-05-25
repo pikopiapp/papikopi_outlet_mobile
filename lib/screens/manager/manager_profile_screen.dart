@@ -4,8 +4,6 @@ import '../../models/user.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
-import '../../widgets/header.dart';
-import 'manager_settings_screen.dart';
 
 class ManagerProfileScreen extends StatefulWidget {
   const ManagerProfileScreen({super.key});
@@ -73,17 +71,7 @@ class _ManagerProfileScreenState extends State<ManagerProfileScreen> {
     Navigator.of(context).pushReplacementNamed('/login');
   }
 
-  void _handleProfile() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Anda sudah berada di halaman profil')),
-    );
-  }
 
-  void _handleSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const ManagerSettingsScreen()),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,11 +107,6 @@ class _ManagerProfileScreenState extends State<ManagerProfileScreen> {
         if (user == null) return const Center(child: Text('Data pengguna tidak ditemukan'));
 
         return Scaffold(
-          appBar: PapikopiAppBar(
-            onLogout: _handleLogout,
-            onProfile: _handleProfile,
-            onSettings: _handleSettings,
-          ),
           body: SingleChildScrollView(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).padding.bottom + 24,
