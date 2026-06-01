@@ -3019,6 +3019,45 @@ class SupabaseService {
     }
   }
 
+  // Insert test data untuk 15 Mei dengan status 'verified by barista' dan shortfall
+  Future<bool> insertTestData15May({
+    required String outletId,
+    required String baristaId,
+  }) async {
+    if (!_isInitialized) {
+      print('ERROR: SupabaseService not initialized');
+      return false;
+    }
+
+    try {
+      print('DEBUG: Inserting test data for 15 May');
+      
+      // Insert dengan submitted_at explicit untuk 15 Mei
+      await _client.from('cash_deposit_handovers').insert(
+        {
+          'outlet_id': outletId,
+          'barista_id': baristaId,
+          'total_omset': 406000.0,
+          'cash_amount': 318500.0,
+          'qris_amount': 87500.0,
+          'bonus': 81200.0,
+          'meal_allowance': 34000.0,
+          'deposit_amount': -50000.0,  // Negative = shortfall
+          'status': 'verified by barista',
+          'shortfall_receipt_recorded': true,
+          'date': '2026-05-15',
+          'submitted_at': DateTime.utc(2026, 5, 15, 7, 0, 0).toIso8601String(),
+        },
+      );
+      
+      print('DEBUG: Test data inserted successfully');
+      return true;
+    } catch (e) {
+      print('ERROR: Failed to insert test data: $e');
+      return false;
+    }
+  }
+
   // Submit serah terima (handover) untuk setoran
   Future<bool> submitCashDepositHandover({
     required String outletId,
@@ -3054,6 +3093,7 @@ class SupabaseService {
           'meal_allowance': mealAllowance,
           'deposit_amount': depositAmount,
           'status': status,
+          'shortfall_receipt_recorded': false,  // Initially false, set to true when barista signs
           'date': dateStr,
         },
         onConflict: 'outlet_id,barista_id,date',
@@ -4812,42 +4852,61 @@ class SupabaseService {
       // Note: shortfall_receipt_recorded column indicates if barista signed shortfall receipt
       Map<String, String> approvalStatusMap = {}; // baristaId|outletId -> status
       Map<String, String> statusTypeMap = {}; // baristaId|outletId -> type ('shortfall' or 'approved')
+      Map<String, Map<String, dynamic>> handoverDetailsMap = {}; // baristaId|outletId -> {handoverStatus, shortfallReceiptRecorded, kekuranganUpah}
 
       // Get cash deposit handovers (yang verified oleh barista)
       // Filter by submitted_at (hari ini saja) bukan date (business_day_date bisa berbeda)
+      print('DEBUG getAllBaristaPayments - Query time range: $startIso to $endIso');
       try {
         final handovers = await _client
             .from('cash_deposit_handovers')
-            .select('barista_id, outlet_id, status, shortfall_receipt_recorded')
+            .select('barista_id, outlet_id, status, shortfall_receipt_recorded, deposit_amount, submitted_at')
             .gte('submitted_at', startIso)
             .lt('submitted_at', endIso);
 
         print('DEBUG getAllBaristaPayments - cash_deposit_handovers count: ${handovers.length}');
+        if (handovers.isNotEmpty) {
+          print('DEBUG getAllBaristaPayments - Handovers found:');
+          for (final h in handovers) {
+            print('  - Barista: ${h['barista_id']}, Outlet: ${h['outlet_id']}, Status: ${h['status']}, Submitted: ${h['submitted_at']}');
+          }
+        }
 
         for (final handover in handovers) {
           final baristaId = handover['barista_id'] as String?;
           final outletId = handover['outlet_id'] as String?;
           final dbStatus = handover['status'] as String?;
           final shortfallRecorded = handover['shortfall_receipt_recorded'] as bool? ?? false;
+          final depositAmount = (handover['deposit_amount'] as num?)?.toDouble() ?? 0.0;
+          
+          print('DEBUG getAllBaristaPayments - Handover data: status=$dbStatus, shortfallRecorded=$shortfallRecorded, depositAmount=$depositAmount');
+          
+          // Determine if this is a shortfall or deposit based on deposit_amount
+          // If negative, it's a shortfall; if positive/zero, it's a deposit
+          final bool isShortfall = depositAmount < 0;
+          final double kekuranganUpah = isShortfall ? depositAmount.abs() : 0.0;
           
           if (baristaId != null && outletId != null && dbStatus != null) {
             // Map database status to display status:
             // - 'pending': Belum submit 
             // - 'verified by barista': Sudah verified oleh barista
-            //   * Untuk deposit: menunggu manager approve
-            //   * Untuk shortfall: only if shortfall_receipt_recorded = true (barista signed)
+            // - 'approved': Sudah disetujui manager
+            // - 'completed': Selesai
+            // - 'rejected': Ditolak
+            // Gunakan status dari database langsung, tanpa override
             String displayStatus = dbStatus;
-            
-            // If status is 'verified by barista' tapi shortfall_receipt_recorded = false
-            // Berarti shortfall belum di-record oleh barista → treat as pending
-            if (dbStatus == 'verified by barista' && !shortfallRecorded) {
-              displayStatus = 'pending';
-            }
             
             // Create key combining barista + outlet for unique match (matches sales grouping)
             final key = '$baristaId|$outletId';
             approvalStatusMap[key] = displayStatus;
-            statusTypeMap[key] = 'deposit';
+            statusTypeMap[key] = isShortfall ? 'shortfall' : 'deposit';
+            
+            // Store handover details for later use
+            handoverDetailsMap[key] = {
+              'handoverStatus': displayStatus,
+              'shortfallReceiptRecorded': shortfallRecorded,
+              'kekuranganUpah': kekuranganUpah,
+            };
           }
         }
       } catch (e) {
@@ -4900,6 +4959,12 @@ class SupabaseService {
           String paymentStatus = approvalStatusMap[statusKey] ?? 'pending';
           String statusType = statusTypeMap[statusKey] ?? 'none'; // 'shortfall', 'deposit', or 'none'
           
+          // Get handover details if exists
+          final handoverDetails = handoverDetailsMap[statusKey];
+          final String handoverStatus = handoverDetails?['handoverStatus'] ?? 'pending';
+          final bool shortfallReceiptRecorded = handoverDetails?['shortfallReceiptRecorded'] ?? false;
+          final double kekuranganUpah = (handoverDetails?['kekuranganUpah'] as num?)?.toDouble() ?? 0.0;
+          
           final baristaName = userNameMap[baristaId] ?? 'Unknown';
           final outletName = outletId != null ? (outletNameMap[outletId] ?? 'Outlet Unknown') : 'Outlet Unknown';
           
@@ -4922,6 +4987,9 @@ class SupabaseService {
             'depositAmount': depositAmount,
             'paymentStatus': paymentStatus,
             'statusType': statusType, // 'shortfall', 'deposit', or 'none'
+            'handoverStatus': handoverStatus, // Status from cash_deposit_handovers
+            'shortfallReceiptRecorded': shortfallReceiptRecorded, // From cash_deposit_handovers
+            'kekuranganUpah': kekuranganUpah, // From cash_deposit_handovers
           });
         } catch (e) {
           print('DEBUG getAllBaristaPayments - Error processing barista: $e');
