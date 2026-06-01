@@ -4767,37 +4767,34 @@ class SupabaseService {
         
         for (final sale in sales) {
           try {
-            final createdAt = DateTime.parse(sale['created_at'] as String);
-            if (createdAt.isAfter(startDate) && createdAt.isBefore(endDate)) {
-              final baristaId = sale['barista_id'] as String?;
-              final outletId = sale['outlet_id'] as String?;
-              final totalAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
-              final paymentMethod = (sale['payment_method'] as String?)?.toUpperCase() ?? 'UNKNOWN';
+            final baristaId = sale['barista_id'] as String?;
+            final outletId = sale['outlet_id'] as String?;
+            final totalAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+            final paymentMethod = (sale['payment_method'] as String?)?.toUpperCase() ?? 'UNKNOWN';
+            
+            if (baristaId != null) {
+              // Initialize barista data if not exists
+              if (!baristaDataMap.containsKey(baristaId)) {
+                baristaDataMap[baristaId] = {
+                  'cashAmount': 0.0,
+                  'qrisAmount': 0.0,
+                  'freeCount': 0,
+                  'outletId': outletId,
+                };
+              }
               
-              if (baristaId != null) {
-                // Initialize barista data if not exists
-                if (!baristaDataMap.containsKey(baristaId)) {
-                  baristaDataMap[baristaId] = {
-                    'cashAmount': 0.0,
-                    'qrisAmount': 0.0,
-                    'freeCount': 0,
-                    'outletId': outletId,
-                  };
-                }
-                
-                // Add to appropriate payment method total
-                if (paymentMethod == 'GRATIS') {
-                  // Count free transactions
-                  baristaDataMap[baristaId]!['freeCount'] = 
-                      (baristaDataMap[baristaId]!['freeCount'] as int) + 1;
-                } else if (totalAmount > 0) {
-                  if (paymentMethod == 'CASH') {
-                    baristaDataMap[baristaId]!['cashAmount'] = 
-                        (baristaDataMap[baristaId]!['cashAmount'] as double) + totalAmount;
-                  } else if (paymentMethod == 'QRIS') {
-                    baristaDataMap[baristaId]!['qrisAmount'] = 
-                        (baristaDataMap[baristaId]!['qrisAmount'] as double) + totalAmount;
-                  }
+              // Add to appropriate payment method total
+              if (paymentMethod == 'GRATIS') {
+                // Count free transactions
+                baristaDataMap[baristaId]!['freeCount'] = 
+                    (baristaDataMap[baristaId]!['freeCount'] as int) + 1;
+              } else if (totalAmount > 0) {
+                if (paymentMethod == 'CASH') {
+                  baristaDataMap[baristaId]!['cashAmount'] = 
+                      (baristaDataMap[baristaId]!['cashAmount'] as double) + totalAmount;
+                } else if (paymentMethod == 'QRIS') {
+                  baristaDataMap[baristaId]!['qrisAmount'] = 
+                      (baristaDataMap[baristaId]!['qrisAmount'] as double) + totalAmount;
                 }
               }
             }
@@ -4811,22 +4808,59 @@ class SupabaseService {
 
       print('DEBUG getAllBaristaPayments - processed baristas: ${baristaDataMap.length}');
 
-      // Get approval status from cash_deposit_handovers
-      final handovers = await _client
-          .from('cash_deposit_handovers')
-          .select('barista_id, status')
-          .eq('date', dateStr);
+      // Create map of approval status - check both shortfall_receipts and cash_deposit_handovers
+      Map<String, String> approvalStatusMap = {}; // baristaId -> status
+      Map<String, String> statusTypeMap = {}; // baristaId -> type ('shortfall' or 'approved')
 
-      print('DEBUG getAllBaristaPayments - handovers count: ${handovers.length}');
+      // Get shortfall receipts (kekurangan upah yang sudah ditandatangani)
+      try {
+        final shortfalls = await _client
+            .from('shortfall_receipts')
+            .select('barista_id')
+            .eq('date', dateStr);
 
-      // Create map of approval status
-      Map<String, String> approvalStatusMap = {};
-      for (final handover in handovers) {
-        final baristaId = handover['barista_id'] as String?;
-        final status = handover['status'] as String?;
-        if (baristaId != null && status != null) {
-          approvalStatusMap[baristaId] = status;
+        print('DEBUG getAllBaristaPayments - shortfall_receipts count: ${shortfalls.length}');
+
+        for (final shortfall in shortfalls) {
+          final baristaId = shortfall['barista_id'] as String?;
+          if (baristaId != null) {
+            approvalStatusMap[baristaId] = 'approved'; // shortfall receipt = approved/settled
+            statusTypeMap[baristaId] = 'shortfall';
+          }
         }
+      } catch (e) {
+        print('DEBUG getAllBaristaPayments - Warning: Could not fetch shortfall_receipts: $e');
+      }
+
+      // Get cash deposit handovers (yang verified oleh barista)
+      try {
+        final handovers = await _client
+            .from('cash_deposit_handovers')
+            .select('barista_id, status')
+            .eq('date', dateStr);
+
+        print('DEBUG getAllBaristaPayments - cash_deposit_handovers count: ${handovers.length}');
+
+        for (final handover in handovers) {
+          final baristaId = handover['barista_id'] as String?;
+          final dbStatus = handover['status'] as String?;
+          if (baristaId != null && dbStatus != null) {
+            // Map database status to display status:
+            // - 'pending': Belum submit (should not happen here, but just in case)
+            // - 'verified by barista': Sudah verified oleh barista, menunggu manager approve
+            // - 'approved': Manager sudah approve
+            String displayStatus = 'pending'; // Default
+            if (dbStatus == 'approved') {
+              displayStatus = 'approved';
+            } else if (dbStatus == 'verified by barista' || dbStatus == 'pending') {
+              displayStatus = 'pending'; // Still waiting for manager approval
+            }
+            approvalStatusMap[baristaId] = displayStatus;
+            statusTypeMap[baristaId] = 'deposit';
+          }
+        }
+      } catch (e) {
+        print('DEBUG getAllBaristaPayments - Warning: Could not fetch cash_deposit_handovers: $e');
       }
 
       // Convert to result list with calculated bonus and meal allowance
@@ -4869,8 +4903,10 @@ class SupabaseService {
           // Calculate settlement
           double depositAmount = cashAmount - bonus - mealAllowance;
           
-          // Get payment status from approvalStatusMap, default to 'pending'
+          // Get payment status from approvalStatusMap (already mapped from database)
+          // Returns 'approved' if manager approved, 'pending' if still waiting for manager approval
           String paymentStatus = approvalStatusMap[baristaId] ?? 'pending';
+          String statusType = statusTypeMap[baristaId] ?? 'none'; // 'shortfall', 'deposit', or 'none'
           
           final baristaName = userNameMap[baristaId] ?? 'Unknown';
           final outletName = outletId != null ? (outletNameMap[outletId] ?? 'Outlet Unknown') : 'Outlet Unknown';
@@ -4893,6 +4929,7 @@ class SupabaseService {
             'totalWage': bonus + mealAllowance,
             'depositAmount': depositAmount,
             'paymentStatus': paymentStatus,
+            'statusType': statusType, // 'shortfall', 'deposit', or 'none'
           });
         } catch (e) {
           print('DEBUG getAllBaristaPayments - Error processing barista: $e');

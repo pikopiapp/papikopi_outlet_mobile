@@ -23,6 +23,12 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
   late SupabaseService _supabaseService;
   bool _isLoading = true;
   List<Map<String, dynamic>> _baristaPayments = [];
+  
+  // Track expanded sections for each barista
+  final Map<String, bool> _expandedSections = {}; // baristaId -> isExpanded
+  
+  // Track bonus tier info expansion
+  bool _isBonusTierInfoExpanded = false;
 
   @override
   void initState() {
@@ -153,64 +159,84 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (isHolidayDate) ...[
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.purple.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  const Text('🎉', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Bonus $holidayDescription: Semua Tier 20%',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.purple,
-                          ),
-                    ),
+          // Toggle Header
+          GestureDetector(
+            onTap: () => setState(() => _isBonusTierInfoExpanded = !_isBonusTierInfoExpanded),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    isHolidayDate ? 'Sistem Bonus (Hari Libur)' : 'Sistem Bonus Bertingkat',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isHolidayDate ? Colors.purple : AppColors.primary,
+                        ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          Text(
-            isHolidayDate ? 'Sistem Bonus (Hari Libur)' : 'Sistem Bonus Bertingkat',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: isHolidayDate ? Colors.purple : AppColors.primary,
                 ),
-          ),
-          const SizedBox(height: 8),
-          if (isHolidayDate)
-            _buildBonusLine('Semua omset', '20%', Colors.purple)
-          else ...[
-            _buildBonusLine('Rp 0 - 200.000', '10%', Colors.black87),
-            const SizedBox(height: 4),
-            _buildBonusLine('Rp 200.000 - 350.000', '12%', Colors.black87),
-            const SizedBox(height: 4),
-            _buildBonusLine('Rp 350.000 - 500.000', '15%', Colors.black87),
-            const SizedBox(height: 4),
-            _buildBonusLine('> Rp 500.000', '20%', Colors.black87),
-          ],
-          const SizedBox(height: 8),
-          const Divider(),
-          const SizedBox(height: 8),
-          Text(
-            'Uang Makan:',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
+                Icon(
+                  _isBonusTierInfoExpanded ? Icons.expand_less : Icons.expand_more,
                   color: AppColors.primary,
+                  size: 20,
                 ),
+              ],
+            ),
           ),
-          const SizedBox(height: 4),
-          _buildBonusLine('< Rp 300.000', 'Rp 25.000', Colors.black87),
-          const SizedBox(height: 4),
-          _buildBonusLine('≥ Rp 300.000', 'Rp 34.000', Colors.black87),
+          
+          // Expandable Content
+          if (_isBonusTierInfoExpanded) ...[
+            const SizedBox(height: 12),
+            if (isHolidayDate) ...[
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    const Text('🎉', style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Bonus $holidayDescription: Semua Tier 20%',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.purple,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (isHolidayDate)
+              _buildBonusLine('Semua omset', '20%', Colors.purple)
+            else ...[
+              _buildBonusLine('Rp 0 - 200.000', '10%', Colors.black87),
+              const SizedBox(height: 4),
+              _buildBonusLine('Rp 200.000 - 350.000', '12%', Colors.black87),
+              const SizedBox(height: 4),
+              _buildBonusLine('Rp 350.000 - 500.000', '15%', Colors.black87),
+              const SizedBox(height: 4),
+              _buildBonusLine('> Rp 500.000', '20%', Colors.black87),
+            ],
+            const SizedBox(height: 8),
+            const Divider(),
+            const SizedBox(height: 8),
+            Text(
+              'Uang Makan:',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            _buildBonusLine('< Rp 300.000', 'Rp 25.000', Colors.black87),
+            const SizedBox(height: 4),
+            _buildBonusLine('≥ Rp 300.000', 'Rp 34.000', Colors.black87),
+          ],
         ],
       ),
     );
@@ -537,6 +563,7 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                           final qrisAmount = (baristaData['qrisAmount'] as num?)?.toDouble() ?? 0.0;
                           final freeCount = (baristaData['freeCount'] as int?) ?? 0;
                           final paymentStatus = baristaData['paymentStatus'] as String;
+                          final statusType = baristaData['statusType'] as String? ?? 'none'; // 'shortfall', 'deposit', or 'none'
                           
                           // Calculate bonus and settlement using same logic as sales_outlet_manager
                           final Map<String, dynamic> bonusCalc = _calculateBonusAndMeal(cashAmount, qrisAmount, freeCount);
@@ -588,177 +615,229 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                         ],
                                       ),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: paymentStatus.toLowerCase() == 'approved'
-                                            ? Colors.green.withOpacity(0.1)
-                                            : Colors.orange.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        paymentStatus.toLowerCase() == 'approved' ? 'Dibayar' : 'Pending',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
+                                    // Status badge untuk setoran normal (deposit > 0)
+                                    if (settlementType == 'deposit')
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
                                           color: paymentStatus.toLowerCase() == 'approved'
-                                              ? Colors.green.shade700
-                                              : Colors.orange.shade700,
+                                              ? Colors.green.withOpacity(0.1)
+                                              : Colors.blue.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          paymentStatus.toLowerCase() == 'approved' ? 'Sudah Bayar' : 'Sudah Terima',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: paymentStatus.toLowerCase() == 'approved'
+                                                ? Colors.green.shade700
+                                                : Colors.blue.shade700,
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                    // Status badge untuk kekurangan upah (shortfall > 0)
+                                    if (settlementType == 'shortfall')
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.purple.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          'Verify by Barista',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.purple.shade700,
+                                          ),
+                                        ),
+                                      ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
                                 
-                                // Omset Breakdown
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.background,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                // Toggle Button for Details
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _expandedSections[baristaData['baristaId'] as String] = 
+                                          !(_expandedSections[baristaData['baristaId'] as String] ?? false);
+                                    });
+                                  },
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
-                                        'Omset:',
+                                        'Detail Perhitungan',
                                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                               fontWeight: FontWeight.bold,
+                                              color: AppColors.primary,
                                             ),
                                       ),
-                                      const SizedBox(height: 6),
-                                      _buildBonusLine(
-                                        'Penjualan',
-                                        'Rp ${NumberFormat('#,##0', 'id_ID').format(omset.toInt())}',
-                                        Colors.black,
+                                      Icon(
+                                        (_expandedSections[baristaData['baristaId'] as String] ?? false)
+                                            ? Icons.expand_less
+                                            : Icons.expand_more,
+                                        color: AppColors.primary,
                                       ),
-                                      const SizedBox(height: 4),
-                                      _buildBonusLine(
-                                        '  ├─ Cash',
-                                        'Rp ${NumberFormat('#,##0', 'id_ID').format(cashAmount.toInt())}',
-                                        Colors.black87,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      _buildBonusLine(
-                                        '  └─ QRIS',
-                                        'Rp ${NumberFormat('#,##0', 'id_ID').format(qrisAmount.toInt())}',
-                                        Colors.black87,
-                                      ),
-                                      if (freeCount > 0) ...[
-                                        const SizedBox(height: 4),
-                                        _buildBonusLine(
-                                          '  └─ Gratis',
-                                          '${freeCount}x',
-                                          Colors.black87,
-                                        ),
-                                      ],
                                     ],
                                   ),
                                 ),
-                                const SizedBox(height: 12),
                                 
-                                // Holiday Bonus Indicator
-                                if (isHolidayDate)
+                                // Expandable Sections
+                                if (_expandedSections[baristaData['baristaId'] as String] ?? false) ...[
+                                  const SizedBox(height: 12),
+                                  
+                                  // Omset Breakdown
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.background,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Omset:',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        _buildBonusLine(
+                                          'Penjualan',
+                                          'Rp ${NumberFormat('#,##0', 'id_ID').format(omset.toInt())}',
+                                          Colors.black,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        _buildBonusLine(
+                                          '  ├─ Cash',
+                                          'Rp ${NumberFormat('#,##0', 'id_ID').format(cashAmount.toInt())}',
+                                          Colors.black87,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        _buildBonusLine(
+                                          '  └─ QRIS',
+                                          'Rp ${NumberFormat('#,##0', 'id_ID').format(qrisAmount.toInt())}',
+                                          Colors.black87,
+                                        ),
+                                        if (freeCount > 0) ...[
+                                          const SizedBox(height: 4),
+                                          _buildBonusLine(
+                                            '  └─ Gratis',
+                                            '${freeCount}x',
+                                            Colors.black87,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  
+                                  // Holiday Bonus Indicator
+                                  if (isHolidayDate)
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purple.withOpacity(0.1),
+                                        border: Border.all(color: Colors.purple, width: 1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Text('🎉', style: TextStyle(fontSize: 14)),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Bonus Hari Libur: 20%',
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.purple,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  if (isHolidayDate) const SizedBox(height: 12),
+                                  
+                                  // Settlement Calculation
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: settlementType == 'deposit'
+                                          ? Colors.green.withOpacity(0.1)
+                                          : Colors.orange.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: settlementType == 'deposit' ? Colors.green : Colors.orange,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        _buildBonusLine(
+                                          'CASH Diterima',
+                                          'Rp ${NumberFormat('#,##0', 'id_ID').format(cashAmount.toInt())}',
+                                          Colors.black,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        _buildBonusLine(
+                                          '- Bonus (Bertahap)',
+                                          '-Rp ${NumberFormat('#,##0', 'id_ID').format(bonus.toInt())}',
+                                          Colors.red,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        _buildBonusLine(
+                                          '- Uang Makan',
+                                          '-Rp ${NumberFormat('#,##0', 'id_ID').format(mealAllowance.toInt())}',
+                                          Colors.red,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          decoration: BoxDecoration(
+                                            border: Border(
+                                              top: BorderSide(color: Colors.grey.shade300),
+                                            ),
+                                          ),
+                                          child: _buildBonusLine(
+                                            settlementType == 'deposit' ? 'Setoran' : 'Kekurangan Upah',
+                                            settlementType == 'deposit'
+                                                ? 'Rp ${NumberFormat('#,##0', 'id_ID').format(settlementAmount.toInt())}'
+                                                : '-Rp ${NumberFormat('#,##0', 'id_ID').format(settlementAmount.toInt())}',
+                                            settlementType == 'deposit' ? Colors.green : Colors.orange,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  
+                                  // Formula Info
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: Colors.purple.withOpacity(0.1),
-                                      border: Border.all(color: Colors.purple, width: 1),
+                                      color: Colors.blue.withValues(alpha: 0.05),
                                       borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3), width: 1),
                                     ),
-                                    child: Row(
-                                      children: [
-                                        const Text('🎉', style: TextStyle(fontSize: 14)),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'Bonus Hari Libur: 20%',
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.purple,
-                                                ),
+                                    child: Text(
+                                      'Rumus: Setoran = CASH - Bonus - Uang Makan\nQRIS langsung ke rekening toko',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            fontSize: 10,
+                                            color: Colors.blue.shade700,
+                                            height: 1.3,
                                           ),
-                                        ),
-                                      ],
                                     ),
                                   ),
-                                if (isHolidayDate) const SizedBox(height: 12),
+                                ],
                                 
-                                // Settlement Calculation
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: settlementType == 'deposit'
-                                        ? Colors.green.withOpacity(0.1)
-                                        : Colors.orange.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: settlementType == 'deposit' ? Colors.green : Colors.orange,
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      _buildBonusLine(
-                                        'CASH Diterima',
-                                        'Rp ${NumberFormat('#,##0', 'id_ID').format(cashAmount.toInt())}',
-                                        Colors.black,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      _buildBonusLine(
-                                        '- Bonus (Bertahap)',
-                                        '-Rp ${NumberFormat('#,##0', 'id_ID').format(bonus.toInt())}',
-                                        Colors.red,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      _buildBonusLine(
-                                        '- Uang Makan',
-                                        '-Rp ${NumberFormat('#,##0', 'id_ID').format(mealAllowance.toInt())}',
-                                        Colors.red,
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
-                                        decoration: BoxDecoration(
-                                          border: Border(
-                                            top: BorderSide(color: Colors.grey.shade300),
-                                          ),
-                                        ),
-                                        child: _buildBonusLine(
-                                          settlementType == 'deposit' ? 'Setoran' : 'Kekurangan Upah',
-                                          settlementType == 'deposit'
-                                              ? 'Rp ${NumberFormat('#,##0', 'id_ID').format(settlementAmount.toInt())}'
-                                              : '-Rp ${NumberFormat('#,##0', 'id_ID').format(settlementAmount.toInt())}',
-                                          settlementType == 'deposit' ? Colors.green : Colors.orange,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                
-                                // Formula Info
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.blue.withValues(alpha: 0.3), width: 1),
-                                  ),
-                                  child: Text(
-                                    'Rumus: Setoran = CASH - Bonus - Uang Makan\nQRIS langsung ke rekening toko',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          fontSize: 10,
-                                          color: Colors.blue.shade700,
-                                          height: 1.3,
-                                        ),
-                                  ),
-                                ),
-                                
-                                // Action Button
-                                if (paymentStatus.toLowerCase() == 'pending')
+                                // Action Button - hanya tampil untuk deposit cases (bukan shortfall)
+                                if (paymentStatus.toLowerCase() == 'pending' && settlementType == 'deposit')
                                   ...[
                                     const SizedBox(height: 12),
                                     SizedBox(
@@ -770,7 +849,25 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                           padding: const EdgeInsets.symmetric(vertical: 10),
                                         ),
                                         icon: const Icon(Icons.check_circle, size: 18),
-                                        label: const Text('Bayar Sekarang', style: TextStyle(fontSize: 13)),
+                                        label: const Text('Approve', style: TextStyle(fontSize: 13)),
+                                      ),
+                                    ),
+                                  ],
+                                
+                                // Action Button - untuk shortfall cases
+                                if (settlementType == 'shortfall')
+                                  ...[
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () => _processPayment(baristaData),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.purple,
+                                          padding: const EdgeInsets.symmetric(vertical: 10),
+                                        ),
+                                        icon: const Icon(Icons.check_circle, size: 18),
+                                        label: const Text('Bayar', style: TextStyle(fontSize: 13)),
                                       ),
                                     ),
                                   ],
