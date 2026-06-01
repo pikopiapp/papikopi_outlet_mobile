@@ -7,6 +7,7 @@ import 'manager_dashboard_screen.dart';
 import 'showcase_allocation_screen.dart';
 import 'manager_product_returns_screen.dart';
 import 'sales_outlet_manager_screen.dart';
+import '../private_messages_screen.dart';
 
 class ManagerShellScreen extends StatefulWidget {
   const ManagerShellScreen({super.key});
@@ -45,12 +46,19 @@ class _ManagerShellScreenState extends State<ManagerShellScreen> {
     );
   }
 
+  void _handleMessages() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const PrivateMessagesScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: PapikopiAppBar(
         onLogout: _handleLogout,
         onSettings: _handleSettings,
+        onMessages: _handleMessages,
       ),
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(

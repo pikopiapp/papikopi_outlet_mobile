@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/auth_provider.dart';
-import '../services/supabase_service.dart';
-import '../theme/thema.dart';
-import '../widgets/header.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../widgets/header.dart';
+import 'investor_home_screen.dart';
+import 'investor_profile_screen.dart';
+import 'investor_revenue_screen.dart';
+import 'investor_report_outlet_screen.dart';
+import 'investor_notification_screen.dart';
+import 'investor_withdrawal_screen.dart';
 
 class InvestorScreen extends StatefulWidget {
   const InvestorScreen({super.key});
@@ -19,19 +25,23 @@ class _InvestorScreenState extends State<InvestorScreen> {
 
   late final Future<void> _supabaseInitFuture;
 
-  // 0: Profile, 1: Revenue, 2: Report Outlet, 3: Notifikasi
-  final List<Widget> _screens = const [
-    _InvestorProfilePlaceholder(),
-    _InvestorRevenuePlaceholder(),
-    _InvestorReportOutletPlaceholder(),
-    _InvestorNotificationPlaceholder(),
-  ];
+  // 0: Home, 1: Revenue, 2: Report Outlet, 3: Withdrawal, 4: Notification
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
     // Extra guard: pastikan Supabase sudah siap sebelum screen mulai query
     _supabaseInitFuture = _supabaseService.initialize();
+    
+    // Initialize screens with navigation callback
+    _screens = [
+      InvestorHomeScreen(onNavigate: _onItemTapped),
+      const InvestorRevenueScreen(),
+      const InvestorReportOutletScreen(),
+      const InvestorWithdrawalScreen(),
+      const InvestorNotificationScreen(),
+    ];
   }
 
   void _onItemTapped(int index) {
@@ -47,15 +57,27 @@ class _InvestorScreenState extends State<InvestorScreen> {
   }
 
   void _handleProfile() {
-    setState(() {
-      _selectedIndex = 0;
-    });
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => const InvestorProfileScreen(),
+    );
   }
 
   void _handleSettings() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Settings investor masih placeholder')),
     );
+  }
+
+  void _handleMessage() {
+    setState(() {
+      _selectedIndex = 3; // Navigate to Message/Notification screen
+    });
   }
 
   @override
@@ -65,6 +87,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
         onLogout: _handleLogout,
         onProfile: _handleProfile,
         onSettings: _handleSettings,
+        onMessages: _handleMessage,
       ),
       body: FutureBuilder<void>(
         future: _supabaseInitFuture,
@@ -76,7 +99,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
           if (snap.hasError) {
             return const Padding(
               padding: EdgeInsets.all(16),
-              child: _InfoBox(
+              child: _ErrorBox(
                 title: 'Error Supabase',
                 value: 'Gagal menginisialisasi koneksi database.',
               ),
@@ -87,7 +110,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
         },
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
+        currentIndex: _selectedIndex < 4 ? _selectedIndex : 0,
         onTap: _onItemTapped,
         backgroundColor: AppColors.surface,
         selectedItemColor: AppColors.primary,
@@ -108,9 +131,42 @@ class _InvestorScreenState extends State<InvestorScreen> {
             label: 'Report Outlet',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_active),
-            label: 'Notifikasi',
+            icon: Icon(Icons.wallet),
+            label: 'Penarikan',
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBox extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _ErrorBox({required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.altSurface),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(value),
         ],
       ),
     );

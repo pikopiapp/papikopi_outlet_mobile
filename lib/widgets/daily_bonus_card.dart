@@ -99,14 +99,8 @@ class DailyBonusCard extends StatelessWidget {
     final totalBonus = bonusData.totalBonus;
     final breakdown = bonusData.breakdown;
     
-    // Calculate meal allowance and total wage
-    final mealAllowance = (() {
-      if (omset >= 300000) {
-        return 34000.0;
-      } else {
-        return 25000.0;
-      }
-    })();
+    // Calculate meal allowance using the same function
+    final mealAllowance = calculateMealAllowance(omset);
     final totalWage = totalBonus + mealAllowance;
 
     return Container(

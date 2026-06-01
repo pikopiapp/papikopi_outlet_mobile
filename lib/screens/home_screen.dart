@@ -243,13 +243,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   /// Format business day hours
-  /// If business day starts at hour H, it runs from H:00 to (H-1):59 the next day
+  /// If business day starts at hour H, it runs from H:00 on one date to (H-1):59 on the next date
   String _buildBusinessDayText() {
     final startHour = _businessDayStartHour.toString().padLeft(2, '0');
     final endHour = (_businessDayStartHour - 1 < 0 
         ? 23 
         : _businessDayStartHour - 1).toString().padLeft(2, '0');
-    return 'Jam Bisnis: $startHour:00 - $endHour:59 (WIB)';
+    return 'Hari Bisnis: jam $startHour:00 hari ini s/d jam $endHour:59 hari besok (WIB)';
   }
 
   String _formatCompactCurrency(double amount) {

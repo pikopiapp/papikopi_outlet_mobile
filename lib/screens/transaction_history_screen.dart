@@ -362,6 +362,10 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
   
   // 🆕 Track newly added items (not from original transaction)
   late List<({String productId, String productName, int quantity, double unitPrice, double hpp})> _newItems;
+  
+  // 🆕 Gratis limit check
+  bool _gratisLimitReached = false;
+  String _gratisLimitMessage = '';
 
   @override
   void initState() {
@@ -422,6 +426,51 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
         _itemUnitPriceByProduct[originalProductName] = newProduct.price.toDouble();
         _itemHppByProduct[originalProductName] = (newProduct.hpp ?? 0).toDouble();
       } catch (e) {
+      }
+    } catch (e) {
+    }
+  }
+
+  // 🆕 Check monthly gratis limit
+  Future<void> _checkMonthlyGratisLimit() async {
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final supabaseService = SupabaseService();
+      
+      if (authProvider.currentUser == null) return;
+
+      // Get current month's transactions
+      final now = DateTime.now();
+      final monthStart = DateTime(now.year, now.month, 1);
+      
+      final result = await supabaseService.getMonthlyGratisStats(
+        outletId: authProvider.currentUser!.outletId,
+        monthStart: monthStart,
+      );
+      
+      final totalTransactions = result['total'] as int;
+      final gratisCount = result['gratis_count'] as int;
+      
+      if (totalTransactions == 0) {
+        setState(() {
+          _gratisLimitReached = false;
+          _gratisLimitMessage = '';
+        });
+        return;
+      }
+      
+      final gratisPercentage = (gratisCount / totalTransactions) * 100;
+      
+      if (gratisPercentage >= 3.0) {
+        setState(() {
+          _gratisLimitReached = true;
+          _gratisLimitMessage = '⚠️ Limit gratis 3% sudah tercapai! (${gratisPercentage.toStringAsFixed(1)}% dari $totalTransactions transaksi)';
+        });
+      } else {
+        setState(() {
+          _gratisLimitReached = false;
+          _gratisLimitMessage = 'Gratis: ${gratisPercentage.toStringAsFixed(1)}% dari 3% limit';
+        });
       }
     } catch (e) {
     }
@@ -616,8 +665,37 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                     DropdownMenuItem(value: 'QRIS', child: Text('QRIS')),
                     DropdownMenuItem(value: 'GRATIS', child: Text('Gratis')),
                   ],
-                  onChanged: (value) {
+                  onChanged: (value) async {
                     if (value != null) {
+                      // If changing to GRATIS, check limit first
+                      if (value == 'GRATIS') {
+                        await _checkMonthlyGratisLimit();
+                        
+                        // If limit reached, show confirmation dialog
+                        if (_gratisLimitReached) {
+                          if (!mounted) return;
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('⚠️ Limit Gratis'),
+                              content: Text(_gratisLimitMessage),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Batal'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Lanjutkan'),
+                                ),
+                              ],
+                            ),
+                          );
+                          
+                          if (confirmed != true) return; // Don't change payment method
+                        }
+                      }
+                      
                       setState(() => _paymentMethod = value);
                     }
                   },
@@ -942,7 +1020,24 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    // 🆕 Validate GRATIS payment method for limit check
+                    if (_paymentMethod == 'GRATIS') {
+                      // Check limit one more time at save
+                      await _checkMonthlyGratisLimit();
+                      
+                      if (_gratisLimitReached) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(_gratisLimitMessage),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return; // Don't save
+                      }
+                    }
+                    
                     // Get product provider to lookup product IDs
                     final productProvider = context.read<ProductProvider>();
                     
@@ -1005,7 +1100,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                     }
 
                     // Calculate new totals
-                    final newTotalAmount = updatedItems.fold(0.0, (sum, item) => sum + item.subtotal);
+                    final calculatedTotalAmount = updatedItems.fold(0.0, (sum, item) => sum + item.subtotal);
+                    // If payment method is GRATIS, set total amount to 0
+                    final newTotalAmount = _paymentMethod == 'GRATIS' ? 0.0 : calculatedTotalAmount;
                     final newTotalHpp = updatedItems.fold(0.0, (sum, item) => sum + item.totalHpp);
                     final newProfit = newTotalAmount - newTotalHpp;
                     

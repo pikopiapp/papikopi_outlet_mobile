@@ -35,6 +35,9 @@ dependencies:
   # UI Components
   google_fonts: ^6.2.0
   
+  # Charts
+  fl_chart: ^0.65.0
+  
   # Connectivity
   connectivity_plus: ^5.0.0
   

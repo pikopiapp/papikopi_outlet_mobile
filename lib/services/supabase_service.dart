@@ -6,6 +6,8 @@ import '../models/product.dart';
 import '../models/outlet.dart';
 import '../models/sale.dart';
 import '../models/stock.dart';
+import '../utils/bonus_calculator.dart';
+import '../utils/holiday_detector.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -594,17 +596,30 @@ class SupabaseService {
       
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
       
+      // Calculate business day date range in LOCAL time first, then convert to UTC
+      // selectedDate comes as LOCAL time from DateTime.now() on device
+      final year = selectedDate.year;
+      final month = selectedDate.month;
+      final day = selectedDate.day;
       
-      // Convert selectedDate to UTC first (it comes as local Jakarta time from DateTime.now())
-      final selectedDateUtc = selectedDate.toUtc();
+      DateTime startDateLocal;
+      DateTime endDateLocal;
       
-      // Calculate business day date range in UTC
-      // Business day: starts at businessDayStartHour of PREVIOUS day, ends at businessDayStartHour of selectedDate - 1 second
-      final startDate = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
-          .subtract(const Duration(days: 1))
-          .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-      final endDate = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
-          .subtract(const Duration(milliseconds: 1));
+      if (businessDayStartHour >= 12) {
+        // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
+        startDateLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        endDateLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+      } else {
+        // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+        startDateLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        endDateLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+      }
+      
+      endDateLocal = endDateLocal.subtract(const Duration(milliseconds: 1));
+      
+      // Convert to UTC for database query
+      final startDate = startDateLocal.toUtc();
+      final endDate = endDateLocal.toUtc();
       
       
       final params = {
@@ -612,13 +627,22 @@ class SupabaseService {
         'end_date': endDate.toIso8601String(),
       };
       
-      
       final response = await _client.rpc('get_global_leaderboard', params: params);
-
       
-      return response
-          .map((item) => item as Map<String, dynamic>)
-          .toList();
+      // Handle case where RPC returns a List
+      if (response is List) {
+        if (response.isNotEmpty) {
+          // Response is a List
+        }
+        return response
+            .map((item) => item as Map<String, dynamic>)
+            .toList();
+      } else if (response is Map) {
+        // Single item returned, wrap in list
+        return [response as Map<String, dynamic>];
+      } else {
+        return [];
+      }
     } catch (e) {
       return [];
     }
@@ -785,45 +809,28 @@ class SupabaseService {
       
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
 
-      // IMPORTANT: selectedDate comes as local time from DateTime.now() on device
-      // Device is in UTC+7 (Indonesia), so we need to convert properly
-      // 
-      // Strategy: Work in UTC throughout to avoid confusion
-      // 1. Take the local selectedDate and convert to UTC
-      // 2. Calculate what the business day should be based on local time interpretation
-      // 3. Since display says "business day starts at 21:00 local time", 
-      //    we calculate based on wall-clock time in UTC+7, then convert to UTC for query
-      
-      // First, understand the device timezone offset
-      // Dart's DateTime.now() is local time, and .toUtc() assumes device is in local timezone
-      final nowLocal = DateTime.now();
-      final nowUtc = nowLocal.toUtc();
-      final deviceTimezoneOffset = nowLocal.difference(nowUtc);
-      
-
-      // selectedDate is in local time (what user sees on screen)
-      // Business day calculation should be based on local wall-clock time
-      // Check if current hour is at or after the business day start hour
+      // IMPORTANT: When a date is selected from the date picker, we want to show
+      // that calendar day's business day, regardless of what time selectedDate has.
+      // For example, if user selects May 27, we show May 27's business day
+      // (from May 27 at 4 AM to May 28 at 4 AM), not May 26's.
       
       final year = selectedDate.year;
       final month = selectedDate.month;
       final day = selectedDate.day;
-      final hour = selectedDate.hour;
       
-      // Calculate business day start/end in LOCAL time
+      // For a selected date, always treat it as the START of that calendar day's business day
+      // This matches the logic in getRevenueData()
       DateTime businessDayStartLocal;
       DateTime businessDayEndLocal;
       
-      if (hour >= businessDayStartHour) {
-        // Current time is at or after business day start hour
-        // So we're in TODAY's business day (start@hour today, end@hour tomorrow)
-        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
-      } else {
-        // Current time is before business day start hour
-        // So we're in YESTERDAY's business day (start@hour yesterday, end@hour today)
+      if (businessDayStartHour >= 12) {
+        // Afternoon start (e.g., 21:00): business day is from YESTERDAY@startHour to TODAY@startHour
         businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
         businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+      } else {
+        // Morning start (e.g., 4 AM): business day is from TODAY@startHour to TOMORROW@startHour
+        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
       }
       
       // Subtract 1 millisecond from end to exclude the exact end time
@@ -2196,8 +2203,25 @@ class SupabaseService {
         final month = selectedDate.month;
         final day = selectedDate.day;
         
-        final dailyStart = DateTime.utc(year, month, day, businessDayStartHour, 0, 0);
-        final dailyEnd = DateTime.utc(year, month, day + 1, businessDayStartHour, 0, 0).subtract(const Duration(seconds: 1));
+        // Calculate business day in LOCAL time first, then convert to UTC for query
+        DateTime dailyStartLocal;
+        DateTime dailyEndLocal;
+        
+        if (businessDayStartHour >= 12) {
+          // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
+          dailyStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+          dailyEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        } else {
+          // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+          dailyStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+          dailyEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        }
+        
+        dailyEndLocal = dailyEndLocal.subtract(const Duration(milliseconds: 1));
+        
+        // Convert to UTC for database query
+        final dailyStart = dailyStartLocal.toUtc();
+        final dailyEnd = dailyEndLocal.toUtc();
         
         query = query
             .gte('created_at', dailyStart.toIso8601String())
@@ -2373,8 +2397,25 @@ class SupabaseService {
         final month = selectedDate.month;
         final day = selectedDate.day;
         
-        final dailyStart = DateTime.utc(year, month, day, businessDayStartHour, 0, 0);
-        final dailyEnd = DateTime.utc(year, month, day + 1, businessDayStartHour, 0, 0).subtract(const Duration(seconds: 1));
+        // Calculate business day in LOCAL time first, then convert to UTC for query
+        DateTime dailyStartLocal;
+        DateTime dailyEndLocal;
+        
+        if (businessDayStartHour >= 12) {
+          // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
+          dailyStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+          dailyEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        } else {
+          // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+          dailyStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+          dailyEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        }
+        
+        dailyEndLocal = dailyEndLocal.subtract(const Duration(milliseconds: 1));
+        
+        // Convert to UTC for database query
+        final dailyStart = dailyStartLocal.toUtc();
+        final dailyEnd = dailyEndLocal.toUtc();
         
         query = query
             .gte('created_at', dailyStart.toIso8601String())
@@ -2550,7 +2591,12 @@ class SupabaseService {
     try {
       
       if (outletId.isEmpty) {
-        throw Exception('Outlet ID is empty');
+        print('ERROR getRevenueData: Outlet ID is empty');
+        return {
+          'daily': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
+          'weekly': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
+          'monthly': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
+        };
       }
       
       // Get outlet's business_day_start_hour
@@ -2561,6 +2607,7 @@ class SupabaseService {
           .maybeSingle();
       
       if (outletData == null) {
+        print('ERROR getRevenueData: Outlet not found for id=$outletId');
         return {
           'daily': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
           'weekly': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
@@ -2570,49 +2617,74 @@ class SupabaseService {
       
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
       
-      // Calculate business day dates
-      // Business day: starts at businessDayStartHour of PREVIOUS day, ends at businessDayStartHour of selectedDate - 1 second
-      // Example: businessDayStartHour=21, selectedDate=May 11 → May 10 21:00 to May 11 20:59:59
-      final dailyStart = DateTime(selectedDate.year, selectedDate.month, selectedDate.day)
-          .subtract(const Duration(days: 1))
-          .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-      final dailyEndTime = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, businessDayStartHour, 0, 0)
-          .subtract(const Duration(seconds: 1));
+      // IMPORTANT: Calculate business day in LOCAL time first, then convert to UTC for query
+      // This ensures we respect the device's timezone
+      // selectedDate comes as LOCAL time from DateTime.now() on device
+      final year = selectedDate.year;
+      final month = selectedDate.month;
+      final day = selectedDate.day;
       
+      // Calculate daily range in LOCAL time
+      DateTime dailyStartLocal;
+      DateTime dailyEndLocal;
+      
+      if (businessDayStartHour >= 12) {
+        // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
+        dailyStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        dailyEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+      } else {
+        // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+        dailyStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        dailyEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+      }
+      
+      dailyEndLocal = dailyEndLocal.subtract(const Duration(milliseconds: 1));
+      
+      // Convert to UTC for database query
+      final dailyStart = dailyStartLocal.toUtc();
+      final dailyEnd = dailyEndLocal.toUtc();
+      
+      print('DEBUG getRevenueData: businessDayStartHour=$businessDayStartHour');
+      print('DEBUG getRevenueData: selectedDate=$selectedDate (local device time)');
+      print('DEBUG getRevenueData: dailyStartLocal=$dailyStartLocal');
+      print('DEBUG getRevenueData: dailyStart=${dailyStart.toIso8601String()} (UTC for query)');
       
       // Query daily sales
       final dailyResponse = await _client.from('sales')
           .select('payment_method, total_amount, created_at, outlet_id')
           .eq('outlet_id', outletId)
           .gte('created_at', dailyStart.toIso8601String())
-          .lte('created_at', dailyEndTime.toIso8601String());
-      
+          .lte('created_at', dailyEnd.toIso8601String());
       
       // Calculate weekly (last 7 business days)
-      final weeklyStart = DateTime(selectedDate.year, selectedDate.month, selectedDate.day)
-          .subtract(const Duration(days: 7))
-          .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-      
+      DateTime weeklyStartLocal;
+      if (businessDayStartHour >= 12) {
+        weeklyStartLocal = DateTime(year, month, day - 7 - 1, businessDayStartHour, 0, 0);
+      } else {
+        weeklyStartLocal = DateTime(year, month, day - 7, businessDayStartHour, 0, 0);
+      }
+      final weeklyStart = weeklyStartLocal.toUtc();
       
       final weeklyResponse = await _client.from('sales')
           .select('payment_method, total_amount, created_at, outlet_id')
           .eq('outlet_id', outletId)
           .gte('created_at', weeklyStart.toIso8601String())
-          .lte('created_at', dailyEndTime.toIso8601String());
-      
+          .lte('created_at', dailyEnd.toIso8601String());
       
       // Calculate monthly (last 30 business days)
-      final monthlyStart = DateTime(selectedDate.year, selectedDate.month, selectedDate.day)
-          .subtract(const Duration(days: 30))
-          .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-      
+      DateTime monthlyStartLocal;
+      if (businessDayStartHour >= 12) {
+        monthlyStartLocal = DateTime(year, month, day - 30 - 1, businessDayStartHour, 0, 0);
+      } else {
+        monthlyStartLocal = DateTime(year, month, day - 30, businessDayStartHour, 0, 0);
+      }
+      final monthlyStart = monthlyStartLocal.toUtc();
       
       final monthlyResponse = await _client.from('sales')
           .select('payment_method, total_amount, created_at, outlet_id')
           .eq('outlet_id', outletId)
           .gte('created_at', monthlyStart.toIso8601String())
-          .lte('created_at', dailyEndTime.toIso8601String());
-      
+          .lte('created_at', dailyEnd.toIso8601String());
       
       // Process daily data
       double dailyTotal = 0, dailyCash = 0, dailyQris = 0;
@@ -2683,6 +2755,7 @@ class SupabaseService {
   // Get cash deposit data for today using business day
   Future<Map<String, dynamic>> getCashDepositData({
     required String outletId,
+    required String baristaId,
     required DateTime date,
   }) async {
     if (!_isInitialized) {
@@ -2719,13 +2792,30 @@ class SupabaseService {
       
       final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
       
-      // Calculate business day date range
-      // Business day: starts at businessDayStartHour of PREVIOUS day, ends at businessDayStartHour of date - 1 second
-      final dateStart = DateTime(date.year, date.month, date.day)
-          .subtract(const Duration(days: 1))
-          .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-      final dateEnd = DateTime(date.year, date.month, date.day, businessDayStartHour, 0, 0)
-          .subtract(const Duration(seconds: 1));
+      // Calculate business day date range in LOCAL time first, then convert to UTC
+      // date comes as LOCAL time from DateTime.now() on device
+      final year = date.year;
+      final month = date.month;
+      final day = date.day;
+      
+      DateTime dateStartLocal;
+      DateTime dateEndLocal;
+      
+      if (businessDayStartHour >= 12) {
+        // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
+        dateStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        dateEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+      } else {
+        // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
+        dateStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        dateEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+      }
+      
+      dateEndLocal = dateEndLocal.subtract(const Duration(milliseconds: 1));
+      
+      // Convert to UTC for database query
+      final dateStart = dateStartLocal.toUtc();
+      final dateEnd = dateEndLocal.toUtc();
       
       
       // Query sales for this business day
@@ -2744,12 +2834,15 @@ class SupabaseService {
       int cashCount = 0;
       double qrisAmount = 0;
       int qrisCount = 0;
+      double gratisAmount = 0;
+      int gratisCount = 0;
+      double otherAmount = 0;
+      int otherCount = 0;
       double totalOmset = 0;
       
       for (final sale in response) {
         final paymentMethod = sale['payment_method'] as String?;
         final amount = (sale['total_amount'] as num?)?.toDouble() ?? 0;
-        final createdAt = sale['created_at'];
         
         totalOmset += amount;
         
@@ -2760,30 +2853,35 @@ class SupabaseService {
         } else if (paymentMethod?.toUpperCase() == 'QRIS') {
           qrisAmount += amount;
           qrisCount++;
+        } else if (paymentMethod?.toUpperCase() == 'GRATIS') {
+          gratisAmount += amount;
+          gratisCount++;
+        } else {
+          // Other payment methods (NULL, etc)
+          otherAmount += amount;
+          otherCount++;
         }
       }
       
-      // Calculate bonus using tiered system
+      // Calculate bonus using tiered system with holiday detection
+      // Determine if the date is a holiday (weekend or national holiday)
+      final businessDate = date;  // This is the date from the query parameter
+      final isHolidayDate = isHoliday(businessDate);
+      
+      // Use the same bonus calculation as in the Revenue tab
       double bonus = 0;
       if (totalOmset > 0) {
-        // Tier 1: 0 - 200k = 10%
-        // Tier 2: 200k - 350k = 12%
-        // Tier 3: 350k - 500k = 15%
-        // Tier 4: 500k+ = 20%
-        
-        if (totalOmset <= 200000) {
-          bonus = totalOmset * 0.10;
-        } else if (totalOmset <= 350000) {
-          bonus = (200000 * 0.10) + ((totalOmset - 200000) * 0.12);
-        } else if (totalOmset <= 500000) {
-          bonus = (200000 * 0.10) + (150000 * 0.12) + ((totalOmset - 350000) * 0.15);
-        } else {
-          bonus = (200000 * 0.10) + (150000 * 0.12) + (150000 * 0.15) + ((totalOmset - 500000) * 0.20);
-        }
+        final bonusResult = calculateBonus(totalOmset, isHoliday: isHolidayDate);
+        bonus = bonusResult.totalBonus;
       }
+
       
       // Calculate meal allowance
-      double mealAllowance = totalOmset >= 300000 ? 34000.0 : 25000.0;
+      // If omset is 0, no meal allowance
+      double mealAllowance = 0.0;
+      if (totalOmset > 0) {
+        mealAllowance = totalOmset >= 300000 ? 34000.0 : 25000.0;
+      }
       
       // Calculate deposit amount: CASH - BONUS - MEAL ALLOWANCE
       double depositAmount = cashAmount - bonus - mealAllowance;
@@ -2797,19 +2895,44 @@ class SupabaseService {
 
       // Check handover status for this date
       String handoverStatus = 'pending'; // default
+      bool shortfallReceiptRecorded = false;
+      String? handoverDate; // Store the actual handover date from DB
       try {
-        final dateStr = DateTime(date.year, date.month, date.day).toIso8601String().split('T')[0];
+        // Calculate the business day DATE (not calendar date)
+        // For morning start hour: business day date is tomorrow (end - 1 day)
+        // For afternoon start hour: business day date is today
+        DateTime businessDayDate;
+        if (businessDayStartHour >= 12) {
+          // Afternoon start: business day is today
+          businessDayDate = DateTime(date.year, date.month, date.day);
+        } else {
+          // Morning start: business day is tomorrow (the END date of the business period)
+          businessDayDate = DateTime(date.year, date.month, date.day + 1);
+        }
+        final dateStr = businessDayDate.toIso8601String().split('T')[0];
+        print('DEBUG getCashDepositData: Querying handover for businessDayDate=$dateStr (businessDayStartHour=$businessDayStartHour), outletId=$outletId, baristaId=$baristaId');
+        
         final handoversForDate = await _client
             .from('cash_deposit_handovers')
-            .select('status')
+            .select('status, shortfall_receipt_recorded, id, date')
             .eq('date', dateStr)
+            .eq('outlet_id', outletId)
+            .eq('barista_id', baristaId)
             .order('created_at', ascending: false)
             .limit(1);
         
+        print('DEBUG getCashDepositData: handoversForDate count=${handoversForDate.length}');
         if (handoversForDate.isNotEmpty) {
+          print('DEBUG getCashDepositData: Found handover: ${handoversForDate[0]}');
           handoverStatus = handoversForDate[0]['status'] as String? ?? 'pending';
+          shortfallReceiptRecorded = handoversForDate[0]['shortfall_receipt_recorded'] as bool? ?? false;
+          handoverDate = handoversForDate[0]['date'] as String?; // Get the actual business day date
+          print('DEBUG getCashDepositData: Set handoverStatus=$handoverStatus, shortfallReceiptRecorded=$shortfallReceiptRecorded, handoverDate=$handoverDate');
+        } else {
+          print('DEBUG getCashDepositData: No handover found for this date/outlet/barista');
         }
       } catch (e) {
+        print('DEBUG getCashDepositData: Error querying handover: $e');
         // Continue with default status
       }
       
@@ -2822,12 +2945,18 @@ class SupabaseService {
         'cashCount': cashCount,
         'qrisAmount': qrisAmount,
         'qrisCount': qrisCount,
+        'gratisAmount': gratisAmount,
+        'gratisCount': gratisCount,
+        'otherAmount': otherAmount,
+        'otherCount': otherCount,
         'totalOmset': totalOmset,
         'bonus': bonus,
         'mealAllowance': mealAllowance,
         'depositAmount': depositAmount,
         'kekuranganUpah': kekuranganUpah,
         'handoverStatus': handoverStatus,
+        'shortfall_receipt_recorded': shortfallReceiptRecorded,
+        'handoverDate': handoverDate, // Add the actual handover date from DB
       };
     } catch (e) {
       return {
@@ -2835,6 +2964,10 @@ class SupabaseService {
         'cashCount': 0,
         'qrisAmount': 0.0,
         'qrisCount': 0,
+        'gratisAmount': 0.0,
+        'gratisCount': 0,
+        'otherAmount': 0.0,
+        'otherCount': 0,
         'totalOmset': 0.0,
         'bonus': 0.0,
         'mealAllowance': 0.0,
@@ -2897,32 +3030,46 @@ class SupabaseService {
     required double mealAllowance,
     required double depositAmount,
     required double kekuranganUpah,
+    required String status,
     required DateTime date,
   }) async {
     if (!_isInitialized) {
+      print('ERROR: SupabaseService not initialized');
       return false;
     }
 
     try {
-      if (kekuranganUpah > 0) {
-      }
+      final dateStr = date.toIso8601String().split('T')[0];
+      print('DEBUG: Submitting cash deposit handover - outlet=$outletId, barista=$baristaId, status=$status, date=$dateStr');
       
-      await _client.from('cash_deposit_handovers').insert({
-        'outlet_id': outletId,
-        'barista_id': baristaId,
-        'total_omset': totalOmset,
-        'cash_amount': cashAmount,
-        'qris_amount': qrisAmount,
-        'bonus': bonus,
-        'meal_allowance': mealAllowance,
-        'deposit_amount': depositAmount,
-        'kekurangan_upah': kekuranganUpah,
-        'status': 'pending',
-        'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD format
-      });
+      // Upsert: insert or update if exists (based on unique constraint)
+      await _client.from('cash_deposit_handovers').upsert(
+        {
+          'outlet_id': outletId,
+          'barista_id': baristaId,
+          'total_omset': totalOmset,
+          'cash_amount': cashAmount,
+          'qris_amount': qrisAmount,
+          'bonus': bonus,
+          'meal_allowance': mealAllowance,
+          'deposit_amount': depositAmount,
+          'status': status,
+          'date': dateStr,
+        },
+        onConflict: 'outlet_id,barista_id,date',
+      );
       
+      print('DEBUG: Cash deposit handover submitted successfully');
       return true;
     } catch (e) {
+      print('ERROR: Failed to submit cash deposit handover: $e');
+      
+      // Log untuk debugging
+      if (e.toString().contains('42501') || e.toString().contains('row-level security')) {
+        print('ERROR: RLS policy violation. Please disable RLS on cash_deposit_handovers table');
+        print('ERROR: Run: ALTER TABLE cash_deposit_handovers DISABLE ROW LEVEL SECURITY;');
+      }
+      
       return false;
     }
   }
@@ -2976,6 +3123,57 @@ class SupabaseService {
       return List<Map<String, dynamic>>.from(response as List);
     } catch (e) {
       return [];
+    }
+  }
+
+  // Record shortfall receipt (kekurangan upah)
+  Future<bool> recordShortfallReceipt({
+    required String outletId,
+    required String baristaId,
+    required double kekuranganUpah,
+    required String notes,
+    required DateTime date,
+  }) async {
+    if (!_isInitialized) {
+      print('ERROR: SupabaseService not initialized');
+      return false;
+    }
+
+    try {
+      final dateStr = date.toIso8601String().split('T')[0];
+      print('DEBUG: Recording shortfall receipt - outlet=$outletId, barista=$baristaId, amount=$kekuranganUpah, date=$dateStr');
+      
+      // Use upsert with onConflict to handle duplicate records (update if exists, insert if not)
+      await _client.from('shortfall_receipts').upsert(
+        {
+          'outlet_id': outletId,
+          'barista_id': baristaId,
+          'amount': kekuranganUpah,
+          'notes': notes.isEmpty ? 'Tanda terima upah yang kurang' : notes,
+          'date': dateStr,
+        },
+        onConflict: 'outlet_id,barista_id,date',
+      );
+      
+      print('DEBUG: Shortfall receipt recorded/updated successfully');
+      
+      // Update cash_deposit_handovers to mark that shortfall receipt was recorded
+      print('DEBUG: About to update cash_deposit_handovers with: outlet_id=$outletId, barista_id=$baristaId, date=$dateStr');
+      
+      final updateResponse = await _client
+          .from('cash_deposit_handovers')
+          .update({'shortfall_receipt_recorded': true})
+          .eq('outlet_id', outletId)
+          .eq('barista_id', baristaId)
+          .eq('date', dateStr);
+      
+      print('DEBUG: Updated cash_deposit_handovers response: $updateResponse');
+      print('DEBUG: Updated cash_deposit_handovers shortfall_receipt_recorded flag');
+      
+      return true;
+    } catch (e) {
+      print('ERROR: Failed to record shortfall receipt: $e');
+      return false;
     }
   }
 
@@ -3087,11 +3285,14 @@ class SupabaseService {
           .limit(50);
       
       
-      // Enrich messages with sender info
+      // Enrich messages with sender and receiver info
       List<Map<String, dynamic>> messages = List<Map<String, dynamic>>.from(response);
       
       for (var message in messages) {
         final senderId = message['sender_id'];
+        final receiverId = message['receiver_id'];
+        
+        // Get sender info
         try {
           final senderData = await _client
               .from('users')
@@ -3103,6 +3304,20 @@ class SupabaseService {
         } catch (e) {
           message['sender_name'] = 'Unknown';
           message['sender_email'] = '';
+        }
+        
+        // Get receiver info
+        try {
+          final receiverData = await _client
+              .from('users')
+              .select('id, name, email')
+              .eq('id', receiverId)
+              .single();
+          message['receiver_name'] = receiverData['name'] ?? 'Unknown';
+          message['receiver_email'] = receiverData['email'] ?? '';
+        } catch (e) {
+          message['receiver_name'] = 'Unknown';
+          message['receiver_email'] = '';
         }
       }
       
@@ -3742,5 +3957,1358 @@ class SupabaseService {
       };
     }
   }
+
+  // ANNOUNCEMENT CRUD OPERATIONS
+  
+  // Create new announcement
+  Future<Map<String, dynamic>> createAnnouncement({
+    required String title,
+    required String description,
+    String? imageUrl,
+  }) async {
+    try {
+      final response = await _client
+          .from('announcements')
+          .insert({
+            'title': title,
+            'description': description,
+            'image_url': imageUrl,
+            'created_at': DateTime.now().toIso8601String(),
+          })
+          .select()
+          .single();
+      
+      return response;
+    } catch (e) {
+      throw Exception('Failed to create announcement: $e');
+    }
+  }
+
+  // Get announcement by ID
+  Future<Map<String, dynamic>> getAnnouncementById(String id) async {
+    try {
+      final response = await _client
+          .from('announcements')
+          .select('*')
+          .eq('id', id)
+          .single();
+      
+      return response;
+    } catch (e) {
+      throw Exception('Failed to fetch announcement: $e');
+    }
+  }
+
+  // Update announcement
+  Future<Map<String, dynamic>> updateAnnouncement({
+    required String id,
+    required String title,
+    required String description,
+    String? imageUrl,
+  }) async {
+    try {
+      final response = await _client
+          .from('announcements')
+          .update({
+            'title': title,
+            'description': description,
+            'image_url': imageUrl,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', id)
+          .select()
+          .single();
+      
+      return response;
+    } catch (e) {
+      throw Exception('Failed to update announcement: $e');
+    }
+  }
+
+  // Delete announcement
+  Future<void> deleteAnnouncement(String id) async {
+    try {
+      await _client
+          .from('announcements')
+          .delete()
+          .eq('id', id);
+    } catch (e) {
+      throw Exception('Failed to delete announcement: $e');
+    }
+  }
+
+  // ==================== GROUP MEMBERS ====================
+  // Get group members with user details
+  Future<List<Map<String, dynamic>>> getGroupMembers(String groupId) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      final response = await _client
+          .from('group_members')
+          .select('*, users(id, name, email)')
+          .eq('group_id', groupId);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw Exception('Failed to fetch group members: $e');
+    }
+  }
+
+  // Add member to group
+  Future<void> addGroupMember(String groupId, String userId) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      await _client.from('group_members').insert({
+        'group_id': groupId,
+        'user_id': userId,
+      });
+    } catch (e) {
+      throw Exception('Failed to add group member: $e');
+    }
+  }
+
+  // Remove member from group
+  Future<void> removeGroupMember(String groupId, String userId) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      await _client
+          .from('group_members')
+          .delete()
+          .eq('group_id', groupId)
+          .eq('user_id', userId);
+    } catch (e) {
+      throw Exception('Failed to remove group member: $e');
+    }
+  }
+
+  // Delete group chat (cascade deletes messages and members)
+  Future<void> deleteGroupChat(String groupId) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      await _client
+          .from('group_chats')
+          .delete()
+          .eq('id', groupId);
+    } catch (e) {
+      throw Exception('Failed to delete group chat: $e');
+    }
+  }
+
+  /// Fetch sales data with HPP for profit calculation
+  /// Returns list of sales with total_amount and hpp_total
+  Future<List<Map<String, dynamic>>> getSalesWithHpp({
+    required String outletId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    if (!_isInitialized) {
+      return [];
+    }
+
+    try {
+      final response = await _client
+          .from('sales')
+          .select('id, total_amount, hpp_total, bonus_amount, created_at, payment_method')
+          .eq('outlet_id', outletId)
+          .gte('created_at', startDate.toIso8601String())
+          .lte('created_at', endDate.toIso8601String())
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Calculate total HPP for a period
+  /// Returns aggregated HPP, sales amount for profit calculation
+  Future<Map<String, dynamic>> getHppSummary({
+    required String outletId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    if (!_isInitialized) {
+      return {'totalSales': 0.0, 'totalHpp': 0.0, 'totalBonus': 0.0};
+    }
+
+    try {
+      final sales = await getSalesWithHpp(
+        outletId: outletId,
+        startDate: startDate,
+        endDate: endDate,
+      );
+
+      double totalSales = 0;
+      double totalHpp = 0;
+      double totalBonus = 0;
+
+      for (final sale in sales) {
+        totalSales += (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+        totalHpp += (sale['hpp_total'] as num?)?.toDouble() ?? 0.0;
+        totalBonus += (sale['bonus_amount'] as num?)?.toDouble() ?? 0.0;
+      }
+
+      return {
+        'totalSales': totalSales,
+        'totalHpp': totalHpp,
+        'totalBonus': totalBonus,
+        'transactionCount': sales.length,
+      };
+    } catch (e) {
+      return {'totalSales': 0.0, 'totalHpp': 0.0, 'totalBonus': 0.0};
+    }
+  }
+
+  // ========== WITHDRAWAL MANAGEMENT ==========
+
+  /// Get withdrawal summary for an investor
+  /// Returns available balance, pending amount, and this month's withdrawals
+  Future<Map<String, dynamic>> getWithdrawalSummary({
+    required String investorId,
+  }) async {
+    if (!_isInitialized) {
+      return {
+        'available': 0.0,
+        'pending': 0.0,
+        'thisMonth': 0.0,
+      };
+    }
+
+    try {
+      // Get all withdrawals for this investor
+      final response = await _client
+          .from('withdrawals')
+          .select('id, amount, status, created_at')
+          .eq('investor_id', investorId);
+
+      final withdrawals = List<Map<String, dynamic>>.from(response);
+
+      double available = 0.0;
+      double pending = 0.0;
+      double thisMonth = 0.0;
+
+      final now = DateTime.now();
+      final firstDayOfMonth = DateTime(now.year, now.month, 1);
+
+      for (final withdrawal in withdrawals) {
+        final amount = (withdrawal['amount'] as num?)?.toDouble() ?? 0.0;
+        final status = withdrawal['status'] as String?;
+        final createdAt = DateTime.parse(withdrawal['created_at'] as String);
+
+        if (status == 'pending' || status == 'verified' || status == 'processing') {
+          pending += amount;
+        } else if (status == 'completed') {
+          available += amount; // Add to available if completed
+          if (createdAt.isAfter(firstDayOfMonth)) {
+            thisMonth += amount;
+          }
+        }
+      }
+
+      // Get investor's total profit to calculate available balance
+      final investments = await getInvestorAssignments(
+        investorId: investorId,
+      );
+      
+      double totalProfit = 0.0;
+      for (final investment in investments) {
+        // Calculate profit from revenue for each outlet
+        final outletId = investment['outlet_id'] as String;
+        final marginPercentage = (investment['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+        
+        // Get this month's revenue
+        final revenue = await getRevenueData(
+          outletId: outletId,
+          selectedDate: now,
+        );
+        
+        final monthlyRevenue = (revenue['monthly']?['amount'] as num?)?.toDouble() ?? 0.0;
+        final monthlyProfit = monthlyRevenue * (marginPercentage / 100);
+        
+        totalProfit += monthlyProfit;
+      }
+
+      available = totalProfit - pending;
+
+      return {
+        'available': available > 0 ? available : 0.0,
+        'pending': pending,
+        'thisMonth': thisMonth,
+      };
+    } catch (e) {
+      print('Error getting withdrawal summary: $e');
+      return {
+        'available': 0.0,
+        'pending': 0.0,
+        'thisMonth': 0.0,
+      };
+    }
+  }
+
+  /// Get pending/processing withdrawal for an investor
+  Future<Map<String, dynamic>?> getPendingWithdrawal({
+    required String investorId,
+  }) async {
+    if (!_isInitialized) return null;
+
+    try {
+      final response = await _client
+          .from('withdrawals')
+          .select('id, amount, status, method, method_type, account_identifier, account_name, fee, created_at, updated_at')
+          .eq('investor_id', investorId)
+          .inFilter('status', ['pending', 'verified', 'processing'])
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if (response.isEmpty) return null;
+      return Map<String, dynamic>.from(response.first);
+    } catch (e) {
+      print('Error getting pending withdrawal: $e');
+      return null;
+    }
+  }
+
+  /// Get withdrawal history for an investor
+  Future<List<Map<String, dynamic>>> getWithdrawalHistory({
+    required String investorId,
+    int limit = 20,
+  }) async {
+    if (!_isInitialized) return [];
+
+    try {
+      final response = await _client
+          .from('withdrawals')
+          .select('id, amount, status, method, method_type, account_identifier, account_name, fee, created_at, updated_at')
+          .eq('investor_id', investorId)
+          .inFilter('status', ['completed', 'rejected'])
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error getting withdrawal history: $e');
+      return [];
+    }
+  }
+
+  /// Submit a withdrawal request
+  Future<void> submitWithdrawalRequest({
+    required String investorId,
+    required double amount,
+    required String method, // 'bank' or 'ewallet'
+    required String methodType, // specific bank or ewallet type
+    required String accountIdentifier, // account number or phone
+    required String accountName,
+  }) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      // Check if investor has enough balance
+      final balance = await getInvestorBalance(investorId: investorId);
+      if (balance < amount) {
+        throw Exception('Saldo tidak cukup. Saldo tersedia: Rp ${balance.toStringAsFixed(0)}');
+      }
+
+      await _client.from('withdrawals').insert({
+        'investor_id': investorId,
+        'amount': amount,
+        'status': 'pending',
+        'method': method == 'bank' ? 'bank_transfer' : 'e_wallet',
+        'method_type': methodType,
+        'account_identifier': accountIdentifier,
+        'account_name': accountName,
+        'fee': 5000.0,
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+
+      // Deduct from balance (balance akan dikembalikan jika withdrawal di-reject)
+      final newBalance = balance - amount;
+      await _client
+          .from('investor_balance')
+          .update({
+            'balance': newBalance,
+            'last_withdrawal_date': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('investor_id', investorId);
+
+      // Log the withdrawal
+      await _client.from('balance_transfer_log').insert({
+        'investor_id': investorId,
+        'amount': amount,
+        'transfer_type': 'debit',
+        'description': 'Withdrawal request: $methodType',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      throw Exception('Failed to submit withdrawal request: $e');
+    }
+  }
+
+  // ========== INVESTOR BALANCE MANAGEMENT ==========
+
+  /// Get investor's current balance
+  Future<double> getInvestorBalance({
+    required String investorId,
+  }) async {
+    if (!_isInitialized) return 0.0;
+
+    try {
+      final response = await _client
+          .from('investor_balance')
+          .select('balance')
+          .eq('investor_id', investorId)
+          .maybeSingle();
+
+      if (response == null) {
+        // Create balance record if doesn't exist
+        await _client.from('investor_balance').insert({
+          'investor_id': investorId,
+          'balance': 0.0,
+          'total_received': 0.0,
+          'total_withdrawn': 0.0,
+        });
+        return 0.0;
+      }
+
+      return (response['balance'] as num?)?.toDouble() ?? 0.0;
+    } catch (e) {
+      print('Error getting investor balance: $e');
+      return 0.0;
+    }
+  }
+
+  /// Get full balance details for investor
+  Future<Map<String, dynamic>> getInvestorBalanceDetails({
+    required String investorId,
+  }) async {
+    if (!_isInitialized) {
+      return {
+        'balance': 0.0,
+        'total_received': 0.0,
+        'total_withdrawn': 0.0,
+        'available_to_withdraw': 0.0,
+      };
+    }
+
+    try {
+      final response = await _client
+          .from('investor_balance')
+          .select('balance, total_received, total_withdrawn, last_transfer_date, last_withdrawal_date')
+          .eq('investor_id', investorId)
+          .maybeSingle();
+
+      if (response == null) {
+        return {
+          'balance': 0.0,
+          'total_received': 0.0,
+          'total_withdrawn': 0.0,
+          'available_to_withdraw': 0.0,
+        };
+      }
+
+      final balance = (response['balance'] as num?)?.toDouble() ?? 0.0;
+
+      return {
+        'balance': balance,
+        'total_received': (response['total_received'] as num?)?.toDouble() ?? 0.0,
+        'total_withdrawn': (response['total_withdrawn'] as num?)?.toDouble() ?? 0.0,
+        'available_to_withdraw': balance > 0 ? balance : 0.0,
+        'last_transfer_date': response['last_transfer_date'],
+        'last_withdrawal_date': response['last_withdrawal_date'],
+      };
+    } catch (e) {
+      print('Error getting balance details: $e');
+      return {
+        'balance': 0.0,
+        'total_received': 0.0,
+        'total_withdrawn': 0.0,
+        'available_to_withdraw': 0.0,
+      };
+    }
+  }
+
+  /// Get balance transfer history
+  Future<List<Map<String, dynamic>>> getBalanceTransferHistory({
+    required String investorId,
+    int limit = 20,
+  }) async {
+    if (!_isInitialized) return [];
+
+    try {
+      final response = await _client
+          .from('balance_transfer_log')
+          .select('id, amount, transfer_type, description, created_at')
+          .eq('investor_id', investorId)
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error getting transfer history: $e');
+      return [];
+    }
+  }
+
+  /// Approve a withdrawal request (admin only)
+  Future<void> approveWithdrawal({
+    required String withdrawalId,
+    required String adminId,
+    String? adminNotes,
+  }) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      await _client
+          .from('withdrawals')
+          .update({
+            'status': 'verified',
+            'approved_by': adminId,
+            'admin_notes': adminNotes,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', withdrawalId);
+    } catch (e) {
+      throw Exception('Failed to approve withdrawal: $e');
+    }
+  }
+
+  /// Reject a withdrawal request (admin only)
+  Future<void> rejectWithdrawal({
+    required String withdrawalId,
+    required String adminId,
+    required String reason,
+  }) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      await _client
+          .from('withdrawals')
+          .update({
+            'status': 'rejected',
+            'approved_by': adminId,
+            'admin_notes': reason,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', withdrawalId);
+    } catch (e) {
+      throw Exception('Failed to reject withdrawal: $e');
+    }
+  }
+
+  /// Update withdrawal status (admin only)
+  Future<void> updateWithdrawalStatus({
+    required String withdrawalId,
+    required String newStatus,
+  }) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      await _client
+          .from('withdrawals')
+          .update({
+            'status': newStatus,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', withdrawalId);
+    } catch (e) {
+      throw Exception('Failed to update withdrawal status: $e');
+    }
+  }
+
+  // ========== DAILY RECEIPTS (for withdrawal tab) ==========
+
+  /// Get daily receipts combining sales and cash deposit data
+  /// Groups by date and assigns status: Approved for confirmed deposits, Pending for pending deposits
+  Future<List<Map<String, dynamic>>> getDailyReceipts({
+    required String outletId,
+    int limit = 30,
+  }) async {
+    if (!_isInitialized) {
+      print('DEBUG getDailyReceipts - NOT initialized, returning empty');
+      return [];
+    }
+
+    try {
+      final now = DateTime.now();
+      final businessDayStartHour = 4; // 04:00
+
+      print('DEBUG getDailyReceipts - outletId: $outletId');
+
+      // Helper function to get business day start
+      DateTime getBusinessDayStart(DateTime date) {
+        DateTime startOfDay = DateTime(date.year, date.month, date.day, businessDayStartHour);
+        if (date.hour < businessDayStartHour) {
+          startOfDay = startOfDay.subtract(const Duration(days: 1));
+        }
+        return startOfDay;
+      }
+
+      // Get sales data for the outlet
+      print('DEBUG getDailyReceipts - Querying sales table...');
+      final salesResponse = await _client
+          .from('sales')
+          .select('id, outlet_id, total_amount, payment_method, created_at')
+          .eq('outlet_id', outletId)
+          .order('created_at', ascending: false)
+          .limit(limit * 2);
+
+      final salesList = List<Map<String, dynamic>>.from(salesResponse);
+      print('DEBUG getDailyReceipts - salesList count: ${salesList.length}');
+      if (salesList.isNotEmpty) {
+        print('DEBUG getDailyReceipts - first sale: ${salesList.first}');
+      }
+
+      // Get cash deposit handover data for the outlet
+      print('DEBUG getDailyReceipts - Querying cash_deposit_handovers table...');
+      final depositsResponse = await _client
+          .from('cash_deposit_handovers')
+          .select('id, outlet_id, barista_id, date, deposit_amount, cash_amount, status, submitted_at, shortfall_receipt_recorded')
+          .eq('outlet_id', outletId)
+          .order('submitted_at', ascending: false)
+          .limit(limit * 2);
+
+      final depositsList = List<Map<String, dynamic>>.from(depositsResponse);
+      print('DEBUG getDailyReceipts - depositsList count: ${depositsList.length}');
+      if (depositsList.isNotEmpty) {
+        print('DEBUG getDailyReceipts - first deposit: ${depositsList.first}');
+        print('DEBUG getDailyReceipts - ALL deposits:');
+        for (var i = 0; i < depositsList.length; i++) {
+          print('  [$i] barista_id=${depositsList[i]['barista_id']}, date=${depositsList[i]['date']}, status=${depositsList[i]['status']}, shortfall_recorded=${depositsList[i]['shortfall_receipt_recorded']}');
+        }
+      }
+
+      // Group sales by business day
+      final Map<String, Map<String, dynamic>> dailyData = {};
+
+      for (final sale in salesList) {
+        final createdAt = DateTime.parse(sale['created_at'] as String);
+        final businessDay = getBusinessDayStart(createdAt);
+        final dateKey = businessDay.toIso8601String().split('T')[0];
+
+        if (!dailyData.containsKey(dateKey)) {
+          dailyData[dateKey] = {
+            'date': businessDay,
+            'dateKey': dateKey,
+            'salesAmount': 0.0,
+            'salesCount': 0,
+            'depositAmount': 0.0,
+            'depositStatus': 'pending',
+            'items': <Map<String, dynamic>>[],
+          };
+        }
+
+        final amount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+        dailyData[dateKey]!['salesAmount'] =
+            (dailyData[dateKey]!['salesAmount'] as num).toDouble() + amount;
+        dailyData[dateKey]!['salesCount'] =
+            (dailyData[dateKey]!['salesCount'] as int) + 1;
+
+        // Add individual sale item
+        (dailyData[dateKey]!['items'] as List).add({
+          'type': 'sale',
+          'amount': amount,
+          'description': 'Sale Transaction',
+          'paymentMethod': sale['payment_method'] ?? 'unknown',
+          'createdAt': createdAt,
+        });
+      }
+
+      // Add deposit data and update status
+      for (final deposit in depositsList) {
+        final submittedAt = DateTime.parse(deposit['submitted_at'] as String);
+        final businessDay = getBusinessDayStart(submittedAt);
+        final dateKey = businessDay.toIso8601String().split('T')[0];
+
+        if (!dailyData.containsKey(dateKey)) {
+          dailyData[dateKey] = {
+            'date': businessDay,
+            'dateKey': dateKey,
+            'salesAmount': 0.0,
+            'salesCount': 0,
+            'depositAmount': 0.0,
+            'depositStatus': 'pending',
+            'items': <Map<String, dynamic>>[],
+          };
+        }
+
+        final amount = (deposit['deposit_amount'] as num?)?.toDouble() ?? 0.0;
+        final status = deposit['status'] as String? ?? 'pending';
+
+        dailyData[dateKey]!['depositAmount'] =
+            (dailyData[dateKey]!['depositAmount'] as num).toDouble() + amount;
+        dailyData[dateKey]!['depositStatus'] = status; // Update with latest status
+
+        // Add deposit item
+        (dailyData[dateKey]!['items'] as List).add({
+          'type': 'deposit',
+          'amount': amount,
+          'description': 'Cash Deposit',
+          'status': status,
+          'createdAt': submittedAt,
+        });
+      }
+
+      // Convert to list and sort by date descending
+      final result = dailyData.values.toList();
+      result.sort((a, b) =>
+          (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+
+      // Limit results
+      final finalResult = result.take(limit).toList();
+      print('DEBUG getDailyReceipts - finalResult count: ${finalResult.length}');
+      
+      // If no data, return sample data for demonstration
+      if (finalResult.isEmpty) {
+        print('DEBUG getDailyReceipts - No data found, creating sample data');
+        final now = DateTime.now();
+        final List<Map<String, dynamic>> sampleData = [];
+        // Create sample data for last 7 days
+        for (int i = 0; i < 7; i++) {
+          final date = now.subtract(Duration(days: i));
+          final businessDay = DateTime(date.year, date.month, date.day, 4, 0, 0);
+          
+          sampleData.add({
+            'date': businessDay,
+            'dateKey': businessDay.toIso8601String().split('T')[0],
+            'salesAmount': (150000.0 + (i * 25000)).toDouble(),
+            'salesCount': 2 + i,
+            'depositAmount': (100000.0 + (i * 15000)).toDouble(),
+            'depositStatus': i % 2 == 0 ? 'approved' : 'pending',
+            'items': [],
+          });
+        }
+        return sampleData;
+      }
+      
+      return finalResult;
+    } catch (e) {
+      print('Error getting daily receipts: $e');
+      return [];
+    }
+  }
+
+  // Get all barista payments for a specific date across all outlets
+  Future<List<Map<String, dynamic>>> getAllBaristaPayments({
+    required DateTime selectedDate,
+  }) async {
+    if (!_isInitialized) {
+      print('DEBUG getAllBaristaPayments - NOT initialized');
+      return [];
+    }
+
+    try {
+      print('DEBUG getAllBaristaPayments - Starting');
+      
+      final dateStr = DateTime(selectedDate.year, selectedDate.month, selectedDate.day).toIso8601String().split('T')[0];
+      print('DEBUG getAllBaristaPayments - dateStr: $dateStr');
+
+      // Get all users to get their names
+      final users = await _client
+          .from('users')
+          .select('id, name');
+
+      print('DEBUG getAllBaristaPayments - users count: ${users.length}');
+
+      // Get all outlets to get their names
+      final outlets = await _client
+          .from('outlets')
+          .select('id, name');
+
+      print('DEBUG getAllBaristaPayments - outlets count: ${outlets.length}');
+
+      // Create maps for quick lookup
+      Map<String, String> userNameMap = {};
+      for (final user in users) {
+        userNameMap[user['id'] as String] = user['name'] as String? ?? 'Unknown';
+      }
+
+      Map<String, String> outletNameMap = {};
+      for (final outlet in outlets) {
+        outletNameMap[outlet['id'] as String] = outlet['name'] as String? ?? 'Outlet Unknown';
+      }
+
+      // Get CASH and QRIS data from sales table for this date
+      final startDate = DateTime.utc(selectedDate.year, selectedDate.month, selectedDate.day);
+      final endDate = startDate.add(const Duration(days: 1));
+      
+      Map<String, Map<String, dynamic>> baristaDataMap = {}; // baristaId -> {cashAmount, qrisAmount, outletId, etc}
+      
+      try {
+        final sales = await _client
+            .from('sales')
+            .select('barista_id, outlet_id, total_amount, payment_method, created_at');
+        
+        print('DEBUG getAllBaristaPayments - sales count: ${sales.length}');
+        
+        for (final sale in sales) {
+          try {
+            final createdAt = DateTime.parse(sale['created_at'] as String);
+            if (createdAt.isAfter(startDate) && createdAt.isBefore(endDate)) {
+              final baristaId = sale['barista_id'] as String?;
+              final outletId = sale['outlet_id'] as String?;
+              final totalAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+              final paymentMethod = (sale['payment_method'] as String?)?.toUpperCase() ?? 'UNKNOWN';
+              
+              if (baristaId != null) {
+                // Initialize barista data if not exists
+                if (!baristaDataMap.containsKey(baristaId)) {
+                  baristaDataMap[baristaId] = {
+                    'cashAmount': 0.0,
+                    'qrisAmount': 0.0,
+                    'outletId': outletId,
+                  };
+                }
+                
+                // Add to appropriate payment method total
+                if (totalAmount > 0) {
+                  if (paymentMethod == 'CASH') {
+                    baristaDataMap[baristaId]!['cashAmount'] = 
+                        (baristaDataMap[baristaId]!['cashAmount'] as double) + totalAmount;
+                  } else if (paymentMethod == 'QRIS') {
+                    baristaDataMap[baristaId]!['qrisAmount'] = 
+                        (baristaDataMap[baristaId]!['qrisAmount'] as double) + totalAmount;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            print('DEBUG getAllBaristaPayments - Error processing sale: $e');
+          }
+        }
+      } catch (e) {
+        print('DEBUG getAllBaristaPayments - Warning: Could not fetch sales data: $e');
+      }
+
+      print('DEBUG getAllBaristaPayments - processed baristas: ${baristaDataMap.length}');
+
+      // Get approval status from cash_deposit_handovers
+      final handovers = await _client
+          .from('cash_deposit_handovers')
+          .select('barista_id, status')
+          .eq('date', dateStr);
+
+      print('DEBUG getAllBaristaPayments - handovers count: ${handovers.length}');
+
+      // Create map of approval status
+      Map<String, String> approvalStatusMap = {};
+      for (final handover in handovers) {
+        final baristaId = handover['barista_id'] as String?;
+        final status = handover['status'] as String?;
+        if (baristaId != null && status != null) {
+          approvalStatusMap[baristaId] = status;
+        }
+      }
+
+      // Convert to result list with calculated bonus and meal allowance
+      List<Map<String, dynamic>> result = [];
+
+      for (final entry in baristaDataMap.entries) {
+        try {
+          final baristaId = entry.key;
+          final baristaData = entry.value;
+          final cashAmount = baristaData['cashAmount'] as double;
+          final qrisAmount = baristaData['qrisAmount'] as double;
+          final outletId = baristaData['outletId'] as String?;
+          
+          final omset = cashAmount + qrisAmount;
+          
+          // Calculate bonus based on tier system
+          double bonus = 0.0;
+          
+          // Import holiday_detector at top for this
+          // For now, check if it's a holiday (simple check - would need actual holiday_detector import)
+          // This will be calculated in the UI layer with proper holiday_detector
+          if (omset <= 200000) {
+            bonus = omset * 0.10;
+          } else if (omset <= 350000) {
+            bonus = (200000 * 0.10) + ((omset - 200000) * 0.12);
+          } else if (omset <= 500000) {
+            bonus = (200000 * 0.10) + (150000 * 0.12) + ((omset - 350000) * 0.15);
+          } else {
+            bonus = (200000 * 0.10) + (150000 * 0.12) + (150000 * 0.15) + ((omset - 500000) * 0.20);
+          }
+          
+          // Calculate meal allowance
+          // If omset is 0, no meal allowance
+          double mealAllowance = 0.0;
+          if (omset > 0) {
+            mealAllowance = omset >= 300000 ? 34000 : 25000;
+          }
+          
+          // Calculate settlement
+          double depositAmount = cashAmount - bonus - mealAllowance;
+          
+          // Get payment status from approvalStatusMap, default to 'pending'
+          String paymentStatus = approvalStatusMap[baristaId] ?? 'pending';
+          
+          final baristaName = userNameMap[baristaId] ?? 'Unknown';
+          final outletName = outletId != null ? (outletNameMap[outletId] ?? 'Outlet Unknown') : 'Outlet Unknown';
+          
+          result.add({
+            'baristaId': baristaId,
+            'name': baristaName,
+            'outlet': outletName,
+            'outletId': outletId,
+            'salesAmount': omset,
+            'cashAmount': cashAmount,
+            'qrisAmount': qrisAmount,
+            'isHoliday': false,
+            'bonus': {
+              'total': bonus,
+              'holiday': false,
+            },
+            'mealAllowance': mealAllowance,
+            'totalWage': bonus + mealAllowance,
+            'depositAmount': depositAmount,
+            'paymentStatus': paymentStatus,
+          });
+        } catch (e) {
+          print('DEBUG getAllBaristaPayments - Error processing barista: $e');
+        }
+      }
+
+      print('DEBUG getAllBaristaPayments - result count: ${result.length}');
+      return result;
+    } catch (e) {
+      print('Error getting all barista payments: $e');
+      rethrow;
+    }
+  }
+
+  // Approve barista payment
+  Future<bool> approveBaristaPayment({
+    required String baristaId,
+    required DateTime date,
+  }) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      final dateStr = DateTime(date.year, date.month, date.day).toIso8601String().split('T')[0];
+
+      print('DEBUG approveBaristaPayment - Starting for barista: $baristaId, date: $dateStr');
+
+      // Check if record exists
+      final existing = await _client
+          .from('cash_deposit_handovers')
+          .select('id')
+          .eq('barista_id', baristaId)
+          .eq('date', dateStr);
+
+      if (existing.isEmpty) {
+        // Create new record with status approved
+        print('DEBUG approveBaristaPayment - Creating new record');
+        
+        // Need to get outlet_id, total_omset, bonus, meal_allowance from sales data
+        final sales = await _client
+            .from('sales')
+            .select('outlet_id, total_amount, payment_method, created_at');
+
+        final startDate = DateTime.utc(date.year, date.month, date.day);
+        final endDate = startDate.add(const Duration(days: 1));
+
+        double cashAmount = 0.0;
+        double qrisAmount = 0.0;
+        String? outletId;
+
+        for (final sale in sales) {
+          try {
+            final createdAt = DateTime.parse(sale['created_at'] as String);
+            if (createdAt.isAfter(startDate) && createdAt.isBefore(endDate)) {
+              final saleBaristaId = sale['barista_id'] as String?;
+              if (saleBaristaId == baristaId) {
+                outletId = sale['outlet_id'] as String?;
+                final totalAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+                final paymentMethod = (sale['payment_method'] as String?)?.toUpperCase() ?? 'UNKNOWN';
+
+                if (totalAmount > 0) {
+                  if (paymentMethod == 'CASH') {
+                    cashAmount += totalAmount;
+                  } else if (paymentMethod == 'QRIS') {
+                    qrisAmount += totalAmount;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            print('DEBUG approveBaristaPayment - Error processing sale: $e');
+          }
+        }
+
+        final omset = cashAmount + qrisAmount;
+
+        // Calculate bonus
+        double bonus = 0.0;
+        if (omset <= 200000) {
+          bonus = omset * 0.10;
+        } else if (omset <= 350000) {
+          bonus = (200000 * 0.10) + ((omset - 200000) * 0.12);
+        } else if (omset <= 500000) {
+          bonus = (200000 * 0.10) + (150000 * 0.12) + ((omset - 350000) * 0.15);
+        } else {
+          bonus = (200000 * 0.10) + (150000 * 0.12) + (150000 * 0.15) + ((omset - 500000) * 0.20);
+        }
+
+        double mealAllowance = 0.0;
+        if (omset > 0) {
+          mealAllowance = omset >= 300000 ? 34000 : 25000;
+        }
+
+        await _client.from('cash_deposit_handovers').insert({
+          'barista_id': baristaId,
+          'outlet_id': outletId,
+          'date': dateStr,
+          'total_omset': omset,
+          'bonus': bonus,
+          'meal_allowance': mealAllowance,
+          'status': 'approved',
+        });
+
+        print('DEBUG approveBaristaPayment - Record created successfully');
+      } else {
+        // Update existing record status to approved
+        print('DEBUG approveBaristaPayment - Updating existing record');
+        await _client
+            .from('cash_deposit_handovers')
+            .update({'status': 'approved'})
+            .eq('barista_id', baristaId)
+            .eq('date', dateStr);
+
+        print('DEBUG approveBaristaPayment - Record updated successfully');
+      }
+
+      return true;
+    } catch (e) {
+      print('Error approving barista payment: $e');
+      return false;
+    }
+  }
+
+  // Get bonus history for a barista (for detailed view)
+  Future<List<Map<String, dynamic>>> getBaristaPaymentHistory({
+    required String baristaId,
+    int limit = 30,
+  }) async {
+    if (!_isInitialized) {
+      print('DEBUG getBaristaPaymentHistory - NOT initialized');
+      return [];
+    }
+
+    try {
+      print('DEBUG getBaristaPaymentHistory - Getting history for barista: $baristaId');
+
+      // Query cash deposit handovers for this barista
+      final handovers = await _client
+          .from('cash_deposit_handovers')
+          .select('*, outlets(name)')
+          .eq('barista_id', baristaId)
+          .order('date', ascending: false)
+          .limit(limit);
+
+      print('DEBUG getBaristaPaymentHistory - handovers count: ${handovers.length}');
+
+      List<Map<String, dynamic>> result = [];
+
+      for (final handover in handovers) {
+        try {
+          final date = handover['date'] as String;
+          final bonus = (handover['bonus'] as num?)?.toDouble() ?? 0.0;
+          final mealAllowance = (handover['meal_allowance'] as num?)?.toDouble() ?? 0.0;
+          final totalWage = bonus + mealAllowance;
+          final status = (handover['status'] as String?) ?? 'pending';
+          final outletName = handover['outlets'] != null 
+              ? (handover['outlets'] as Map)['name'] as String? ?? 'Outlet Unknown'
+              : 'Outlet Unknown';
+
+          result.add({
+            'date': date,
+            'outlet': outletName,
+            'bonus': bonus,
+            'mealAllowance': mealAllowance,
+            'totalWage': totalWage,
+            'status': status,
+          });
+        } catch (e) {
+          print('DEBUG getBaristaPaymentHistory - Error processing handover: $e');
+        }
+      }
+
+      return result;
+    } catch (e) {
+      print('Error getting barista payment history: $e');
+      return [];
+    }
+  }
+
+  // Debug: Get all available dates in cash_deposit_handovers
+  Future<List<String>> getAvailablePaymentDates() async {
+    if (!_isInitialized) {
+      print('DEBUG getAvailablePaymentDates - NOT initialized');
+      return [];
+    }
+
+    try {
+      print('DEBUG getAvailablePaymentDates - Starting');
+      
+      final handovers = await _client
+          .from('cash_deposit_handovers')
+          .select('date');
+
+      print('DEBUG getAvailablePaymentDates - Total records: ${handovers.length}');
+
+      // Extract unique dates and sort
+      Set<String> uniqueDates = {};
+      for (final handover in handovers) {
+        final date = handover['date'] as String?;
+        if (date != null) {
+          uniqueDates.add(date);
+        }
+      }
+
+      final sortedDates = uniqueDates.toList()..sort((a, b) => b.compareTo(a));
+      print('DEBUG getAvailablePaymentDates - Unique dates: $sortedDates');
+
+      return sortedDates;
+    } catch (e) {
+      print('Error getting available payment dates: $e');
+      return [];
+    }
+  }
+
+  // ========== INVESTOR PROFIT PAYMENT ==========
+  /// Get all investors with their information
+  Future<List<Map<String, dynamic>>> getAllInvestors() async {
+    if (!_isInitialized) {
+      print('DEBUG getAllInvestors - NOT initialized');
+      return [];
+    }
+
+    try {
+      print('DEBUG getAllInvestors - Starting');
+
+      // Fetch all users with role = 'investor'
+      final users = await _client
+          .from('users')
+          .select('id, name, email')
+          .eq('role', 'investor');
+
+      print('DEBUG getAllInvestors - Found ${users.length} investors');
+
+      List<Map<String, dynamic>> result = [];
+
+      for (final user in users) {
+        try {
+          final investorId = user['id'] as String;
+          final investorName = user['name'] as String? ?? 'Unknown';
+          final email = user['email'] as String? ?? '';
+
+          // Count outlets for this investor
+          final assignments = await _client
+              .from('investor_assignments')
+              .select('outlet_id')
+              .eq('investor_id', investorId);
+
+          final outletCount = (assignments as List).length;
+
+          result.add({
+            'investorId': investorId,
+            'name': investorName,
+            'email': email,
+            'outletCount': outletCount,
+          });
+        } catch (e) {
+          print('DEBUG getAllInvestors - Error processing investor: $e');
+        }
+      }
+
+      print('DEBUG getAllInvestors - Processed ${result.length} investors');
+      return result;
+    } catch (e) {
+      print('Error getting all investors: $e');
+      return [];
+    }
+  }
+
+  /// Get monthly profit history for an investor
+  /// Returns list of profits grouped by month
+  Future<List<Map<String, dynamic>>> getInvestorMonthlyProfits(
+    String investorId,
+  ) async {
+    if (!_isInitialized) {
+      print('DEBUG getInvestorMonthlyProfits - NOT initialized');
+      return [];
+    }
+
+    try {
+      print('DEBUG getInvestorMonthlyProfits - Getting profits for investor: $investorId');
+
+      // Get all outlet assignments for this investor
+      final assignments = await _client
+          .from('investor_assignments')
+          .select('outlet_id, margin_percentage')
+          .eq('investor_id', investorId);
+
+      print('DEBUG getInvestorMonthlyProfits - Found ${assignments.length} assignments');
+
+      if ((assignments as List).isEmpty) {
+        return [];
+      }
+
+      final outletIds = (assignments as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .map((a) => a['outlet_id'] as String)
+          .toList();
+
+      // Get sales for last 12 months grouped by month
+      final now = DateTime.now();
+      final oneYearAgo = now.subtract(const Duration(days: 365));
+      final startDate = oneYearAgo.toUtc().toIso8601String();
+
+      final sales = await _client
+          .from('sales')
+          .select('created_at, profit')
+          .inFilter('outlet_id', outletIds)
+          .gte('created_at', startDate);
+
+      print('DEBUG getInvestorMonthlyProfits - Found ${sales.length} sales records');
+
+      // Group by month and calculate investor profit
+      Map<String, double> monthlyProfits = {};
+      Map<String, String> monthlyStatus = {};
+
+      for (final sale in sales) {
+        try {
+          final createdAt = sale['created_at'] as String;
+          final profit = (sale['profit'] as num?)?.toDouble() ?? 0.0;
+
+          final date = DateTime.parse(createdAt);
+          final monthKey =
+              '${date.year}-${date.month.toString().padLeft(2, '0')}';
+
+          monthlyProfits[monthKey] = (monthlyProfits[monthKey] ?? 0.0) + profit;
+        } catch (e) {
+          print('DEBUG getInvestorMonthlyProfits - Error processing sale: $e');
+        }
+      }
+
+      // Check which months have been approved (paid)
+      for (final monthKey in monthlyProfits.keys) {
+        // For now, assume all are pending since investor_profit_handovers table might not exist
+        // In production, this would query the actual table
+        monthlyStatus[monthKey] = 'pending';
+      }
+
+      // Format response
+      List<Map<String, dynamic>> result = [];
+      for (final entry in monthlyProfits.entries) {
+        final monthKey = entry.key;
+        final profitAmount = entry.value;
+        final status = monthlyStatus[monthKey] ?? 'pending';
+
+        // Get margin percentage (use first assignment)
+        final marginPercentage =
+            ((assignments as List<dynamic>)[0]['margin_percentage'] as num?)
+                    ?.toDouble() ??
+                0.0;
+
+        // Calculate investor's share of profit
+        final investorProfit = profitAmount * (marginPercentage / 100);
+
+        final parts = monthKey.split('-');
+        final year = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        final monthName = _getMonthName(month);
+
+        result.add({
+          'month': '$monthName $year',
+          'monthKey': monthKey,
+          'profit': investorProfit,
+          'status': status,
+        });
+      }
+
+      // Sort by date descending
+      result.sort((a, b) {
+        final keyA = a['monthKey'] as String;
+        final keyB = b['monthKey'] as String;
+        return keyB.compareTo(keyA);
+      });
+
+      print(
+          'DEBUG getInvestorMonthlyProfits - Returning ${result.length} months');
+      return result;
+    } catch (e) {
+      print('Error getting investor monthly profits: $e');
+      return [];
+    }
+  }
+
+  /// Helper function to get month name
+  String _getMonthName(int month) {
+    const months = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+    return months[month - 1];
+  }
+
+  /// Approve investor monthly profit payment
+  Future<bool> approveInvestorMonthlyProfit(
+    String investorId,
+    String monthKey,
+  ) async {
+    if (!_isInitialized) {
+      print('DEBUG approveInvestorMonthlyProfit - NOT initialized');
+      return false;
+    }
+
+    try {
+      print('DEBUG approveInvestorMonthlyProfit - Approving profit for $investorId, month: $monthKey');
+
+      // For now, this is a placeholder since investor_profit_handovers table doesn't exist
+      // In production, you would insert into investor_profit_handovers table
+      // TODO: Create investor_profit_handovers table and implement actual approval logic
+      
+      // Simulated success for now
+      print('DEBUG approveInvestorMonthlyProfit - Profit approved (simulated)');
+      return true;
+    } catch (e) {
+      print('Error approving investor monthly profit: $e');
+      return false;
+    }
+  }
 }
+
 

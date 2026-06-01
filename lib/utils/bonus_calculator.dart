@@ -318,6 +318,11 @@ double calculateMealAllowance(
   double omset, {
   MealAllowance allowanceConfig = MealAllowance.defaultAllowance,
 }) {
+  // If omset is 0, no meal allowance
+  if (omset == 0) {
+    return 0.0;
+  }
+  
   return omset >= allowanceConfig.threshold
       ? allowanceConfig.aboveThreshold
       : allowanceConfig.belowThreshold;

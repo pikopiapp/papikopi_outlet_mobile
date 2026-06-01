@@ -5,11 +5,13 @@ import '../providers/auth_provider.dart';
 import '../services/supabase_service.dart';
 import '../theme/thema.dart';
 import '../widgets/header.dart';
-import '../widgets/bonus_calculator_widget.dart';
 import '../widgets/daily_bonus_card.dart';
+import '../utils/bonus_calculator.dart';
+import '../utils/holiday_detector.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'approval_screen.dart';
+import 'bonus_calculator_screen.dart';
 
 // Helper function to format Rupiah with thousand separator (dots)
 String formatRupiah(num? amount) {
@@ -37,7 +39,8 @@ class _FinanceScreenState extends State<FinanceScreen>
   late DateTime _selectedDate;
   bool _isLoadingLeaderboard = true;
   bool _isRefreshing = false;
-  late String _outletId;
+  late String _outletId = '';
+  late String _baristaId = ''; // 🆕 Cache barista ID
 
   @override
   void initState() {
@@ -56,25 +59,31 @@ class _FinanceScreenState extends State<FinanceScreen>
     // Get outlet ID from AuthProvider
     // Note: We'll get it in the callback to ensure context is available
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = context.read<AuthProvider>();
-      if (authProvider.currentUser != null) {
-        _outletId = authProvider.currentUser!.outletId;
-        
-        // Set loading states
-        if (mounted) {
-          setState(() {
-            _isLoadingRevenue = true;
-            _isLoadingCashDeposit = true;
-            _isLoadingLeaderboard = true;
-          });
+      try {
+        final authProvider = context.read<AuthProvider>();
+        if (authProvider.currentUser != null) {
+          _outletId = authProvider.currentUser!.outletId;
+          _baristaId = authProvider.currentUser!.id; // 🆕 Cache barista ID
+          
+          // Set loading states
+          if (mounted) {
+            setState(() {
+              _isLoadingRevenue = true;
+              _isLoadingCashDeposit = true;
+              _isLoadingLeaderboard = true;
+            });
+          }
+          
+          // Load data
+          _loadLeaderboard();
+          _loadRevenue();
+          _loadCashDeposit();
+        } else {
+          _outletId = '';
+          _baristaId = '';
         }
-        
-        // Load data
-        _loadLeaderboard();
-        _loadRevenue();
-        _loadCashDeposit();
-      } else {
-        _outletId = '';
+      } catch (e) {
+        // Error in PostFrameCallback
       }
     });
   }
@@ -83,17 +92,89 @@ class _FinanceScreenState extends State<FinanceScreen>
     final supabaseService = SupabaseService();
     
     try {
+      print('DEBUG: Starting _loadCashDeposit, baristaId=$_baristaId');
       final data = await supabaseService.getCashDepositData(
         outletId: _outletId,
+        baristaId: _baristaId,
         date: _selectedDate,
       );
+      
+      if (!mounted) {
+        return;
+      }
+      
+      setState(() {
+        _cashDepositData = data;
+        _isLoadingCashDeposit = false;
+      });
+      print('DEBUG: _loadCashDeposit completed');
+      
+    } catch (e) {
+      print('DEBUG: Error in _loadCashDeposit: $e');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingCashDeposit = false;
+      });
+    }
+  }
+
+  // Helper method to reload and ensure UI updates
+  Future<void> _reloadCashDepositWithRetry() async {
+    try {
+      print('DEBUG: Starting _reloadCashDepositWithRetry, baristaId=$_baristaId');
+      if (_baristaId.isEmpty) {
+        print('DEBUG: baristaId is empty, returning');
+        if (mounted) {
+          setState(() {
+            _isLoadingCashDeposit = false;
+          });
+        }
+        return;
+      }
+      
+      // Wait a bit for database to process insert
+      await Future.delayed(const Duration(milliseconds: 1500));
+      print('DEBUG: Delay completed, now fetching data');
+      
+      final supabaseService = SupabaseService();
+      
+      // Add timeout to prevent infinite wait
+      final data = await supabaseService.getCashDepositData(
+        outletId: _outletId,
+        baristaId: _baristaId,
+        date: _selectedDate,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print('DEBUG: getCashDepositData timeout!');
+          return {
+            'cashAmount': 0.0,
+            'cashCount': 0,
+            'qrisAmount': 0.0,
+            'qrisCount': 0,
+            'totalOmset': 0.0,
+            'bonus': 0.0,
+            'mealAllowance': 0.0,
+            'depositAmount': 0.0,
+            'handoverStatus': 'pending',
+          };
+        },
+      );
+      print('DEBUG: Data fetched, handoverStatus=${data['handoverStatus']}');
+      
       if (mounted) {
         setState(() {
           _cashDepositData = data;
           _isLoadingCashDeposit = false;
         });
+        print('DEBUG: setState completed, loading should be false now');
+      } else {
+        print('DEBUG: Not mounted, cannot setState');
       }
     } catch (e) {
+      print('DEBUG: Error in _reloadCashDepositWithRetry: $e');
       if (mounted) {
         setState(() {
           _isLoadingCashDeposit = false;
@@ -102,58 +183,61 @@ class _FinanceScreenState extends State<FinanceScreen>
     }
   }
 
-  // Helper method to reload and ensure UI updates
-  Future<void> _reloadCashDepositWithRetry({int retries = 3}) async {
+  // Reload with a specific date (used after recording shortfall to query the correct business day)
+  Future<void> _reloadCashDepositWithRetryForDate(DateTime dateToQuery) async {
     try {
-      for (int i = 0; i < retries; i++) {
-        try {
-          await Future.delayed(Duration(milliseconds: 500 + (i * 500)));
-          
-          final supabaseService = SupabaseService();
-          final data = await supabaseService.getCashDepositData(
-            outletId: _outletId,
-            date: _selectedDate,
-          );
-          
-          if (mounted) {
-            setState(() {
-              _cashDepositData = data;
-              _isLoadingCashDeposit = false;
-            });
-          }
-          
-          // Check if status has updated
-          final currentStatus = (data['handoverStatus'] as String?) ?? 'pending';
-          
-          if (currentStatus != 'pending') {
-            // Status has been updated, force rebuild and stop retrying
-            if (mounted) {
-              setState(() {});
-            }
-            break;
-          }
-          
-          // If this is the last retry, still update UI to stop loading
-          if (i == retries - 1) {
-            if (mounted) {
-              setState(() {
-                _isLoadingCashDeposit = false;
-              });
-            }
-          }
-        } catch (e) {
-          
-          // On last attempt, stop loading regardless of error
-          if (i == retries - 1) {
-            if (mounted) {
-              setState(() {
-                _isLoadingCashDeposit = false;
-              });
-            }
-          }
+      print('DEBUG: Starting _reloadCashDepositWithRetryForDate with dateToQuery=$dateToQuery, baristaId=$_baristaId');
+      if (_baristaId.isEmpty) {
+        print('DEBUG: baristaId is empty, returning');
+        if (mounted) {
+          setState(() {
+            _isLoadingCashDeposit = false;
+          });
         }
+        return;
+      }
+      
+      // Wait a bit for database to process insert
+      await Future.delayed(const Duration(milliseconds: 1500));
+      print('DEBUG: Delay completed, now fetching data with dateToQuery=$dateToQuery');
+      
+      final supabaseService = SupabaseService();
+      
+      // Add timeout to prevent infinite wait
+      final data = await supabaseService.getCashDepositData(
+        outletId: _outletId,
+        baristaId: _baristaId,
+        date: dateToQuery,  // Use the date we recorded for, not current _selectedDate
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print('DEBUG: getCashDepositData timeout!');
+          return {
+            'cashAmount': 0.0,
+            'cashCount': 0,
+            'qrisAmount': 0.0,
+            'qrisCount': 0,
+            'totalOmset': 0.0,
+            'bonus': 0.0,
+            'mealAllowance': 0.0,
+            'depositAmount': 0.0,
+            'handoverStatus': 'pending',
+          };
+        },
+      );
+      print('DEBUG: Data fetched with dateToQuery=$dateToQuery, handoverStatus=${data['handoverStatus']}, shortfall_recorded=${data['shortfall_receipt_recorded']}');
+      
+      if (mounted) {
+        setState(() {
+          _cashDepositData = data;
+          _isLoadingCashDeposit = false;
+        });
+        print('DEBUG: setState completed, loading should be false now');
+      } else {
+        print('DEBUG: Not mounted, cannot setState');
       }
     } catch (e) {
+      print('DEBUG: Error in _reloadCashDepositWithRetryForDate: $e');
       if (mounted) {
         setState(() {
           _isLoadingCashDeposit = false;
@@ -165,45 +249,63 @@ class _FinanceScreenState extends State<FinanceScreen>
   Future<void> _loadRevenue() async {
     final supabaseService = SupabaseService();
     
-    // Note: getRevenueData now takes selectedDate and calculates business day internally
-
     try {
       final data = await supabaseService.getRevenueData(
         outletId: _outletId,
         selectedDate: _selectedDate,
       );
-      if (mounted) {
-        setState(() {
-          _revenueData = data;
-          _isLoadingRevenue = false;
-        });
+      
+      // Check mounted BEFORE calling setState
+      if (!mounted) {
+        return;
       }
+      
+      setState(() {
+        _revenueData = data;
+        _isLoadingRevenue = false;
+      });
+      
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingRevenue = false;
-        });
+      if (!mounted) {
+        return;
       }
+      
+      setState(() {
+        _isLoadingRevenue = false;
+      });
     }
   }
 
   void _loadLeaderboard() {
     final supabaseService = SupabaseService();
 
-
     // Fetch leaderboard from all outlets using business day
+    // Assign future outside heavy setState to avoid race conditions
     setState(() {
       _isLoadingLeaderboard = true;
-      _leaderboardFuture = supabaseService.getGlobalLeaderboard(
-        outletId: _outletId,
-        selectedDate: _selectedDate,
-      ).then((data) {
-        for (var item in data) {
-        }
-        return data;
-      }).catchError((error) {
-        return <Map<String, dynamic>>[];
+      // keep previous future until we assign the real one below
+      _leaderboardFuture = Future.value(<Map<String, dynamic>>[]);
+    });
+
+    final future = supabaseService
+        .getGlobalLeaderboard(
+      outletId: _outletId,
+      selectedDate: _selectedDate,
+    )
+        .then((data) {
+      return data;
+    }).catchError((error) {
+      return <Map<String, dynamic>>[];
+    }).whenComplete(() {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingLeaderboard = false;
       });
+    });
+
+    // finally assign the future so FutureBuilder listens to it
+    setState(() {
+      _leaderboardFuture = future;
     });
   }
 
@@ -797,8 +899,8 @@ class _FinanceScreenState extends State<FinanceScreen>
                   text: 'Setoran',
                 ),
                 Tab(
-                  icon: Icon(Icons.calculate),
-                  text: 'Calculator',
+                  icon: Icon(Icons.account_balance_wallet),
+                  text: 'Penarikan',
                 ),
                 Tab(
                   icon: Icon(Icons.star),
@@ -809,6 +911,8 @@ class _FinanceScreenState extends State<FinanceScreen>
               unselectedLabelColor: AppColors.textSecondary,
               indicatorColor: AppColors.primary,
               indicatorWeight: 3,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
             ),
           ),
           // Content
@@ -818,7 +922,7 @@ class _FinanceScreenState extends State<FinanceScreen>
               children: [
                 _buildRevenueTab(),
                 _buildCashDepositTab(),
-                _buildBonusTab(),
+                _buildWithdrawTab(),
                 _buildLeaderboardTab(),
               ],
             ),
@@ -855,6 +959,17 @@ class _FinanceScreenState extends State<FinanceScreen>
     final isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == DateFormat('yyyy-MM-dd').format(DateTime.now());
     final dateLabel = isToday ? 'Hari Ini' : DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate);
 
+    // Calculate business day range for the selected date
+    final businessDayStartHour = 4;
+    final businessDayStart = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, businessDayStartHour);
+    final businessDayEnd = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day + 1, businessDayStartHour);
+    final endHour = (businessDayStartHour - 1 < 0 ? 23 : businessDayStartHour - 1).toString().padLeft(2, '0');
+    final startHourPadded = businessDayStartHour.toString().padLeft(2, '0');
+    final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    final startMonth = monthNames[businessDayStart.month - 1];
+    final endMonth = monthNames[businessDayEnd.month - 1];
+    final businessDayDisplay = '${businessDayStart.day} $startMonth $startHourPadded:00 - ${businessDayEnd.day} $endMonth $endHour:59';
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -876,13 +991,27 @@ class _FinanceScreenState extends State<FinanceScreen>
                   Icon(Icons.info_outline, color: AppColors.accent, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      'Hari Bisnis: 04:00 - 03:59 (penjualan 00:00-03:59 = hari kemarin)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.accent,
-                        fontStyle: FontStyle.italic,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hari Bisnis: $businessDayDisplay',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Penjualan sebelum 04:00 dihitung untuk hari sebelumnya',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.accent,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -895,6 +1024,31 @@ class _FinanceScreenState extends State<FinanceScreen>
               omset: omset,
               isLoading: _isLoadingRevenue,
               selectedDate: _selectedDate,
+            ),
+            const SizedBox(height: 16),
+
+            // Button: Lihat Calculator
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const BonusCalculatorScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.calculate),
+                label: const Text('Lihat Calculator Bonus'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -1198,17 +1352,26 @@ class _FinanceScreenState extends State<FinanceScreen>
       'cashCount': 0,
       'qrisAmount': 0.0,
       'qrisCount': 0,
+      'gratisAmount': 0.0,
+      'gratisCount': 0,
+      'otherAmount': 0.0,
+      'otherCount': 0,
     };
     
     final cashAmount = (cashData['cashAmount'] as num?)?.toDouble() ?? 0.0;
     final cashCount = (cashData['cashCount'] as int?) ?? 0;
     final qrisAmount = (cashData['qrisAmount'] as num?)?.toDouble() ?? 0.0;
     final qrisCount = (cashData['qrisCount'] as int?) ?? 0;
+    final gratisAmount = (cashData['gratisAmount'] as num?)?.toDouble() ?? 0.0;
+    final gratisCount = (cashData['gratisCount'] as int?) ?? 0;
+    final otherAmount = (cashData['otherAmount'] as num?)?.toDouble() ?? 0.0;
+    final otherCount = (cashData['otherCount'] as int?) ?? 0;
     final totalOmset = (cashData['totalOmset'] as num?)?.toDouble() ?? 0.0;
     final bonus = (cashData['bonus'] as num?)?.toDouble() ?? 0.0;
     final mealAllowance = (cashData['mealAllowance'] as num?)?.toDouble() ?? 0.0;
     final depositAmount = (cashData['depositAmount'] as num?)?.toDouble() ?? 0.0;
     final handoverStatus = (cashData['handoverStatus'] as String?) ?? 'pending';
+    final shortfallReceiptRecorded = (cashData['shortfall_receipt_recorded'] as bool?) ?? false;
     
     // Format date for display
     final isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -1219,12 +1382,16 @@ class _FinanceScreenState extends State<FinanceScreen>
     String statusText = 'PENDING';
     IconData statusIcon = Icons.schedule;
     
-    if (handoverStatus == 'approved') {
+    if (handoverStatus == 'verified' || handoverStatus == 'verified by barista') {
+      statusColor = Colors.blue;
+      statusText = 'SUDAH DIVERIFIKASI BARISTA';
+      statusIcon = Icons.verified;
+    } else if (handoverStatus == 'approved') {
       statusColor = Colors.green;
-      statusText = 'SUDAH DIBAYAR';
+      statusText = 'SUDAH DISETUJUI MANAGER';
       statusIcon = Icons.check_circle;
     } else if (handoverStatus == 'completed') {
-      statusColor = Colors.blue;
+      statusColor = Colors.green;
       statusText = 'SELESAI';
       statusIcon = Icons.done_all;
     } else if (handoverStatus == 'rejected') {
@@ -1242,91 +1409,95 @@ class _FinanceScreenState extends State<FinanceScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Total Setoran Card + Kekurangan Upah Card
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.accentDark, AppColors.accent],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          // Kekurangan Upah Card
+          // Show if: has shortfall value OR recorded OR (both deposit and shortfall are 0)
+          if (((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) > 0 || shortfallReceiptRecorded || (depositAmount == 0 && ((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) == 0))
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: shortfallReceiptRecorded ? Colors.green : Colors.orange, width: 2),
+                borderRadius: BorderRadius.circular(12),
+                color: shortfallReceiptRecorded ? Colors.green.shade50 : Colors.orange.shade50,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Total Setoran - $dateLabel',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                      const Expanded(
+                        child: Text(
+                          'Kekurangan yang\nHarus Diterima',
+                          style: TextStyle(
+                            color: Colors.orange,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.3),
-                              border: Border.all(color: Colors.white),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(statusIcon, color: Colors.white, size: 14),
-                                const SizedBox(width: 4),
-                                Text(
-                                  statusText,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Rp ${formatRupiah(depositAmount)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'CASH: ${cashCount}tx | QRIS: ${qrisCount}tx',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 12,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: shortfallReceiptRecorded ? Colors.green.withOpacity(0.3) : Colors.orange.withOpacity(0.3),
+                          border: Border.all(color: shortfallReceiptRecorded ? Colors.green : Colors.orange),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(shortfallReceiptRecorded ? Icons.check_circle : Icons.pending_actions, color: shortfallReceiptRecorded ? Colors.green : Colors.orange, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              shortfallReceiptRecorded ? 'SUDAH DICATAT' : 'MENUNGGU DICATAT',
+                              style: TextStyle(
+                                color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Rp ${formatRupiah((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0)}',
+                    style: TextStyle(
+                      color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Dari Manajemen Papi Kopi',
+                    style: TextStyle(
+                      color: shortfallReceiptRecorded ? Colors.green.shade700 : Colors.orange.shade700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              if (((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) > 0)
+            ),
+          
+          const SizedBox(height: 20),
+          
+          // Total Setoran Card
+          // Show if: has value OR both deposit and shortfall are 0
+          if (depositAmount > 0 || (depositAmount == 0 && ((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) == 0))
+            Row(
+              children: [
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.orange, width: 2),
+                      gradient: LinearGradient(
+                        colors: [AppColors.accentDark, AppColors.accent],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: BorderRadius.circular(12),
-                      color: Colors.orange.shade50,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1334,33 +1505,33 @@ class _FinanceScreenState extends State<FinanceScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Text(
-                                'Kekurangan yang\nHarus Diterima',
-                                style: TextStyle(
-                                  color: Colors.orange,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                                'Total Setoran - $dateLabel',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.orange.withOpacity(0.3),
-                                border: Border.all(color: Colors.orange),
-                                borderRadius: BorderRadius.circular(10),
+                                color: statusColor.withOpacity(0.3),
+                                border: Border.all(color: Colors.white),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.pending_actions, color: Colors.orange, size: 12),
-                                  SizedBox(width: 3),
+                                  Icon(statusIcon, color: Colors.white, size: 14),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    'PENDING',
-                                    style: TextStyle(
-                                      color: Colors.orange,
-                                      fontSize: 8,
+                                    statusText,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -1371,27 +1542,28 @@ class _FinanceScreenState extends State<FinanceScreen>
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Rp ${formatRupiah((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0)}',
+                          'Rp ${formatRupiah(depositAmount)}',
                           style: const TextStyle(
-                            color: Colors.orange,
-                            fontSize: 24,
+                            color: Colors.white,
+                            fontSize: 28,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Dari Manajemen Papi Kopi',
+                          'CASH: ${cashCount}tx | QRIS: ${qrisCount}tx | GRATIS: ${gratisCount}tx',
                           style: TextStyle(
-                            color: Colors.orange.shade700,
-                            fontSize: 11,
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 12,
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-            ],
-          ),
+              ],
+            ),
+          
           const SizedBox(height: 24),
 
           // Payment Breakdown
@@ -1405,7 +1577,10 @@ class _FinanceScreenState extends State<FinanceScreen>
           const SizedBox(height: 12),
           _buildDepositItem('Total Omset', 'Rp ${formatRupiah(totalOmset)}', 'Semua pembayaran'),
           _buildDepositItem('  ├─ Pembayaran CASH', 'Rp ${formatRupiah(cashAmount)}', '$cashCount transaksi'),
-          _buildDepositItem('  └─ Pembayaran QRIS', 'Rp ${formatRupiah(qrisAmount)}', '$qrisCount transaksi'),
+          _buildDepositItem('  ├─ Pembayaran QRIS', 'Rp ${formatRupiah(qrisAmount)}', '$qrisCount transaksi'),
+          _buildDepositItem('  ├─ Pembayaran GRATIS', 'Rp ${formatRupiah(gratisAmount)}', '$gratisCount transaksi'),
+          if (otherAmount > 0)
+            _buildDepositItem('  └─ Pembayaran Lainnya', 'Rp ${formatRupiah(otherAmount)}', '$otherCount transaksi'),
           
           const SizedBox(height: 24),
           
@@ -1494,18 +1669,19 @@ class _FinanceScreenState extends State<FinanceScreen>
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: (handoverStatus == 'pending' && !_isLoadingCashDeposit) ? () {
+                onPressed: (!shortfallReceiptRecorded && !_isLoadingCashDeposit) ? () {
                   final kekuranganUpah = (_cashDepositData?['kekuranganUpah'] as num?)?.toDouble() ?? 0;
-                  _showShortfallReceipt(kekuranganUpah);
+                  final handoverDate = _cashDepositData?['handoverDate'] as String?; // Get actual handover date from DB
+                  _showShortfallReceipt(kekuranganUpah, handoverDate);
                 } : null,
                 icon: const Icon(Icons.receipt),
                 label: Text(
-                  handoverStatus == 'pending'
-                    ? '📋 Catat Tanda Terima Kekurangan Upah'
-                    : '✅ Sudah Dicatat',
+                  shortfallReceiptRecorded
+                    ? '✅ Tanda Terima Sudah Dicatat'
+                    : '📋 Catat Tanda Terima Kekurangan Upah',
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: handoverStatus == 'pending' ? Colors.orange : Colors.grey,
+                  backgroundColor: shortfallReceiptRecorded ? Colors.green : Colors.orange,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -1564,154 +1740,260 @@ class _FinanceScreenState extends State<FinanceScreen>
     required double depositAmount,
     required double kekuranganUpah,
   }) async {
-    final supabaseService = SupabaseService();
-    final currentUser = supabaseService.getCurrentUser();
+    // Get current user from AuthProvider instead of SupabaseService
+    final authProvider = context.read<AuthProvider>();
+    final currentUser = authProvider.currentUser;
     
     if (currentUser == null) {
       _showErrorSnackBar('User tidak valid');
       return;
     }
+    
+    final supabaseService = SupabaseService();
 
-    // Show confirmation dialog
+    // 🆕 Status options based on role
+    String selectedStatus = currentUser.role == 'manager' ? 'pending' : 'verified by barista';
+    
+    // Determine available status options based on role
+    List<String> availableStatuses = currentUser.role == 'manager'
+        ? ['pending', 'approved', 'rejected']
+        : ['verified by barista']; // Barista can only set verified by barista
+
+    // Show confirmation dialog with status selection
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Konfirmasi Serah Terima Setoran'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Total Omset: Rp ${formatRupiah(totalOmset)}'),
-            Text('Pembayaran CASH: Rp ${formatRupiah(cashAmount)}'),
-            Text('Pembayaran QRIS: Rp ${formatRupiah(qrisAmount)}'),
-            const SizedBox(height: 12),
-            Text('Bonus Anda: Rp ${formatRupiah(bonus)}'),
-            Text('Uang Makan: Rp ${formatRupiah(mealAllowance)}'),
-            if (kekuranganUpah > 0) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  border: Border.all(color: Colors.orange),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '⚠️ Kekurangan Upah',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange.shade700,
-                      ),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, dialogSetState) => AlertDialog(
+          title: const Text('Konfirmasi Serah Terima Setoran'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Total Omset: Rp ${formatRupiah(totalOmset)}'),
+                Text('Pembayaran CASH: Rp ${formatRupiah(cashAmount)}'),
+                Text('Pembayaran QRIS: Rp ${formatRupiah(qrisAmount)}'),
+                const SizedBox(height: 12),
+                Text('Bonus Anda: Rp ${formatRupiah(bonus)}'),
+                Text('Uang Makan: Rp ${formatRupiah(mealAllowance)}'),
+                if (kekuranganUpah > 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      border: Border.all(color: Colors.orange),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Rp ${formatRupiah(kekuranganUpah)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Colors.orange.shade700,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '⚠️ Kekurangan Upah',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Rp ${formatRupiah(kekuranganUpah)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '(Toko akan memberikan kekurangan ini)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '(Toko akan memberikan kekurangan ini)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                      ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    border: Border.all(color: Colors.green),
+                  ),
+                  child: Text(
+                    'Total Disetor: Rp ${formatRupiah(depositAmount)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Colors.green.shade700,
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                border: Border.all(color: Colors.green),
-              ),
-              child: Text(
-                'Total Disetor: Rp ${formatRupiah(depositAmount)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: Colors.green.shade700,
+                // 🆕 Status selection
+                const SizedBox(height: 16),
+                Text(
+                  'Status Setoran',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButton<String>(
+                    value: selectedStatus,
+                    isExpanded: true,
+                    underline: const SizedBox(),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    items: availableStatuses.map((status) {
+                      String label = '';
+                      if (status == 'pending') {
+                        label = '⏳ Pending (Menunggu Verifikasi)';
+                      } else if (status == 'verified by barista') {
+                        label = '✅ Verified by Barista';
+                      } else if (status == 'approved') {
+                        label = '👍 Approved (Disetujui Manager)';
+                      } else if (status == 'rejected') {
+                        label = '❌ Rejected (Ditolak)';
+                      }
+                      return DropdownMenuItem(
+                        value: status,
+                        child: Text(label, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        dialogSetState(() => selectedStatus = value);
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              
-              // Show loading
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-              );
-              
-              try {
-                final success = await supabaseService.submitCashDepositHandover(
-                  outletId: _outletId,
-                  baristaId: currentUser.id,
-                  totalOmset: totalOmset,
-                  cashAmount: cashAmount,
-                  qrisAmount: qrisAmount,
-                  bonus: bonus,
-                  mealAllowance: mealAllowance,
-                  depositAmount: depositAmount,
-                  kekuranganUpah: kekuranganUpah,
-                  date: DateTime.now(),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                // Save main screen context before closing dialog
+                final mainScreenContext = context;
+                
+                Navigator.pop(dialogContext); // Close dialog first
+                
+                // Show loading overlay using OverlayEntry
+                final overlayEntry = OverlayEntry(
+                  builder: (overlayContext) => const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Material(
+                      color: Colors.black54,
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                  ),
                 );
                 
-                if (mounted) {
-                  Navigator.pop(context); // Close loading
+                // Track if overlay is still mounted
+                bool overlayMounted = true;
+                
+                try {
+                  Overlay.of(mainScreenContext).insert(overlayEntry);
+                } catch (e) {
+                  overlayMounted = false;
+                  print('DEBUG: Could not insert overlay: $e');
+                }
+                
+                try {
+                  print('DEBUG: Starting submit cash deposit handover');
+                  final success = await supabaseService.submitCashDepositHandover(
+                    outletId: _outletId,
+                    baristaId: currentUser.id,
+                    totalOmset: totalOmset,
+                    cashAmount: cashAmount,
+                    qrisAmount: qrisAmount,
+                    bonus: bonus,
+                    mealAllowance: mealAllowance,
+                    depositAmount: depositAmount,
+                    kekuranganUpah: kekuranganUpah,
+                    status: selectedStatus,
+                    date: _selectedDate,
+                  );
+                  print('DEBUG: Submit completed, success=$success');
+                  
+                  // Remove loading overlay
+                  if (overlayMounted) {
+                    try {
+                      overlayEntry.remove();
+                      overlayMounted = false;
+                    } catch (e) {
+                      print('DEBUG: Error removing overlay: $e');
+                    }
+                  }
+                  
+                  // Only update screen state if still mounted
+                  // Dialog is already closed, so only update main screen
+                  if (!mounted) {
+                    print('DEBUG: Screen not mounted, skipping state updates');
+                    return;
+                  }
                   
                   if (success) {
                     _showSuccessSnackBar('✅ Serah terima berhasil disubmit');
-                    // Initial delay before first query
-                    await Future.delayed(const Duration(milliseconds: 800));
-                    // Reload data with retry to ensure status is updated
+                    
+                    // Only update screen state if still mounted
                     if (mounted) {
                       setState(() {
                         _isLoadingCashDeposit = true;
                       });
-                      await _reloadCashDepositWithRetry(retries: 5);
-                      // Final force rebuild to ensure UI updates
-                      if (mounted) {
-                        setState(() {});
-                      }
+                    }
+                    
+                    // Reload data
+                    await _reloadCashDepositWithRetry();
+                    
+                    // Final state update
+                    if (mounted) {
+                      setState(() {});
                     }
                   } else {
                     _showErrorSnackBar('Gagal submit serah terima');
                   }
+                } catch (e) {
+                  print('DEBUG: Error in submit: $e');
+                  
+                  // Remove loading overlay even on error
+                  if (overlayMounted) {
+                    try {
+                      overlayEntry.remove();
+                      overlayMounted = false;
+                    } catch (e2) {
+                      print('DEBUG: Error removing overlay on exception: $e2');
+                    }
+                  }
+                  
+                  if (mounted) {
+                    _showErrorSnackBar('Error: $e');
+                  }
                 }
-              } catch (e) {
-                if (mounted) {
-                  Navigator.pop(context); // Close loading
-                  _showErrorSnackBar('Error: $e');
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+              ),
+              child: const Text('Serah Terima'),
             ),
-            child: const Text('Serah Terima'),
-          ),
         ],
       ),
+    ),
     );
   }
 
@@ -1735,7 +2017,7 @@ class _FinanceScreenState extends State<FinanceScreen>
     );
   }
 
-  void _showShortfallReceipt(double kekuranganUpah) {
+  void _showShortfallReceipt(double kekuranganUpah, String? handoverDate) {
     final noteController = TextEditingController();
 
     showDialog(
@@ -1794,6 +2076,7 @@ class _FinanceScreenState extends State<FinanceScreen>
           ),
           ElevatedButton(
             onPressed: () async {
+              final notes = noteController.text;
               Navigator.pop(context); // Close dialog
               
               // Create overlay entry for loading
@@ -1811,23 +2094,50 @@ class _FinanceScreenState extends State<FinanceScreen>
               }
               
               try {
-                _showSuccessSnackBar('✅ Tanda terima kekurangan upah dicatat');
+                // Parse handoverDate string to DateTime, or use selected date as fallback
+                DateTime recordDate = _selectedDate;
+                if (handoverDate != null && handoverDate.isNotEmpty) {
+                  try {
+                    recordDate = DateTime.parse(handoverDate);
+                  } catch (e) {
+                    print('DEBUG: Failed to parse handoverDate=$handoverDate, using _selectedDate=$_selectedDate');
+                  }
+                }
                 
-                // Initial delay before first query
-                await Future.delayed(const Duration(milliseconds: 800));
+                // Record shortfall receipt to database using the actual handover date from DB
+                final success = await SupabaseService().recordShortfallReceipt(
+                  outletId: _outletId,
+                  baristaId: _baristaId,
+                  kekuranganUpah: kekuranganUpah,
+                  notes: notes,
+                  date: recordDate,
+                );
                 
-                // Reload data with retry to ensure status is updated
-                if (mounted) {
-                  overlayEntry.remove();
+                if (success) {
+                  _showSuccessSnackBar('✅ Tanda terima kekurangan upah dicatat');
                   
-                  setState(() {
-                    _isLoadingCashDeposit = true;
-                  });
-                  await _reloadCashDepositWithRetry(retries: 5);
+                  // Initial delay before first query
+                  await Future.delayed(const Duration(milliseconds: 800));
                   
-                  // Final force rebuild to ensure UI updates
+                  // Reload data with retry using the same date we recorded for (important!)
                   if (mounted) {
-                    setState(() {});
+                    overlayEntry.remove();
+                    
+                    setState(() {
+                      _isLoadingCashDeposit = true;
+                    });
+                    // Pass recordDate so we reload with the correct business day date
+                    await _reloadCashDepositWithRetryForDate(recordDate);
+                    
+                    // Final force rebuild to ensure UI updates
+                    if (mounted) {
+                      setState(() {});
+                    }
+                  }
+                } else {
+                  if (mounted) {
+                    overlayEntry.remove();
+                    _showErrorSnackBar('Gagal mencatat tanda terima kekurangan upah');
                   }
                 }
               } catch (e) {
@@ -1891,179 +2201,817 @@ class _FinanceScreenState extends State<FinanceScreen>
   }
 
   // ==================== BONUS TAB ====================
-  Widget _buildBonusTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.green.shade600, Colors.green.shade400],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
+  Widget _buildWithdrawTab() {
+    print('DEBUG _buildWithdrawTab - _outletId: $_outletId');
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: SupabaseService().getDailyReceipts(
+        outletId: _outletId,
+        limit: 30,
+      ),
+      builder: (context, snapshot) {
+        print('DEBUG _buildWithdrawTab - snapshot state: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, hasError: ${snapshot.hasError}');
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  '🧮 Calculator Bonus',
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(
+                  'Memuat data penerimaan...',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          print('DEBUG _buildWithdrawTab - Error: ${snapshot.error}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  color: Colors.red.shade400,
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Gagal memuat data',
+                  style: TextStyle(
+                    color: Colors.red.shade400,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Hitung bonus penjualan berdasarkan metode berjenjang (progressive). Semakin besar omset, semakin banyak layer bonus yang didapat.',
+                  snapshot.error.toString(),
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                    fontSize: 12,
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 20),
+          );
+        }
 
-          // Tier Structure Reference
-          const Text(
-            '📋 Struktur Tier Bonus',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+        final dailyReceipts = snapshot.data ?? [];
+
+        if (dailyReceipts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  color: Colors.grey.shade400,
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Belum ada data penerimaan',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
+          );
+        }
+
+        // Calculate summaries from real data
+        int approvedCount = 0;
+        double approvedAmount = 0.0;
+        int pendingCount = 0;
+        double pendingAmount = 0.0;
+
+        for (final daily in dailyReceipts) {
+          final dateTime = daily['date'] as DateTime;
+          final salesAmount = (daily['salesAmount'] as num).toDouble();
+          final depositStatus = daily['depositStatus'] as String;
+          
+          // Calculate upah using proper bonus calculator
+          final isHolidayDate = isHoliday(dateTime);
+          final bonusData = calculateBonus(salesAmount, isHoliday: isHolidayDate);
+          final totalBonus = bonusData.totalBonus;
+          
+          // Calculate meal allowance
+          final mealAllowance = salesAmount >= 300000 ? 34000.0 : 25000.0;
+          final totalWage = totalBonus + mealAllowance;
+
+          if (depositStatus == 'approved' || depositStatus == 'Approved') {
+            approvedCount++;
+            approvedAmount += totalWage;
+          } else if (depositStatus == 'pending' || depositStatus == 'Pending') {
+            pendingCount++;
+            pendingAmount += totalWage;
+          }
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTierCard('Tier 1', '10%', '0 - 200rb'),
-              _buildTierCard('Tier 2', '12%', '200rb - 350rb'),
-              _buildTierCard('Tier 3', '15%', '350rb - 500rb'),
-              _buildTierCard('Tier 4', '20%', '500rb+'),
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.blue.shade600, Colors.blue.shade400],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '💰 Penarikan Upah Harian',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Daftar upah harian (bonus + uang makan) dengan status persetujuan',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Summary Cards
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildWithdrawSummaryCard(
+                      title: 'Approved',
+                      count: approvedCount.toString(),
+                      amount: 'Rp ${formatRupiah(approvedAmount)}',
+                      color: Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildWithdrawSummaryCard(
+                      title: 'Pending',
+                      count: pendingCount.toString(),
+                      amount: 'Rp ${formatRupiah(pendingAmount)}',
+                      color: Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Daftar Upah Harian
+              const Text(
+                '📋 Daftar Upah Harian',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // List Items from real data
+              ...dailyReceipts.map((daily) {
+                final dateTime = daily['date'] as DateTime;
+                final salesAmount = (daily['salesAmount'] as num).toDouble();
+                final depositStatus = (daily['depositStatus'] as String).toLowerCase();
+                
+                // Calculate upah using proper bonus calculator
+                final isHolidayDate = isHoliday(dateTime);
+                final bonusData = calculateBonus(salesAmount, isHoliday: isHolidayDate);
+                final totalBonus = bonusData.totalBonus;
+                
+                // Calculate meal allowance
+                final mealAllowance = salesAmount >= 300000 ? 34000.0 : 25000.0;
+                final totalWage = totalBonus + mealAllowance;
+
+                final statusColor =
+                    depositStatus == 'approved' ? Colors.green : Colors.orange;
+                final statusIcon = depositStatus == 'approved'
+                    ? Icons.check_circle
+                    : Icons.schedule;
+
+                // Format business day range: e.g. "27 Apr 04:00 - 28 Apr 03:59"
+                final businessDayStartHour = 4; // Default, should match outlet settings
+                final startHour = businessDayStartHour.toString().padLeft(2, '0');
+                final endHour = (businessDayStartHour - 1 < 0 
+                    ? 23 
+                    : businessDayStartHour - 1).toString().padLeft(2, '0');
+                
+                // When user selects a date (e.g., May 27), they want to see business day data for that date
+                // Business day: from 04:00 on that date to 03:59 on the next date
+                DateTime businessDayStart;
+                DateTime businessDayEnd;
+                
+                businessDayStart = DateTime(dateTime.year, dateTime.month, dateTime.day, businessDayStartHour);
+                businessDayEnd = DateTime(dateTime.year, dateTime.month, dateTime.day + 1, businessDayStartHour);
+                
+                final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                final startMonth = monthNames[businessDayStart.month - 1];
+                final endMonth = monthNames[businessDayEnd.month - 1];
+                
+                final dateDisplay = '${businessDayStart.day} $startMonth $startHour:00 - ${businessDayEnd.day} $endMonth $endHour:59';
+
+                return _buildWithdrawListItem(
+                  date: dateDisplay,
+                  amount: 'Rp ${formatRupiah(totalWage)}',
+                  status: depositStatus == 'approved' ? 'Approved' : 'Pending',
+                  statusColor: statusColor,
+                  statusIcon: statusIcon,
+                  data: daily,
+                );
+              }).toList(),
+
+              // Keterangan Status
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  border: Border.all(color: AppColors.primary, width: 1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '📌 Keterangan Status',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: Colors.green,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Approved = Upah telah disetujui dan siap ditransfer',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          color: Colors.orange,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Pending = Upah menunggu persetujuan pihak manajemen',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 24),
+        );
+      },
+    );
+  }
 
-          // Bonus Calculator Widget
-          const BonusCalculatorWidget(showBreakdown: true),
-
-          const SizedBox(height: 24),
-
-          // Test Card untuk menunjukkan contoh bonus
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              border: Border.all(color: Colors.orange.shade300),
-              borderRadius: BorderRadius.circular(12),
+  Widget _buildWithdrawSummaryCard({
+    required String title,
+    required String count,
+    required String amount,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        border: Border.all(color: color.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: color,
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            count,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            amount,
+            style: TextStyle(
+              fontSize: 11,
+              color: color.withOpacity(0.8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWithdrawListItem({
+    required String date,
+    required String amount,
+    required String status,
+    required Color statusColor,
+    required IconData statusIcon,
+    Map<String, dynamic>? data,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        if (data != null) {
+          _showWithdrawDetailBottomSheet(data);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Hari Bisnis: $date',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    amount,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    statusIcon,
+                    color: statusColor,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    status,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showWithdrawDetailBottomSheet(Map<String, dynamic> daily) {
+    final dateTime = daily['date'] as DateTime;
+    final salesAmount = (daily['salesAmount'] as num).toDouble();
+    final depositStatus = daily['depositStatus'] as String;
+    
+    // Calculate upah components
+    final isHolidayDate = isHoliday(dateTime);
+    final bonusData = calculateBonus(salesAmount, isHoliday: isHolidayDate);
+    final totalBonus = bonusData.totalBonus;
+    final mealAllowance = salesAmount >= 300000 ? 34000.0 : 25000.0;
+    final totalWage = totalBonus + mealAllowance;
+    
+    // Format date
+    final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    final monthName = monthNames[dateTime.month - 1];
+    final dateDisplay = '${dateTime.day} $monthName ${dateTime.year}';
+    
+    final statusColor = depositStatus.toLowerCase() == 'approved' ? Colors.green : Colors.orange;
+    final statusText = depositStatus.toLowerCase() == 'approved' ? 'Disetujui' : 'Menunggu Persetujuan';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 80),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Header
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Title & Date
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Detail Upah Harian',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          dateDisplay,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        border: Border.all(color: statusColor),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: statusColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                
+                // Total Upah Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.green.shade500, Colors.green.shade600],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Total Upah',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Rp ${formatRupiah(totalWage)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                // Breakdown
                 const Text(
-                  '📌 Contoh Perhitungan Bonus',
+                  'Rincian Perhitungan Upah',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Omset: Rp 450.000',
-                  style: TextStyle(fontSize: 12),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  '- Tier 1 (Rp 0-200rb × 10%) = Rp 20.000',
-                  style: TextStyle(fontSize: 11),
-                ),
-                const Text(
-                  '- Tier 2 (Rp 200-350rb × 12%) = Rp 18.000',
-                  style: TextStyle(fontSize: 11),
-                ),
-                const Text(
-                  '- Tier 3 (Rp 350-450rb × 15%) = Rp 15.000',
-                  style: TextStyle(fontSize: 11),
+                
+                // Omset
+                _buildDetailItem(
+                  'Omset Penjualan',
+                  'Rp ${formatRupiah(salesAmount)}',
+                  Icons.shopping_cart,
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade200,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'Total Bonus = Rp 53.000',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange,
+                
+                // Holiday indicator
+                if (isHolidayDate)
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      border: Border.all(color: Colors.orange),
+                      borderRadius: BorderRadius.circular(8),
                     ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.celebration, color: Colors.orange, size: 16),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Hari Libur/Istimewa - Bonus x2',
+                            style: TextStyle(fontSize: 12, color: Colors.orange),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  const SizedBox(height: 0),
+                
+                if (isHolidayDate) const SizedBox(height: 8),
+                
+                // Bonus
+                _buildDetailItem(
+                  'Bonus Penjualan',
+                  'Rp ${formatRupiah(totalBonus)}',
+                  Icons.trending_up,
+                ),
+                const SizedBox(height: 8),
+                
+                // Meal Allowance
+                _buildDetailItem(
+                  'Uang Makan',
+                  'Rp ${formatRupiah(mealAllowance)}',
+                  Icons.restaurant,
+                ),
+                const SizedBox(height: 16),
+                
+                // Total separator
+                Divider(color: Colors.grey.shade300),
+                const SizedBox(height: 12),
+                
+                // Total
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total Upah',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Rp ${formatRupiah(totalWage)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                
+                // Rincian Setoran Section
+                const Text(
+                  'Rincian Setoran (CASH - Bonus - Uang Makan)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Assuming 100% CASH payment for now (would need actual data for breakdown)
+                // For complete solution, would need payment method breakdown from daily data
+                _buildDetailItem(
+                  'Pembayaran CASH',
+                  'Rp ${formatRupiah(salesAmount)}',
+                  Icons.attach_money,
+                ),
+                const SizedBox(height: 8),
+                
+                _buildDetailItem(
+                  'Bonus (Berkurang)',
+                  '-Rp ${formatRupiah(totalBonus)}',
+                  Icons.trending_down,
+                ),
+                const SizedBox(height: 8),
+                
+                _buildDetailItem(
+                  'Uang Makan (Berkurang)',
+                  '-Rp ${formatRupiah(mealAllowance)}',
+                  Icons.dining,
+                ),
+                const SizedBox(height: 12),
+                
+                // Calculate deposit amount and shortfall
+                Builder(
+                  builder: (context) {
+                    final depositAmount = salesAmount - totalBonus - mealAllowance;
+                    final shortfall = depositAmount < 0 ? (depositAmount * -1) : 0.0;
+                    
+                    return Column(
+                      children: [
+                        if (shortfall > 0)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              border: Border.all(color: Colors.orange),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '⚠️ Kekurangan yang Harus Dibayar',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.orange,
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Dari Manajemen Papi Kopi',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.orange,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  'Rp ${formatRupiah(shortfall)}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            border: Border.all(color: Colors.green, width: 2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Total Disetor ke Papi Kopi',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Text(
+                                depositAmount > 0 
+                                  ? 'Rp ${formatRupiah(depositAmount)}' 
+                                  : 'Rp 0',
+                                style: TextStyle(
+                                  color: Colors.green.shade700,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                
+                // Close button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade200,
+                      foregroundColor: Colors.grey.shade800,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Tutup'),
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildTierCard(String tier, String percentage, String range) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        border: Border.all(color: Colors.green.shade300),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            tier,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.green.shade700,
-              fontWeight: FontWeight.w500,
-            ),
+  Widget _buildDetailItem(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.primary, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
-          const SizedBox(height: 8),
-          Text(
-            percentage,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.green.shade600,
-            ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
           ),
-          const SizedBox(height: 8),
-          Text(
-            range,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.green.shade600,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
+
+
 
   void _handleLogout() {
     // Implement logout

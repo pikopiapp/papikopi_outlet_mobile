@@ -131,26 +131,23 @@ class _CheckoutModalState extends State<CheckoutModal> {
     // Check gratis limit if gratis
     if (_selectedPaymentMethod == 'GRATIS') {
       if (_showWarning) {
-        // Show confirmation dialog if limit reached
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('⚠️ Limit Gratis'),
-            content: Text(_warningMessage),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Batal'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Lanjutkan'),
-              ),
-            ],
-          ),
-        );
-        
-        if (confirmed != true) return;
+        // Hard block: Show error dialog - cannot proceed
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('❌ Limit Gratis Tercapai'),
+              content: Text(_warningMessage),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return; // Stop checkout
       }
     }
 

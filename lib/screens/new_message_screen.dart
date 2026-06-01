@@ -94,7 +94,7 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
           initialMessages: [],
         ),
       ),
-    ).then((_) => Navigator.pop(context));
+    );
   }
 
   @override

@@ -662,7 +662,12 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     );
     if (picked != null && picked != _selectedDate) {
       setState(() {
-        _selectedDate = picked;
+        // IMPORTANT: Always use 00:00 when selecting a date to ensure correct business day calculation
+        // If we use the current hour, the business day calculation gets confused
+        // For example, if business day starts at 4 AM and it's 14:00:
+        // - Using 14:00: business day = May 27 4:00 AM to May 28 4:00 AM
+        // - Using 00:00: business day = May 26 4:00 AM to May 27 4:00 AM (CORRECT for May 27 display)
+        _selectedDate = DateTime(picked.year, picked.month, picked.day, 0, 0, 0);
         _loadData();
       });
     }
@@ -679,19 +684,24 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     final month = _selectedDate.month;
     final day = _selectedDate.day;
 
+    // When user selects a date (e.g., May 27), they want to see the business day data for that date
+    // Business day: from 04:00 on selected date to 03:59 on next date
+    // Example: May 27 04:00 to May 28 03:59
     DateTime businessDayStart;
     DateTime businessDayEnd;
 
-    if (businessDayStartHour >= 12) {
-      businessDayStart = DateTime(year, month, day - 1, businessDayStartHour);
-      businessDayEnd = DateTime(year, month, day, businessDayStartHour);
-    } else {
-      businessDayStart = DateTime(year, month, day, businessDayStartHour);
-      businessDayEnd = DateTime(year, month, day + 1, businessDayStartHour);
-    }
+    businessDayStart = DateTime(year, month, day, businessDayStartHour);
+    businessDayEnd = DateTime(year, month, day + 1, businessDayStartHour);
 
     final endHour = (businessDayStartHour - 1 < 0 ? 23 : businessDayStartHour - 1).toString().padLeft(2, '0');
-    final businessDayDisplay = '${businessDayStart.day}/${businessDayStart.month} ${businessDayStart.hour.toString().padLeft(2, '0')}:00 - ${businessDayEnd.day}/${businessDayEnd.month} $endHour:59 WIB';
+    final startHourPadded = businessDayStartHour.toString().padLeft(2, '0');
+    
+    // Format: e.g. "27 Apr 04:00 - 28 Apr 03:59"
+    final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    final startMonth = monthNames[businessDayStart.month - 1];
+    final endMonth = monthNames[businessDayEnd.month - 1];
+    
+    final businessDayDisplay = '${businessDayStart.day} $startMonth $startHourPadded:00 - ${businessDayEnd.day} $endMonth $endHour:59 WIB';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -708,16 +718,17 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Tanggal: ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                      'Tanggal Pilihan: ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       'Hari Bisnis: $businessDayDisplay',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: AppColors.textSecondary,
                       ),
                     ),

@@ -7,7 +7,7 @@ import 'providers/product_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/shell_screen.dart';
 import 'screens/manager/manager_shell_screen.dart';
-import 'screens/investor_screen.dart';
+import 'screens/investor/investor_screen.dart';
 import 'services/supabase_service.dart';
 import 'services/auth_service.dart';
 import 'theme/thema.dart';
