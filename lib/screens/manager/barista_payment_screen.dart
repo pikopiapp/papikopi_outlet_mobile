@@ -611,16 +611,21 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                           final cashAmount = (baristaData['cashAmount'] as num?)?.toDouble() ?? 0.0;
                           final qrisAmount = (baristaData['qrisAmount'] as num?)?.toDouble() ?? 0.0;
                           final freeCount = (baristaData['freeCount'] as int?) ?? 0;
-                          final paymentStatus = baristaData['paymentStatus'] as String;
+                          final handoverStatus = baristaData['handoverStatus'] as String? ?? 'pending';
+                          final shortfallReceiptRecorded = (baristaData['shortfallReceiptRecorded'] as bool?) ?? false;
+                          final statusType = baristaData['statusType'] as String? ?? 'none'; // From database: 'shortfall', 'deposit', or 'none'
                           
                           // Calculate bonus and settlement using same logic as sales_outlet_manager
                           final Map<String, dynamic> bonusCalc = _calculateBonusAndMeal(cashAmount, qrisAmount, freeCount);
                           final double omset = bonusCalc['omset'] as double;
                           final double bonus = bonusCalc['bonus'] as double;
                           final double mealAllowance = bonusCalc['mealAllowance'] as double;
-                          final String settlementType = bonusCalc['settlementType'] as String;
+                          final String calculatedSettlementType = bonusCalc['settlementType'] as String; // Calculated from sales data
                           final double settlementAmount = bonusCalc['settlementAmount'] as double;
                           final bool isHolidayDate = bonusCalc['isHolidayDate'] as bool;
+                          
+                          // Use statusType from database if available, otherwise use calculated
+                          final String settlementType = statusType != 'none' ? statusType : calculatedSettlementType;
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 16),
@@ -663,57 +668,59 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                         ],
                                       ),
                                     ),
-                                    // Status badge untuk setoran normal (deposit > 0)
+                                    // Status badge untuk setoran normal (deposit > 0) - adopt dari finance_screen
                                     if (settlementType == 'deposit')
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         decoration: BoxDecoration(
-                                          color: _getStatusColor(paymentStatus).withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(6),
+                                          color: _getStatusColor(handoverStatus).withOpacity(0.15),
+                                          border: Border.all(color: _getStatusColor(handoverStatus), width: 1.5),
+                                          borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Icon(
-                                              _getStatusIcon(paymentStatus),
+                                              _getStatusIcon(handoverStatus),
                                               size: 14,
-                                              color: _getStatusColor(paymentStatus),
+                                              color: _getStatusColor(handoverStatus),
                                             ),
-                                            const SizedBox(width: 4),
+                                            const SizedBox(width: 6),
                                             Text(
-                                              _getStatusText(paymentStatus),
+                                              _getStatusText(handoverStatus),
                                               style: TextStyle(
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.bold,
-                                                color: _getStatusColor(paymentStatus),
+                                                color: _getStatusColor(handoverStatus),
                                               ),
                                             ),
                                           ],
                                         ),
                                       ),
-                                    // Status badge untuk kekurangan upah (shortfall > 0)
+                                    // Status badge untuk kekurangan upah (shortfall > 0) - adopt dari finance_screen
                                     if (settlementType == 'shortfall')
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         decoration: BoxDecoration(
-                                          color: _getStatusColor(paymentStatus).withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(6),
+                                          color: _getStatusColor(handoverStatus).withOpacity(0.15),
+                                          border: Border.all(color: _getStatusColor(handoverStatus), width: 1.5),
+                                          borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Icon(
-                                              _getStatusIcon(paymentStatus),
+                                              _getStatusIcon(handoverStatus),
                                               size: 14,
-                                              color: _getStatusColor(paymentStatus),
+                                              color: _getStatusColor(handoverStatus),
                                             ),
-                                            const SizedBox(width: 4),
+                                            const SizedBox(width: 6),
                                             Text(
-                                              _getStatusText(paymentStatus),
+                                              _getStatusText(handoverStatus),
                                               style: TextStyle(
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.bold,
-                                                color: _getStatusColor(paymentStatus),
+                                                color: _getStatusColor(handoverStatus),
                                               ),
                                             ),
                                           ],
@@ -883,7 +890,43 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   
-                                  // Formula Info
+                                  // Shortfall Receipt Status Indicator
+                                  if (settlementType == 'shortfall')
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: shortfallReceiptRecorded ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            shortfallReceiptRecorded ? Icons.check_circle : Icons.schedule,
+                                            color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              shortfallReceiptRecorded
+                                                  ? '✓ Tanda terima kekurangan sudah dicatat oleh barista'
+                                                  : '⏳ Menunggu barista mencatat tanda terima kekurangan',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                                color: shortfallReceiptRecorded ? Colors.green.shade700 : Colors.orange.shade700,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  
+                                  const SizedBox(height: 12),
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
@@ -903,15 +946,15 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                 ],
                                 
                                 // Action Button - hanya tampil untuk deposit cases (bukan shortfall)
-                                if (paymentStatus.toLowerCase() == 'pending' && settlementType == 'deposit')
+                                if (settlementType == 'deposit')
                                   ...[
                                     const SizedBox(height: 12),
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton.icon(
-                                        onPressed: () => _processPayment(baristaData),
+                                        onPressed: handoverStatus.toLowerCase() == 'pending' ? null : () => _processPayment(baristaData),
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.green,
+                                          backgroundColor: handoverStatus.toLowerCase() == 'pending' ? Colors.grey : Colors.green,
                                           padding: const EdgeInsets.symmetric(vertical: 10),
                                         ),
                                         icon: const Icon(Icons.check_circle, size: 18),
@@ -927,9 +970,9 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton.icon(
-                                        onPressed: () => _processPayment(baristaData),
+                                        onPressed: (handoverStatus.toLowerCase() == 'pending' || !shortfallReceiptRecorded) ? null : () => _processPayment(baristaData),
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.purple,
+                                          backgroundColor: (handoverStatus.toLowerCase() == 'pending' || !shortfallReceiptRecorded) ? Colors.grey : Colors.purple,
                                           padding: const EdgeInsets.symmetric(vertical: 10),
                                         ),
                                         icon: const Icon(Icons.check_circle, size: 18),
