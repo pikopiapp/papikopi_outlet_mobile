@@ -718,7 +718,7 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      // Badge 1: Status approval dari database
+                                      // Status badge untuk kekurangan upah
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         decoration: BoxDecoration(
@@ -741,38 +741,6 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.bold,
                                                 color: _getStatusColor(handoverStatus),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      // Badge 2: Receipt recorded indicator (adopt dari finance_screen)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: shortfallReceiptRecorded ? Colors.green.withOpacity(0.15) : Colors.orange.withOpacity(0.15),
-                                          border: Border.all(
-                                            color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
-                                            width: 1.5,
-                                          ),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              shortfallReceiptRecorded ? Icons.check_circle : Icons.pending_actions,
-                                              size: 14,
-                                              color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              shortfallReceiptRecorded ? 'SUDAH DICATAT' : 'MENUNGGU DICATAT',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                                color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
                                               ),
                                             ),
                                           ],
@@ -941,43 +909,6 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   
-                                  // Shortfall Receipt Status Indicator
-                                  if (settlementType == 'shortfall')
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: shortfallReceiptRecorded ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            shortfallReceiptRecorded ? Icons.check_circle : Icons.schedule,
-                                            color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
-                                            size: 20,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              shortfallReceiptRecorded
-                                                  ? '✓ Tanda terima kekurangan sudah dicatat oleh barista'
-                                                  : '⏳ Menunggu barista mencatat tanda terima kekurangan',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w500,
-                                                color: shortfallReceiptRecorded ? Colors.green.shade700 : Colors.orange.shade700,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  
-                                  const SizedBox(height: 12),
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
