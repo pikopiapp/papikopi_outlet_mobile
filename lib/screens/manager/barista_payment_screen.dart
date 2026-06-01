@@ -476,26 +476,6 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        // Test button for 15 May
-                        ElevatedButton(
-                          onPressed: () async {
-                            final supabaseService = SupabaseService();
-                            final success = await supabaseService.insertTestData15May(
-                              outletId: 'e3c1e3dd-36e6-4d2d-916d-66d58c51f926',
-                              baristaId: '1441cbfb-7851-44e4-874b-21e48103092e',
-                            );
-                            if (success) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Test data inserted for 15 May')),
-                              );
-                              // Reload data for 15 May
-                              setState(() => _selectedDate = DateTime(2026, 5, 15));
-                              await Future.delayed(const Duration(milliseconds: 500));
-                              _loadBaristaPayments();
-                            }
-                          },
-                          child: const Text('Test 15 May'),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -699,109 +679,107 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                         ],
                                       ),
                                     ),
-                                    // Status badge untuk setoran normal (deposit > 0) - adopt dari finance_screen
-                                    if (settlementType == 'deposit')
-                                      Expanded(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: _getStatusColor(handoverStatus).withOpacity(0.15),
-                                            border: Border.all(color: _getStatusColor(handoverStatus), width: 1.5),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                _getStatusIcon(handoverStatus),
-                                                size: 14,
-                                                color: _getStatusColor(handoverStatus),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                _getStatusText(handoverStatus),
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: _getStatusColor(handoverStatus),
-                                                ),
-                                              ),
-                                            ],
+
+                                  ],
+                                ),
+                                // Status badges - di bawah barista info
+                                const SizedBox(height: 12),
+                                // Status badge untuk setoran normal (deposit > 0) - adopt dari finance_screen
+                                if (settlementType == 'deposit')
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: _getStatusColor(handoverStatus).withOpacity(0.15),
+                                      border: Border.all(color: _getStatusColor(handoverStatus), width: 1.5),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          _getStatusIcon(handoverStatus),
+                                          size: 14,
+                                          color: _getStatusColor(handoverStatus),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          _getStatusText(handoverStatus),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: _getStatusColor(handoverStatus),
                                           ),
                                         ),
-                                      ),
-                                    // Status badge untuk kekurangan upah (shortfall > 0) - adopt dari finance_screen
-                                    if (settlementType == 'shortfall')
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                      ],
+                                    ),
+                                  ),
+                                // Status badges untuk kekurangan upah (shortfall > 0) - adopt dari finance_screen
+                                if (settlementType == 'shortfall')
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Badge 1: Status approval dari database
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: _getStatusColor(handoverStatus).withOpacity(0.15),
+                                          border: Border.all(color: _getStatusColor(handoverStatus), width: 1.5),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            // Badge 1: Status approval dari database
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: _getStatusColor(handoverStatus).withOpacity(0.15),
-                                                border: Border.all(color: _getStatusColor(handoverStatus), width: 1.5),
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    _getStatusIcon(handoverStatus),
-                                                    size: 14,
-                                                    color: _getStatusColor(handoverStatus),
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    _getStatusText(handoverStatus),
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: _getStatusColor(handoverStatus),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                            Icon(
+                                              _getStatusIcon(handoverStatus),
+                                              size: 14,
+                                              color: _getStatusColor(handoverStatus),
                                             ),
-                                            const SizedBox(height: 8),
-                                            // Badge 2: Receipt recorded indicator (adopt dari finance_screen)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: shortfallReceiptRecorded ? Colors.green.withOpacity(0.15) : Colors.orange.withOpacity(0.15),
-                                                border: Border.all(
-                                                  color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
-                                                  width: 1.5,
-                                                ),
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    shortfallReceiptRecorded ? Icons.check_circle : Icons.pending_actions,
-                                                    size: 14,
-                                                    color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    shortfallReceiptRecorded ? 'SUDAH DICATAT' : 'MENUNGGU DICATAT',
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
-                                                    ),
-                                                  ),
-                                                ],
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              _getStatusText(handoverStatus),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: _getStatusColor(handoverStatus),
                                               ),
                                             ),
                                           ],
                                         ),
                                       ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
+                                      const SizedBox(height: 8),
+                                      // Badge 2: Receipt recorded indicator (adopt dari finance_screen)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: shortfallReceiptRecorded ? Colors.green.withOpacity(0.15) : Colors.orange.withOpacity(0.15),
+                                          border: Border.all(
+                                            color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                                            width: 1.5,
+                                          ),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              shortfallReceiptRecorded ? Icons.check_circle : Icons.pending_actions,
+                                              size: 14,
+                                              color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              shortfallReceiptRecorded ? 'SUDAH DICATAT' : 'MENUNGGU DICATAT',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 
                                 // Toggle Button for Details
                                 GestureDetector(

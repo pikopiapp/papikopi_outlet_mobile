@@ -3019,45 +3019,6 @@ class SupabaseService {
     }
   }
 
-  // Insert test data untuk 15 Mei dengan status 'verified by barista' dan shortfall
-  Future<bool> insertTestData15May({
-    required String outletId,
-    required String baristaId,
-  }) async {
-    if (!_isInitialized) {
-      print('ERROR: SupabaseService not initialized');
-      return false;
-    }
-
-    try {
-      print('DEBUG: Inserting test data for 15 May');
-      
-      // Insert dengan submitted_at explicit untuk 15 Mei
-      await _client.from('cash_deposit_handovers').insert(
-        {
-          'outlet_id': outletId,
-          'barista_id': baristaId,
-          'total_omset': 406000.0,
-          'cash_amount': 318500.0,
-          'qris_amount': 87500.0,
-          'bonus': 81200.0,
-          'meal_allowance': 34000.0,
-          'deposit_amount': -50000.0,  // Negative = shortfall
-          'status': 'verified by barista',
-          'shortfall_receipt_recorded': true,
-          'date': '2026-05-15',
-          'submitted_at': DateTime.utc(2026, 5, 15, 7, 0, 0).toIso8601String(),
-        },
-      );
-      
-      print('DEBUG: Test data inserted successfully');
-      return true;
-    } catch (e) {
-      print('ERROR: Failed to insert test data: $e');
-      return false;
-    }
-  }
-
   // Submit serah terima (handover) untuk setoran
   Future<bool> submitCashDepositHandover({
     required String outletId,
