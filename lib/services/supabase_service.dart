@@ -4846,14 +4846,13 @@ class SupabaseService {
           final dbStatus = handover['status'] as String?;
           if (baristaId != null && dbStatus != null) {
             // Map database status to display status:
-            // - 'pending': Belum submit (should not happen here, but just in case)
+            // - 'pending': Belum submit 
             // - 'verified by barista': Sudah verified oleh barista, menunggu manager approve
             // - 'approved': Manager sudah approve
-            String displayStatus = 'pending'; // Default
+            // Keep original status to distinguish 'verified by barista' from 'pending'
+            String displayStatus = dbStatus; // Keep original status for distinction
             if (dbStatus == 'approved') {
               displayStatus = 'approved';
-            } else if (dbStatus == 'verified by barista' || dbStatus == 'pending') {
-              displayStatus = 'pending'; // Still waiting for manager approval
             }
             approvalStatusMap[baristaId] = displayStatus;
             statusTypeMap[baristaId] = 'deposit';

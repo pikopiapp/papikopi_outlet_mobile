@@ -242,6 +242,55 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
     );
   }
 
+  // Helper methods for status display to match finance_screen.dart logic
+  Color _getStatusColor(String? dbStatus) {
+    switch (dbStatus?.toLowerCase()) {
+      case 'verified by barista':
+        return Colors.blue; // Sudah diverifikasi barista
+      case 'approved':
+        return Colors.green; // Sudah disetujui manager
+      case 'completed':
+        return Colors.green; // Selesai
+      case 'rejected':
+        return Colors.red; // Ditolak
+      case 'pending':
+      default:
+        return Colors.grey; // Pending
+    }
+  }
+
+  IconData _getStatusIcon(String? dbStatus) {
+    switch (dbStatus?.toLowerCase()) {
+      case 'verified by barista':
+        return Icons.verified; // Verified icon
+      case 'approved':
+        return Icons.check_circle; // Check circle
+      case 'completed':
+        return Icons.done_all; // Done all
+      case 'rejected':
+        return Icons.cancel; // Cancel/X icon
+      case 'pending':
+      default:
+        return Icons.schedule; // Clock/schedule icon
+    }
+  }
+
+  String _getStatusText(String? dbStatus) {
+    switch (dbStatus?.toLowerCase()) {
+      case 'verified by barista':
+        return 'SUDAH DIVERIFIKASI BARISTA';
+      case 'approved':
+        return 'SUDAH DISETUJUI MANAGER';
+      case 'completed':
+        return 'SELESAI';
+      case 'rejected':
+        return 'DITOLAK';
+      case 'pending':
+      default:
+        return 'PENDING';
+    }
+  }
+
   Future<void> _processPayment(Map<String, dynamic> baristaData) async {
     // Show loading
     showDialog(
@@ -563,7 +612,6 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                           final qrisAmount = (baristaData['qrisAmount'] as num?)?.toDouble() ?? 0.0;
                           final freeCount = (baristaData['freeCount'] as int?) ?? 0;
                           final paymentStatus = baristaData['paymentStatus'] as String;
-                          final statusType = baristaData['statusType'] as String? ?? 'none'; // 'shortfall', 'deposit', or 'none'
                           
                           // Calculate bonus and settlement using same logic as sales_outlet_manager
                           final Map<String, dynamic> bonusCalc = _calculateBonusAndMeal(cashAmount, qrisAmount, freeCount);
@@ -620,20 +668,27 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         decoration: BoxDecoration(
-                                          color: paymentStatus.toLowerCase() == 'approved'
-                                              ? Colors.green.withOpacity(0.1)
-                                              : Colors.blue.withOpacity(0.1),
+                                          color: _getStatusColor(paymentStatus).withOpacity(0.1),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
-                                        child: Text(
-                                          paymentStatus.toLowerCase() == 'approved' ? 'Sudah Bayar' : 'Sudah Terima',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: paymentStatus.toLowerCase() == 'approved'
-                                                ? Colors.green.shade700
-                                                : Colors.blue.shade700,
-                                          ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              _getStatusIcon(paymentStatus),
+                                              size: 14,
+                                              color: _getStatusColor(paymentStatus),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _getStatusText(paymentStatus),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: _getStatusColor(paymentStatus),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     // Status badge untuk kekurangan upah (shortfall > 0)
