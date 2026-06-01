@@ -696,16 +696,27 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         decoration: BoxDecoration(
-                                          color: Colors.purple.withOpacity(0.1),
+                                          color: _getStatusColor(paymentStatus).withOpacity(0.1),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
-                                        child: Text(
-                                          'Verify by Barista',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.purple.shade700,
-                                          ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              _getStatusIcon(paymentStatus),
+                                              size: 14,
+                                              color: _getStatusColor(paymentStatus),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _getStatusText(paymentStatus),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: _getStatusColor(paymentStatus),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                   ],

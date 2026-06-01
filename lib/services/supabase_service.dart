@@ -4808,54 +4808,46 @@ class SupabaseService {
 
       print('DEBUG getAllBaristaPayments - processed baristas: ${baristaDataMap.length}');
 
-      // Create map of approval status - check both shortfall_receipts and cash_deposit_handovers
-      Map<String, String> approvalStatusMap = {}; // baristaId -> status
-      Map<String, String> statusTypeMap = {}; // baristaId -> type ('shortfall' or 'approved')
-
-      // Get shortfall receipts (kekurangan upah yang sudah ditandatangani)
-      try {
-        final shortfalls = await _client
-            .from('shortfall_receipts')
-            .select('barista_id')
-            .eq('date', dateStr);
-
-        print('DEBUG getAllBaristaPayments - shortfall_receipts count: ${shortfalls.length}');
-
-        for (final shortfall in shortfalls) {
-          final baristaId = shortfall['barista_id'] as String?;
-          if (baristaId != null) {
-            approvalStatusMap[baristaId] = 'approved'; // shortfall receipt = approved/settled
-            statusTypeMap[baristaId] = 'shortfall';
-          }
-        }
-      } catch (e) {
-        print('DEBUG getAllBaristaPayments - Warning: Could not fetch shortfall_receipts: $e');
-      }
+      // Create map of approval status - check cash_deposit_handovers
+      // Note: shortfall_receipt_recorded column indicates if barista signed shortfall receipt
+      Map<String, String> approvalStatusMap = {}; // baristaId|outletId -> status
+      Map<String, String> statusTypeMap = {}; // baristaId|outletId -> type ('shortfall' or 'approved')
 
       // Get cash deposit handovers (yang verified oleh barista)
+      // Filter by submitted_at (hari ini saja) bukan date (business_day_date bisa berbeda)
       try {
         final handovers = await _client
             .from('cash_deposit_handovers')
-            .select('barista_id, status')
-            .eq('date', dateStr);
+            .select('barista_id, outlet_id, status, shortfall_receipt_recorded')
+            .gte('submitted_at', startIso)
+            .lt('submitted_at', endIso);
 
         print('DEBUG getAllBaristaPayments - cash_deposit_handovers count: ${handovers.length}');
 
         for (final handover in handovers) {
           final baristaId = handover['barista_id'] as String?;
+          final outletId = handover['outlet_id'] as String?;
           final dbStatus = handover['status'] as String?;
-          if (baristaId != null && dbStatus != null) {
+          final shortfallRecorded = handover['shortfall_receipt_recorded'] as bool? ?? false;
+          
+          if (baristaId != null && outletId != null && dbStatus != null) {
             // Map database status to display status:
             // - 'pending': Belum submit 
-            // - 'verified by barista': Sudah verified oleh barista, menunggu manager approve
-            // - 'approved': Manager sudah approve
-            // Keep original status to distinguish 'verified by barista' from 'pending'
-            String displayStatus = dbStatus; // Keep original status for distinction
-            if (dbStatus == 'approved') {
-              displayStatus = 'approved';
+            // - 'verified by barista': Sudah verified oleh barista
+            //   * Untuk deposit: menunggu manager approve
+            //   * Untuk shortfall: only if shortfall_receipt_recorded = true (barista signed)
+            String displayStatus = dbStatus;
+            
+            // If status is 'verified by barista' tapi shortfall_receipt_recorded = false
+            // Berarti shortfall belum di-record oleh barista → treat as pending
+            if (dbStatus == 'verified by barista' && !shortfallRecorded) {
+              displayStatus = 'pending';
             }
-            approvalStatusMap[baristaId] = displayStatus;
-            statusTypeMap[baristaId] = 'deposit';
+            
+            // Create key combining barista + outlet for unique match (matches sales grouping)
+            final key = '$baristaId|$outletId';
+            approvalStatusMap[key] = displayStatus;
+            statusTypeMap[key] = 'deposit';
           }
         }
       } catch (e) {
@@ -4903,9 +4895,10 @@ class SupabaseService {
           double depositAmount = cashAmount - bonus - mealAllowance;
           
           // Get payment status from approvalStatusMap (already mapped from database)
-          // Returns 'approved' if manager approved, 'pending' if still waiting for manager approval
-          String paymentStatus = approvalStatusMap[baristaId] ?? 'pending';
-          String statusType = statusTypeMap[baristaId] ?? 'none'; // 'shortfall', 'deposit', or 'none'
+          // Use key combining barista + outlet to match sales grouping
+          final statusKey = '$baristaId|$outletId';
+          String paymentStatus = approvalStatusMap[statusKey] ?? 'pending';
+          String statusType = statusTypeMap[statusKey] ?? 'none'; // 'shortfall', 'deposit', or 'none'
           
           final baristaName = userNameMap[baristaId] ?? 'Unknown';
           final outletName = outletId != null ? (outletNameMap[outletId] ?? 'Outlet Unknown') : 'Outlet Unknown';
