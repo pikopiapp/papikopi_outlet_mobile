@@ -41,6 +41,7 @@ class _FinanceScreenState extends State<FinanceScreen>
   bool _isRefreshing = false;
   late String _outletId = '';
   late String _baristaId = ''; // 🆕 Cache barista ID
+  late int _businessDayStartHour = 4; // 🆕 Cache business day start hour
 
   @override
   void initState() {
@@ -64,6 +65,9 @@ class _FinanceScreenState extends State<FinanceScreen>
         if (authProvider.currentUser != null) {
           _outletId = authProvider.currentUser!.outletId;
           _baristaId = authProvider.currentUser!.id; // 🆕 Cache barista ID
+          
+          // Load business day start hour for this outlet
+          _loadBusinessDayStartHour();
           
           // Set loading states
           if (mounted) {
@@ -117,6 +121,24 @@ class _FinanceScreenState extends State<FinanceScreen>
       setState(() {
         _isLoadingCashDeposit = false;
       });
+    }
+  }
+
+  Future<void> _loadBusinessDayStartHour() async {
+    try {
+      final supabaseService = SupabaseService();
+      // Query outlet business_day_start_hour directly
+      final response = await supabaseService.client
+          .from('outlets')
+          .select('business_day_start_hour')
+          .eq('id', _outletId)
+          .single();
+      
+      _businessDayStartHour = (response['business_day_start_hour'] as int?) ?? 4;
+      print('DEBUG: Loaded businessDayStartHour=$_businessDayStartHour for outlet=$_outletId');
+    } catch (e) {
+      print('DEBUG: Error loading businessDayStartHour: $e');
+      _businessDayStartHour = 4; // default
     }
   }
 
@@ -1916,6 +1938,15 @@ class _FinanceScreenState extends State<FinanceScreen>
                 
                 try {
                   print('DEBUG: Starting submit cash deposit handover');
+                  
+                  // Calculate business day date to match database storage
+                  DateTime submitDate = _selectedDate;
+                  if (_businessDayStartHour < 12) {
+                    // Morning start: business day is tomorrow
+                    submitDate = _selectedDate.add(const Duration(days: 1));
+                  }
+                  print('DEBUG: Calculated submitDate=$submitDate for businessDayStartHour=$_businessDayStartHour');
+                  
                   final success = await supabaseService.submitCashDepositHandover(
                     outletId: _outletId,
                     baristaId: currentUser.id,
@@ -1927,7 +1958,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                     depositAmount: depositAmount,
                     kekuranganUpah: kekuranganUpah,
                     status: selectedStatus,
-                    date: _selectedDate,
+                    date: submitDate,
                   );
                   print('DEBUG: Submit completed, success=$success');
                   
