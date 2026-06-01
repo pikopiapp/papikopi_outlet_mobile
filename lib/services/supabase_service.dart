@@ -4751,13 +4751,17 @@ class SupabaseService {
       // Get CASH and QRIS data from sales table for this date
       final startDate = DateTime.utc(selectedDate.year, selectedDate.month, selectedDate.day);
       final endDate = startDate.add(const Duration(days: 1));
+      final startIso = startDate.toIso8601String();
+      final endIso = endDate.toIso8601String();
       
-      Map<String, Map<String, dynamic>> baristaDataMap = {}; // baristaId -> {cashAmount, qrisAmount, outletId, etc}
+      Map<String, Map<String, dynamic>> baristaDataMap = {}; // baristaId -> {cashAmount, qrisAmount, outletId, freeCount, etc}
       
       try {
         final sales = await _client
             .from('sales')
-            .select('barista_id, outlet_id, total_amount, payment_method, created_at');
+            .select('barista_id, outlet_id, total_amount, payment_method, created_at')
+            .gte('created_at', startIso)
+            .lt('created_at', endIso);
         
         print('DEBUG getAllBaristaPayments - sales count: ${sales.length}');
         
@@ -4776,12 +4780,17 @@ class SupabaseService {
                   baristaDataMap[baristaId] = {
                     'cashAmount': 0.0,
                     'qrisAmount': 0.0,
+                    'freeCount': 0,
                     'outletId': outletId,
                   };
                 }
                 
                 // Add to appropriate payment method total
-                if (totalAmount > 0) {
+                if (paymentMethod == 'GRATIS') {
+                  // Count free transactions
+                  baristaDataMap[baristaId]!['freeCount'] = 
+                      (baristaDataMap[baristaId]!['freeCount'] as int) + 1;
+                } else if (totalAmount > 0) {
                   if (paymentMethod == 'CASH') {
                     baristaDataMap[baristaId]!['cashAmount'] = 
                         (baristaDataMap[baristaId]!['cashAmount'] as double) + totalAmount;
@@ -4829,6 +4838,7 @@ class SupabaseService {
           final baristaData = entry.value;
           final cashAmount = baristaData['cashAmount'] as double;
           final qrisAmount = baristaData['qrisAmount'] as double;
+          final freeCount = baristaData['freeCount'] as int;
           final outletId = baristaData['outletId'] as String?;
           
           final omset = cashAmount + qrisAmount;
@@ -4873,6 +4883,7 @@ class SupabaseService {
             'salesAmount': omset,
             'cashAmount': cashAmount,
             'qrisAmount': qrisAmount,
+            'freeCount': freeCount,
             'isHoliday': false,
             'bonus': {
               'total': bonus,
