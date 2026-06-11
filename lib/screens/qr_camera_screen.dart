@@ -69,7 +69,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
           MobileScanner(
             controller: controller,
             onDetect: _onDetect,
-            errorBuilder: (context, error, child) {
+            errorBuilder: (context, error) {
               return SizedBox(
                 width: double.infinity,
                 child: Column(

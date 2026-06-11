@@ -246,6 +246,7 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
   Color _getStatusColor(String? dbStatus) {
     switch (dbStatus?.toLowerCase()) {
       case 'verified by barista':
+      case 'verified':
         return Colors.blue; // Sudah diverifikasi barista
       case 'approved':
         return Colors.green; // Sudah disetujui manager
@@ -262,6 +263,7 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
   IconData _getStatusIcon(String? dbStatus) {
     switch (dbStatus?.toLowerCase()) {
       case 'verified by barista':
+      case 'verified':
         return Icons.verified; // Verified icon
       case 'approved':
         return Icons.check_circle; // Check circle
@@ -278,6 +280,7 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
   String _getStatusText(String? dbStatus) {
     switch (dbStatus?.toLowerCase()) {
       case 'verified by barista':
+      case 'verified':
         return 'SUDAH DIVERIFIKASI BARISTA';
       case 'approved':
         return 'SUDAH DISETUJUI MANAGER';
@@ -303,8 +306,10 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
 
     try {
       final baristaId = baristaData['baristaId'] as String;
+      final outletId = baristaData['outletId'] as String? ?? '';
       final success = await _supabaseService.approveBaristaPayment(
         baristaId: baristaId,
+        outletId: outletId,
         date: _selectedDate,
       );
 
@@ -312,13 +317,34 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
         Navigator.pop(context); // Close loading dialog
 
         if (success) {
+          // Optimistically update local UI so button becomes disabled and shows "Sudah Dibayar"
+          setState(() {
+            final baristaId = baristaData['baristaId'] as String;
+            final outletId = baristaData['outletId'] as String? ?? '';
+            for (var i = 0; i < _baristaPayments.length; i++) {
+              final entry = _baristaPayments[i];
+              if ((entry['baristaId'] as String) == baristaId && (entry['outletId'] as String? ?? '') == outletId) {
+                entry['handoverStatus'] = 'approved';
+                entry['paymentStatus'] = 'approved';
+                // also mark shortfallReceiptRecorded true to prevent shortfall button if applicable
+                entry['shortfallReceiptRecorded'] = true;
+                _baristaPayments[i] = Map<String, dynamic>.from(entry);
+                break;
+              }
+            }
+          });
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('✅ Pembayaran berhasil diproses'),
               backgroundColor: Colors.green,
             ),
           );
-          _loadBaristaPayments();
+
+          // Try to refresh in background to ensure server state is reflected when available
+          Future.delayed(const Duration(milliseconds: 700), () {
+            if (mounted) _loadBaristaPayments();
+          });
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -418,9 +444,12 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                             Text(
                               'Pembayaran Bonus',
                               style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: AppColors.textPrimary,
                                   ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -452,18 +481,18 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                   color: AppColors.primary,
                                 ),
                                 const SizedBox(width: 8),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      isToday ? 'Hari Ini' : dateFormat.format(_selectedDate),
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.primary,
-                                      ),
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.45),
+                                  child: Text(
+                                    isToday ? 'Hari Ini' : dateFormat.format(_selectedDate),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.primary,
                                     ),
-                                  ],
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
                                 ),
                                 const SizedBox(width: 4),
                                 Icon(
@@ -475,7 +504,6 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -759,13 +787,16 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                   },
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(
-                                        'Detail Perhitungan',
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color: AppColors.primary,
-                                            ),
+                                      Expanded(
+                                        child: Text(
+                                          'Detail Perhitungan',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: AppColors.primary,
+                                              ),
+                                        ),
                                       ),
                                       Icon(
                                         (_expandedSections[baristaData['baristaId'] as String] ?? false)
@@ -933,15 +964,25 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                     const SizedBox(height: 12),
                                     SizedBox(
                                       width: double.infinity,
-                                      child: ElevatedButton.icon(
-                                        onPressed: handoverStatus.toLowerCase() == 'pending' ? null : () => _processPayment(baristaData),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: handoverStatus.toLowerCase() == 'pending' ? Colors.grey : Colors.green,
-                                          padding: const EdgeInsets.symmetric(vertical: 10),
-                                        ),
-                                        icon: const Icon(Icons.check_circle, size: 18),
-                                        label: const Text('Approve', style: TextStyle(fontSize: 13)),
-                                      ),
+                                      child: handoverStatus.toLowerCase() == 'approved'
+                                          ? ElevatedButton.icon(
+                                              onPressed: null,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.grey,
+                                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                              ),
+                                              icon: const Icon(Icons.check_circle, size: 18),
+                                              label: const Text('Sudah Dibayar', style: TextStyle(fontSize: 13)),
+                                            )
+                                          : ElevatedButton.icon(
+                                              onPressed: handoverStatus.toLowerCase() == 'pending' ? null : () => _processPayment(baristaData),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: handoverStatus.toLowerCase() == 'pending' ? Colors.grey : Colors.green,
+                                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                              ),
+                                              icon: const Icon(Icons.check_circle, size: 18),
+                                              label: const Text('Approve', style: TextStyle(fontSize: 13)),
+                                            ),
                                     ),
                                   ],
                                 
@@ -951,15 +992,25 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                     const SizedBox(height: 12),
                                     SizedBox(
                                       width: double.infinity,
-                                      child: ElevatedButton.icon(
-                                        onPressed: (handoverStatus.toLowerCase() == 'pending' || !shortfallReceiptRecorded) ? null : () => _processPayment(baristaData),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: (handoverStatus.toLowerCase() == 'pending' || !shortfallReceiptRecorded) ? Colors.grey : Colors.purple,
-                                          padding: const EdgeInsets.symmetric(vertical: 10),
-                                        ),
-                                        icon: const Icon(Icons.check_circle, size: 18),
-                                        label: const Text('Bayar', style: TextStyle(fontSize: 13)),
-                                      ),
+                                      child: handoverStatus.toLowerCase() == 'approved'
+                                          ? ElevatedButton.icon(
+                                              onPressed: null,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.grey,
+                                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                              ),
+                                              icon: const Icon(Icons.check_circle, size: 18),
+                                              label: const Text('Sudah Dibayar', style: TextStyle(fontSize: 13)),
+                                            )
+                                          : ElevatedButton.icon(
+                                              onPressed: (handoverStatus.toLowerCase() == 'pending' || !shortfallReceiptRecorded) ? null : () => _processPayment(baristaData),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: (handoverStatus.toLowerCase() == 'pending' || !shortfallReceiptRecorded) ? Colors.grey : Colors.purple,
+                                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                              ),
+                                              icon: const Icon(Icons.check_circle, size: 18),
+                                              label: const Text('Bayar', style: TextStyle(fontSize: 13)),
+                                            ),
                                     ),
                                   ],
                               ],

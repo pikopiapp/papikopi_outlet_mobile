@@ -12,6 +12,7 @@ class ProductImageHelper {
     'gula arenmachiato': 'GulaAren.png',
     'hazelnut': 'Hazelnut.png',
     'vanilla': 'Vanilla.png',
+    'salted caramel': 'Salted Caramel.png',
   };
 
   // Base path for product images in assets
@@ -27,14 +28,19 @@ class ProductImageHelper {
     // Normalize product name: lowercase and trim
     final normalizedName = productName.toLowerCase().trim();
 
-    // Try exact match first
+    // Priority 1: Check if it's a 1L product (e.g., "Baileys 1 L") - bottle image
+    if (normalizedName.contains('1 l')) {
+      return '$baseImagePath/KemasanBotol.png';
+    }
+
+    // Priority 2: Try exact match
     for (var entry in productImageMap.entries) {
       if (normalizedName == entry.key) {
         return '$baseImagePath/${entry.value}';
       }
     }
 
-    // Try partial match (product name contains key or key contains product name)
+    // Priority 3: Try partial match (product name contains key or key contains product name)
     for (var entry in productImageMap.entries) {
       if (normalizedName.contains(entry.key) || entry.key.contains(normalizedName)) {
         return '$baseImagePath/${entry.value}';
@@ -52,12 +58,19 @@ class ProductImageHelper {
 
     final normalizedName = productName.toLowerCase().trim();
 
+    // Priority 1: Check if it's a 1L product (e.g., "Baileys 1 L") - bottle image
+    if (normalizedName.contains('1 l')) {
+      return 'KemasanBotol.png';
+    }
+
+    // Priority 2: Try exact match
     for (var entry in productImageMap.entries) {
       if (normalizedName == entry.key) {
         return entry.value;
       }
     }
 
+    // Priority 3: Try partial match
     for (var entry in productImageMap.entries) {
       if (normalizedName.contains(entry.key) || entry.key.contains(normalizedName)) {
         return entry.value;

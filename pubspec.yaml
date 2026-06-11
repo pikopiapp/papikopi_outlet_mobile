@@ -23,12 +23,13 @@ dependencies:
   # QR Code
   qr_flutter: ^4.1.0
   
-  # Mobile Scanner for QR/Barcode
-  mobile_scanner: ^3.5.0
   
   # Date & Time
   intl: ^0.19.0
   
+  # Mobile Scanner for QR/Barcode
+  mobile_scanner: ^7.2.0
+
   # Local Storage
   shared_preferences: ^2.5.5
   

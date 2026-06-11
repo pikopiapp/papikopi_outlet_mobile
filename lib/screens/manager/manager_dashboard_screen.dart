@@ -80,7 +80,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   Future<void> _loadDateSales() async {
     try {
-      final startOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
+      // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
+      final selectedLocal = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 4);
+      final startOfDay = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
       final response = await supabaseService.client
@@ -102,12 +105,16 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   Future<void> _loadDateTransactions() async {
     try {
-      final startOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
+      // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
+      final selectedLocal = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 4);
+      final startOfDay = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
+      // Include payment_method so dashboard shows how payment was made
       final response = await supabaseService.client
           .from('sales')
-          .select('id, total_amount, outlet_id, created_at, outlets(name)')
+          .select('id, total_amount, outlet_id, created_at, payment_method, outlets(name)')
           .gte('created_at', startOfDay.toIso8601String())
           .lt('created_at', endOfDay.toIso8601String())
           .order('created_at', ascending: false)
@@ -120,6 +127,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           'amount': sale['total_amount'],
           'outlet': sale['outlets']?['name'] ?? 'Unknown',
           'time': sale['created_at'],
+          'payment_method': sale['payment_method'] ?? '',
         });
       }
 
@@ -134,7 +142,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
   Future<void> _loadDateTopOutlets() async {
     try {
-      final startOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
+      // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
+      final selectedLocal = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 4);
+      final startOfDay = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
       final response = await supabaseService.client
@@ -584,6 +595,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                                     outlet: tx['outlet'],
                                     amount: tx['amount'],
                                     time: timeString,
+                                    paymentMethod: tx['payment_method'] ?? '',
                                     currencyFormat: currencyFormat,
                                   ),
                                 );
@@ -720,6 +732,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     required String outlet,
     required double amount,
     required String time,
+    required String paymentMethod,
     required NumberFormat currencyFormat,
   }) {
     return Container(
@@ -763,12 +776,34 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  time,
-                  style: const TextStyle(
-                    color: Color(0xFF999999),
-                    fontSize: 12,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      time,
+                      style: const TextStyle(
+                        color: Color(0xFF999999),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (paymentMethod.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.altSurface),
+                        ),
+                        child: Text(
+                          paymentMethod.toString().toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF666666),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),

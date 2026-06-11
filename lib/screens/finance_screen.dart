@@ -42,6 +42,7 @@ class _FinanceScreenState extends State<FinanceScreen>
   late String _outletId = '';
   late String _baristaId = ''; // 🆕 Cache barista ID
   late int _businessDayStartHour = 4; // 🆕 Cache business day start hour
+  
 
   @override
   void initState() {
@@ -68,6 +69,8 @@ class _FinanceScreenState extends State<FinanceScreen>
           
           // Load business day start hour for this outlet
           _loadBusinessDayStartHour();
+
+          
           
           // Set loading states
           if (mounted) {
@@ -91,6 +94,8 @@ class _FinanceScreenState extends State<FinanceScreen>
       }
     });
   }
+
+  
 
   Future<void> _loadCashDeposit() async {
     final supabaseService = SupabaseService();

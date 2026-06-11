@@ -2,7 +2,7 @@ import 'package:uuid/uuid.dart';
 
 /// Demo Service - Provides mock data for testing without Supabase
 class DemoService {
-  static const uuid = Uuid();
+  static final uuid = Uuid();
 
   // Mock Users
   static final demoUsers = [
@@ -153,7 +153,7 @@ class DemoService {
         'recipient_id': 'user-1',
         'recipient_name': 'Budi Santoso',
         'message': 'Baik, akan saya pesan hari ini. Tunggu update',
-        'created_at': DateTime.now().subtract(Duration(hours: 2.5)).toIso8601String(),
+        'created_at': DateTime.now().subtract(Duration(hours: 2)).toIso8601String(),
         'read_at': DateTime.now().subtract(Duration(hours: 2)).toIso8601String(),
       },
       {
@@ -188,7 +188,7 @@ class DemoService {
         'sender_name': 'Siti Nurhayati',
         'sender_role': 'manager',
         'message': 'Bagus! Berarti penjualan hari ini bagus',
-        'created_at': DateTime.now().subtract(Duration(hours: 3.5)).toIso8601String(),
+        'created_at': DateTime.now().subtract(Duration(hours: 3)).toIso8601String(),
       },
       {
         'id': uuid.v4(),
