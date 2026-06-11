@@ -223,7 +223,7 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.gray[100],
+                color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -316,7 +316,7 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   backgroundColor: Colors.blue,
-                  disabledBackgroundColor: Colors.gray,
+                  disabledBackgroundColor: Colors.grey,
                 ),
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import '../services/supabase_service.dart';
 import '../services/auth_service.dart';
 import '../providers/product_provider.dart';
@@ -638,7 +639,32 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
   }
 
   void _handleLogout() {
-    // Implement logout
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Apakah Anda yakin ingin logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+
+              final auth = context.read<AuthProvider>();
+              await auth.signOut();
+
+              if (mounted) {
+                Navigator.pushReplacementNamed(context, '/login');
+              }
+            },
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _handleProfile() {

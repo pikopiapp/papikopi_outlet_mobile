@@ -99,8 +99,10 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
       
       final salesList = await _supabaseService.getSales(outletId: outletId);
 
-      // Filter by selected date and calculate totals
-      final startDate = DateTime.utc(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
+      // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
+      final selectedLocal = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 4);
+      final startDate = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
       final endDate = startDate.add(const Duration(days: 1));
 
       int totalItems = 0;
@@ -133,16 +135,18 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
           // Count items per barista
           baristaItemCount[sale.baristaId] = (baristaItemCount[sale.baristaId] ?? 0) + sale.items.length;
           
-          // Track payment method breakdown per barista
-          if (sale.totalAmount > 0) {
-            if (sale.paymentMethod.toUpperCase() == 'CASH') {
-              baristaCashRevenue[sale.baristaId] = (baristaCashRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
-            } else if (sale.paymentMethod.toUpperCase() == 'QRIS') {
-              baristaQrisRevenue[sale.baristaId] = (baristaQrisRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
-            }
-          } else {
+          // Track payment method breakdown per barista using paymentMethod field
+          final pm = sale.paymentMethod.toString().toUpperCase();
+          if (pm == 'CASH') {
+            baristaCashRevenue[sale.baristaId] = (baristaCashRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
+          } else if (pm == 'QRIS') {
+            baristaQrisRevenue[sale.baristaId] = (baristaQrisRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
+          } else if (pm == 'GRATIS' || sale.totalAmount <= 0) {
             // Free transaction
             baristaFreeCount[sale.baristaId] = (baristaFreeCount[sale.baristaId] ?? 0) + 1;
+          } else {
+            // Unknown method - treat as cash fallback
+            baristaCashRevenue[sale.baristaId] = (baristaCashRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
           }
         }
       }
@@ -191,12 +195,12 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
         Container(
           color: AppColors.background,
           child: TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(text: 'Penjualan Outlet'),
-              Tab(text: 'Bonus Barista'),
-            ],
-          ),
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Penjualan'),
+                Tab(text: 'Bonus'),
+              ],
+            ),
         ),
         // Tab content
         Expanded(
@@ -822,7 +826,11 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
 
   Map<String, dynamic> _calculateBonusAndMeal(double cashAmount, double qrisAmount, int freeCount) {
     double omset = cashAmount + qrisAmount; // Total omset (excluding free)
-    double mealAllowance = omset >= 300000 ? 34000 : 25000;
+    // If there were no sales, meal allowance should be 0
+    double mealAllowance = 0;
+    if (omset > 0) {
+      mealAllowance = omset >= 300000 ? 34000 : 25000;
+    }
     double bonusAmount = 0.0;
     
     // Check if selected date is a holiday or weekend using holiday_detector utility

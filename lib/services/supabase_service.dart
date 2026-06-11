@@ -3141,8 +3141,25 @@ class SupabaseService {
     }
 
     try {
-      final dateStr = date.toIso8601String().split('T')[0];
-      print('DEBUG: Recording shortfall receipt - outlet=$outletId, barista=$baristaId, amount=$kekuranganUpah, date=$dateStr');
+      // Compute business-day date same as getCashDepositData to keep consistency
+      // Fetch outlet business_day_start_hour and compute businessDayDate
+      final outletData = await _client
+          .from('outlets')
+          .select('business_day_start_hour')
+          .eq('id', outletId)
+          .maybeSingle();
+
+      final businessDayStartHour = (outletData != null) ? (outletData['business_day_start_hour'] as int?) ?? 4 : 4;
+
+      DateTime businessDayDate;
+      if (businessDayStartHour >= 12) {
+        businessDayDate = DateTime(date.year, date.month, date.day);
+      } else {
+        businessDayDate = DateTime(date.year, date.month, date.day + 1);
+      }
+
+      final dateStr = businessDayDate.toIso8601String().split('T')[0];
+      print('DEBUG: Recording shortfall receipt - outlet=$outletId, barista=$baristaId, amount=$kekuranganUpah, inputDate=$date, businessDayStartHour=$businessDayStartHour, businessDayDate=$dateStr');
       
       // Use upsert with onConflict to handle duplicate records (update if exists, insert if not)
       await _client.from('shortfall_receipts').upsert(
@@ -3161,15 +3178,39 @@ class SupabaseService {
       // Update cash_deposit_handovers to mark that shortfall receipt was recorded
       print('DEBUG: About to update cash_deposit_handovers with: outlet_id=$outletId, barista_id=$baristaId, date=$dateStr');
       
-      final updateResponse = await _client
+        final updateResponse = await _client
           .from('cash_deposit_handovers')
           .update({'shortfall_receipt_recorded': true})
           .eq('outlet_id', outletId)
           .eq('barista_id', baristaId)
           .eq('date', dateStr);
-      
+
       print('DEBUG: Updated cash_deposit_handovers response: $updateResponse');
-      print('DEBUG: Updated cash_deposit_handovers shortfall_receipt_recorded flag');
+
+      // If no existing handover row was updated, create a minimal handover record
+      // with status 'verified by barista' so UI can reflect the recorded receipt.
+      // Do NOT overwrite an existing 'approved' status — only insert when none exists.
+      final bool didUpdate = (updateResponse is List && updateResponse.isNotEmpty);
+      if (!didUpdate) {
+        print('DEBUG: No existing handover found, inserting minimal handover record to mark shortfall recorded');
+        await _client.from('cash_deposit_handovers').upsert({
+          'outlet_id': outletId,
+          'barista_id': baristaId,
+          'date': dateStr,
+          'total_omset': 0.0,
+          'cash_amount': 0.0,
+          'qris_amount': 0.0,
+          'bonus': 0.0,
+          'meal_allowance': 0.0,
+          'deposit_amount': 0.0,
+          'shortfall_receipt_recorded': true,
+          'status': 'verified by barista',
+          'submitted_at': DateTime.now().toIso8601String(),
+        }, onConflict: 'outlet_id,barista_id,date');
+        print('DEBUG: Inserted minimal cash_deposit_handovers record to reflect shortfall receipt');
+      } else {
+        print('DEBUG: cash_deposit_handovers updated to mark shortfall receipt recorded');
+      }
       
       return true;
     } catch (e) {
@@ -4745,15 +4786,24 @@ class SupabaseService {
       }
 
       Map<String, String> outletNameMap = {};
+      // Also capture business day start hour per outlet so we can compute the
+      // correct business-day `date` (same logic as `getCashDepositData`).
+      Map<String, int> outletBusinessStartMap = {};
       for (final outlet in outlets) {
-        outletNameMap[outlet['id'] as String] = outlet['name'] as String? ?? 'Outlet Unknown';
+        final oid = outlet['id'] as String;
+        outletNameMap[oid] = outlet['name'] as String? ?? 'Outlet Unknown';
+        outletBusinessStartMap[oid] = (outlet['business_day_start_hour'] as int?) ?? 4;
       }
 
       // Get CASH and QRIS data from sales table for this date
-      final startDate = DateTime.utc(selectedDate.year, selectedDate.month, selectedDate.day);
+      // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
+      // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
+      final selectedLocal = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 4);
+      final startDate = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
       final endDate = startDate.add(const Duration(days: 1));
       final startIso = startDate.toIso8601String();
       final endIso = endDate.toIso8601String();
+      print('DEBUG getAllBaristaPayments - Business day: local=${selectedLocal.toIso8601String()} UTC=$startIso to $endIso');
       
       Map<String, Map<String, dynamic>> baristaDataMap = {}; // baristaId -> {cashAmount, qrisAmount, outletId, freeCount, etc}
       
@@ -4809,69 +4859,77 @@ class SupabaseService {
 
       print('DEBUG getAllBaristaPayments - processed baristas: ${baristaDataMap.length}');
 
-      // Create map of approval status - check cash_deposit_handovers
+      // Create map of approval status - check cash_deposit_handovers per barista+outlet
       // Note: shortfall_receipt_recorded column indicates if barista signed shortfall receipt
       Map<String, String> approvalStatusMap = {}; // baristaId|outletId -> status
       Map<String, String> statusTypeMap = {}; // baristaId|outletId -> type ('shortfall' or 'approved')
       Map<String, Map<String, dynamic>> handoverDetailsMap = {}; // baristaId|outletId -> {handoverStatus, shortfallReceiptRecorded, kekuranganUpah}
 
-      // Get cash deposit handovers (yang verified oleh barista)
-      // Filter by submitted_at (hari ini saja) bukan date (business_day_date bisa berbeda)
-      print('DEBUG getAllBaristaPayments - Query time range: $startIso to $endIso');
-      try {
-        final handovers = await _client
-            .from('cash_deposit_handovers')
-            .select('barista_id, outlet_id, status, shortfall_receipt_recorded, deposit_amount, submitted_at')
-            .gte('submitted_at', startIso)
-            .lt('submitted_at', endIso);
+      // We must compute the business-day `date` the same way `getCashDepositData` does
+      // because outlets may have different `business_day_start_hour`. Query handovers
+      // per barista+outlet using the computed businessDayDate so manager view aligns
+      // with finance/barista.
+      for (final entry in baristaDataMap.entries) {
+        final baristaId = entry.key;
+        final outletId = entry.value['outletId'] as String?;
+        if (baristaId == null || outletId == null) continue;
 
-        print('DEBUG getAllBaristaPayments - cash_deposit_handovers count: ${handovers.length}');
-        if (handovers.isNotEmpty) {
-          print('DEBUG getAllBaristaPayments - Handovers found:');
-          for (final h in handovers) {
-            print('  - Barista: ${h['barista_id']}, Outlet: ${h['outlet_id']}, Status: ${h['status']}, Submitted: ${h['submitted_at']}');
-          }
+        final businessStart = outletBusinessStartMap[outletId] ?? 4;
+
+        // Determine business day date for this outlet
+        DateTime businessDayDate;
+        if (businessStart >= 12) {
+          businessDayDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+        } else {
+          businessDayDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day + 1);
         }
 
-        for (final handover in handovers) {
-          final baristaId = handover['barista_id'] as String?;
-          final outletId = handover['outlet_id'] as String?;
-          final dbStatus = handover['status'] as String?;
-          final shortfallRecorded = handover['shortfall_receipt_recorded'] as bool? ?? false;
-          final depositAmount = (handover['deposit_amount'] as num?)?.toDouble() ?? 0.0;
-          
-          print('DEBUG getAllBaristaPayments - Handover data: status=$dbStatus, shortfallRecorded=$shortfallRecorded, depositAmount=$depositAmount');
-          
-          // Determine if this is a shortfall or deposit based on deposit_amount
-          // If negative, it's a shortfall; if positive/zero, it's a deposit
-          final bool isShortfall = depositAmount < 0;
-          final double kekuranganUpah = isShortfall ? depositAmount.abs() : 0.0;
-          
-          if (baristaId != null && outletId != null && dbStatus != null) {
-            // Map database status to display status:
-            // - 'pending': Belum submit 
-            // - 'verified by barista': Sudah verified oleh barista
-            // - 'approved': Sudah disetujui manager
-            // - 'completed': Selesai
-            // - 'rejected': Ditolak
-            // Gunakan status dari database langsung, tanpa override
-            String displayStatus = dbStatus;
-            
-            // Create key combining barista + outlet for unique match (matches sales grouping)
-            final key = '$baristaId|$outletId';
-            approvalStatusMap[key] = displayStatus;
-            statusTypeMap[key] = isShortfall ? 'shortfall' : 'deposit';
-            
-            // Store handover details for later use
-            handoverDetailsMap[key] = {
-              'handoverStatus': displayStatus,
-              'shortfallReceiptRecorded': shortfallRecorded,
-              'kekuranganUpah': kekuranganUpah,
-            };
+        final queryDateStr = businessDayDate.toIso8601String().split('T')[0];
+        try {
+          final handovers = await _client
+              .from('cash_deposit_handovers')
+              .select('barista_id, outlet_id, status, shortfall_receipt_recorded, deposit_amount, date')
+              .eq('date', queryDateStr)
+              .eq('outlet_id', outletId)
+              .eq('barista_id', baristaId)
+              .order('created_at', ascending: false)
+              .limit(1);
+
+          if (handovers.isNotEmpty) {
+            final handover = handovers[0];
+            var dbStatus = handover['status'] as String?;
+            final shortfallRecorded = handover['shortfall_receipt_recorded'] as bool? ?? false;
+            final depositAmount = (handover['deposit_amount'] as num?)?.toDouble() ?? 0.0;
+
+            // Treat as shortfall when deposit_amount < 0 OR shortfall receipt has been recorded.
+            // Some handovers record a shortfall via `shortfall_receipt_recorded` while
+            // keeping `deposit_amount` at 0.0; classify those as shortfall for the UI.
+            final bool isShortfall = depositAmount < 0 || shortfallRecorded == true;
+            final double kekuranganUpah = depositAmount < 0 ? depositAmount.abs() : 0.0;
+
+            print('DEBUG getAllBaristaPayments - handover found: baristaId=$baristaId, outletId=$outletId, dbStatus=$dbStatus, shortfallRecorded=$shortfallRecorded, depositAmount=$depositAmount');
+
+            // If shortfallRecorded is true but status is still pending, upgrade status to 'verified by barista'
+            if (shortfallRecorded && (dbStatus == null || dbStatus.toLowerCase() == 'pending')) {
+              print('DEBUG getAllBaristaPayments - upgrading status from $dbStatus to verified by barista (shortfall case)');
+              dbStatus = 'verified by barista';
+            }
+
+            if (dbStatus != null) {
+              final key = '$baristaId|$outletId';
+              approvalStatusMap[key] = dbStatus;
+              statusTypeMap[key] = isShortfall ? 'shortfall' : 'deposit';
+              handoverDetailsMap[key] = {
+                'handoverStatus': dbStatus,
+                'shortfallReceiptRecorded': shortfallRecorded,
+                'kekuranganUpah': kekuranganUpah,
+              };
+              print('DEBUG getAllBaristaPayments - stored: key=$key, handoverStatus=$dbStatus, statusType=${isShortfall ? 'shortfall' : 'deposit'}');
+            }
           }
+        } catch (e) {
+          print('DEBUG getAllBaristaPayments - Warning: Could not fetch cash_deposit_handovers for $baristaId|$outletId date=$queryDateStr : $e');
         }
-      } catch (e) {
-        print('DEBUG getAllBaristaPayments - Warning: Could not fetch cash_deposit_handovers: $e');
       }
 
       // Convert to result list with calculated bonus and meal allowance
@@ -4929,6 +4987,8 @@ class SupabaseService {
           final baristaName = userNameMap[baristaId] ?? 'Unknown';
           final outletName = outletId != null ? (outletNameMap[outletId] ?? 'Outlet Unknown') : 'Outlet Unknown';
           
+          print('DEBUG getAllBaristaPayments - building result: baristaId=$baristaId, name=$baristaName, handoverStatus=$handoverStatus');
+          
           result.add({
             'baristaId': baristaId,
             'name': baristaName,
@@ -4968,6 +5028,7 @@ class SupabaseService {
   // Approve barista payment
   Future<bool> approveBaristaPayment({
     required String baristaId,
+    required String outletId,
     required DateTime date,
   }) async {
     if (!_isInitialized) {
@@ -4975,98 +5036,30 @@ class SupabaseService {
     }
 
     try {
-      final dateStr = DateTime(date.year, date.month, date.day).toIso8601String().split('T')[0];
+      // Compute the business-day date for this outlet (same logic as getAllBaristaPayments)
+      final outletRow = await _client.from('outlets').select('business_day_start_hour').eq('id', outletId).maybeSingle();
+      final businessStart = (outletRow?['business_day_start_hour'] as int?) ?? 4;
 
-      print('DEBUG approveBaristaPayment - Starting for barista: $baristaId, date: $dateStr');
-
-      // Check if record exists
-      final existing = await _client
-          .from('cash_deposit_handovers')
-          .select('id')
-          .eq('barista_id', baristaId)
-          .eq('date', dateStr);
-
-      if (existing.isEmpty) {
-        // Create new record with status approved
-        print('DEBUG approveBaristaPayment - Creating new record');
-        
-        // Need to get outlet_id, total_omset, bonus, meal_allowance from sales data
-        final sales = await _client
-            .from('sales')
-            .select('outlet_id, total_amount, payment_method, created_at');
-
-        final startDate = DateTime.utc(date.year, date.month, date.day);
-        final endDate = startDate.add(const Duration(days: 1));
-
-        double cashAmount = 0.0;
-        double qrisAmount = 0.0;
-        String? outletId;
-
-        for (final sale in sales) {
-          try {
-            final createdAt = DateTime.parse(sale['created_at'] as String);
-            if (createdAt.isAfter(startDate) && createdAt.isBefore(endDate)) {
-              final saleBaristaId = sale['barista_id'] as String?;
-              if (saleBaristaId == baristaId) {
-                outletId = sale['outlet_id'] as String?;
-                final totalAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
-                final paymentMethod = (sale['payment_method'] as String?)?.toUpperCase() ?? 'UNKNOWN';
-
-                if (totalAmount > 0) {
-                  if (paymentMethod == 'CASH') {
-                    cashAmount += totalAmount;
-                  } else if (paymentMethod == 'QRIS') {
-                    qrisAmount += totalAmount;
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            print('DEBUG approveBaristaPayment - Error processing sale: $e');
-          }
-        }
-
-        final omset = cashAmount + qrisAmount;
-
-        // Calculate bonus
-        double bonus = 0.0;
-        if (omset <= 200000) {
-          bonus = omset * 0.10;
-        } else if (omset <= 350000) {
-          bonus = (200000 * 0.10) + ((omset - 200000) * 0.12);
-        } else if (omset <= 500000) {
-          bonus = (200000 * 0.10) + (150000 * 0.12) + ((omset - 350000) * 0.15);
-        } else {
-          bonus = (200000 * 0.10) + (150000 * 0.12) + (150000 * 0.15) + ((omset - 500000) * 0.20);
-        }
-
-        double mealAllowance = 0.0;
-        if (omset > 0) {
-          mealAllowance = omset >= 300000 ? 34000 : 25000;
-        }
-
-        await _client.from('cash_deposit_handovers').insert({
-          'barista_id': baristaId,
-          'outlet_id': outletId,
-          'date': dateStr,
-          'total_omset': omset,
-          'bonus': bonus,
-          'meal_allowance': mealAllowance,
-          'status': 'approved',
-        });
-
-        print('DEBUG approveBaristaPayment - Record created successfully');
+      DateTime businessDayDate;
+      if (businessStart >= 12) {
+        businessDayDate = DateTime(date.year, date.month, date.day);
       } else {
-        // Update existing record status to approved
-        print('DEBUG approveBaristaPayment - Updating existing record');
-        await _client
-            .from('cash_deposit_handovers')
-            .update({'status': 'approved'})
-            .eq('barista_id', baristaId)
-            .eq('date', dateStr);
-
-        print('DEBUG approveBaristaPayment - Record updated successfully');
+        businessDayDate = DateTime(date.year, date.month, date.day + 1);
       }
+
+      final queryDateStr = businessDayDate.toIso8601String().split('T')[0];
+      print('DEBUG approveBaristaPayment - Starting for barista: $baristaId, outlet: $outletId, date: $queryDateStr (businessStart=$businessStart)');
+
+      // Update existing record status to approved for the computed business day and outlet
+      print('DEBUG approveBaristaPayment - Updating existing record');
+      await _client
+          .from('cash_deposit_handovers')
+          .update({'status': 'approved'})
+          .eq('barista_id', baristaId)
+          .eq('outlet_id', outletId)
+          .eq('date', queryDateStr);
+
+      print('DEBUG approveBaristaPayment - Record updated successfully');
 
       return true;
     } catch (e) {
