@@ -3263,17 +3263,19 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: const [
-                Expanded(child: Center(child: Text('Min'))),
-                Expanded(child: Center(child: Text('Sen'))),
-                Expanded(child: Center(child: Text('Sel'))),
-                Expanded(child: Center(child: Text('Rab'))),
-                Expanded(child: Center(child: Text('Kam'))),
-                Expanded(child: Center(child: Text('Jum'))),
-                Expanded(child: Center(child: Text('Sab'))),
+                Expanded(child: Center(child: Text('Min', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('Sen', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('Sel', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('Rab', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('Kam', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('Jum', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('Sab', style: TextStyle(fontSize: 12)))),
               ],
             ),
             const SizedBox(height: 8),
-            Expanded(
+            // Fixed height calendar so the holiday description appears directly below
+            SizedBox(
+              height: 300,
               child: GridView.count(
                 crossAxisCount: 7,
                 children: cells,
@@ -3284,10 +3286,95 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
               children: [
                 Container(width: 12, height: 12, color: Colors.red.withOpacity(0.18)),
                 const SizedBox(width: 8),
-                const Text('Hari Libur (dari Database)'),
+                const Text('Hari Libur'),
+                const SizedBox(width: 16),
+                Container(width: 12, height: 12, color: Colors.orange.withOpacity(0.12)),
+                const SizedBox(width: 8),
+                const Text('Weekend (Sabtu/Minggu)'),
               ],
             ),
             const SizedBox(height: 12),
+
+            // Keterangan / daftar hari libur untuk bulan yang ditampilkan
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppColors.altSurface,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Keterangan Hari Libur — ${DateFormat.yMMMM().format(_displayMonth)}',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                  ),
+                  const SizedBox(height: 10),
+                  Builder(builder: (context) {
+                    // Build list of custom holidays for the displayed month
+                    final year = _displayMonth.year;
+                    final month = _displayMonth.month;
+                    final entries = _customHolidays.entries
+                        .map((e) {
+                          try {
+                            final d = DateTime.parse(e.key);
+                            return MapEntry(d, e.value);
+                          } catch (_) {
+                            return null;
+                          }
+                        })
+                        .whereType<MapEntry<DateTime, String>>()
+                        .where((me) => me.key.year == year && me.key.month == month)
+                        .toList()
+                      ..sort((a, b) => a.key.day.compareTo(b.key.day));
+
+                    if (entries.isEmpty) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Tidak ada hari libur terdaftar di database untuk bulan ini.',
+                            style: TextStyle(fontSize: 13, color: Color(0xFF7A8B99)),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'hari libur dan weekend barista mendapat bonus 20% per tier',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accentDark),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Column(
+                      children: entries.map((me) {
+                        final dayLabel = DateFormat('d MMM').format(me.key);
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                  width: 72,
+                                  child: Text(dayLabel, style: const TextStyle(fontWeight: FontWeight.w600))),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                  child: Text(me.value,
+                                      style: const TextStyle(fontSize: 13, color: Color(0xFF485C69)))),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  }),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'hari libur dan weekend barista mendapat bonus 20% per tier',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accentDark),
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
