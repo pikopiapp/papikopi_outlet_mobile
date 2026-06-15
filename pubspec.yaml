@@ -1,5 +1,5 @@
 name: papikopi
-description: "PapiKopi Mobile POS Application for Android"
+description: "PapiApps Outlets Mobile POS Application for Android"
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -44,6 +44,8 @@ dependencies:
   
   # Bluetooth Printer (commented out - needs compatibility fix with Flutter 3.28+)
   # bluetooth_print: ^4.3.0
+  # UUID generator for demo data
+  uuid: ^3.0.6
 
 dev_dependencies:
   flutter_test:

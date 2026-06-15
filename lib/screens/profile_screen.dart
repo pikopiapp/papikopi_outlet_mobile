@@ -262,6 +262,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       const SizedBox(height: 20),
 
+                      // Debug: User ID (selectable for copying)
+                      const Text(
+                        'User ID',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          border: Border.all(color: AppColors.altSurface),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.fingerprint, size: 20, color: AppColors.primary),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: SelectableText(
+                                user.id,
+                                style: const TextStyle(fontSize: 14),
+                                toolbarOptions: ToolbarOptions(copy: true, selectAll: true),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                       // Outlet Section
                       const Text(
                         'Lapak / Outlet',

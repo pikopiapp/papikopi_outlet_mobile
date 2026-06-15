@@ -88,9 +88,9 @@ class TestUtilities {
 
   /// Verify home screen data loads
   static Future<bool> verifyHomeScreenDataLoad(
-    BuildContext context,
+    BuildContext context, {
     Duration timeout = const Duration(seconds: 5),
-  ) async {
+  }) async {
     try {
       await Future.delayed(timeout);
       return true;

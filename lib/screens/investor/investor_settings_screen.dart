@@ -247,13 +247,13 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
                     onTap: () {
                       showAboutDialog(
                         context: context,
-                        applicationName: 'Papikopi Investor',
+                        applicationName: 'PapiApps Outlets',
                         applicationVersion: '1.0.0',
-                        applicationLegalese: '© 2024 Papikopi. All rights reserved.',
+                        applicationLegalese: '© 2024 PapiApps Outlets. All rights reserved.',
                         children: [
                           const SizedBox(height: 16),
                           const Text(
-                            'Papikopi adalah platform manajemen investasi outlet kopi yang memudahkan investor untuk memantau performa dan keuntungan investasi mereka.',
+                            'PapiApps Outlets adalah platform manajemen investasi outlet kopi yang memudahkan investor untuk memantau performa dan keuntungan investasi mereka.',
                           ),
                         ],
                       );

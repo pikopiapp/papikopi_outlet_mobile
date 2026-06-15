@@ -7,8 +7,6 @@ import '../models/outlet.dart';
 import '../models/sale.dart';
 import '../models/stock.dart';
 import '../utils/bonus_calculator.dart';
-import '../utils/holiday_detector.dart';
-
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
   static late final SupabaseClient _client;
@@ -20,6 +18,48 @@ class SupabaseService {
   
   // Local cache for recent transfers (since stock_transfers table has RLS issues)
   static final List<Map<String, dynamic>> _recentTransfers = [];
+  // Cache for custom holidays from 'custom_holidays' table: date -> description
+  static final Map<String, String> _customHolidaysCache = {};
+
+  /// Load custom holidays into the in-memory cache.
+  static Future<void> _loadCustomHolidays() async {
+    if (!_isInitialized) return;
+    try {
+      final res = await _client.from('custom_holidays').select('date,description');
+      if (res is List) {
+        _customHolidaysCache.clear();
+        for (final row in res.cast<Map<String, dynamic>>()) {
+          final date = row['date'] as String?;
+          final desc = row['description'] as String? ?? '';
+          if (date != null) _customHolidaysCache[date] = desc;
+        }
+      }
+    } catch (e) {
+      // ignore errors; cache remains as-is
+    }
+  }
+
+  /// Public method to get custom holidays; can refresh cache when requested.
+  Future<Map<String, String>> getCustomHolidays({bool refresh = false}) async {
+    if (!_isInitialized) return {};
+    if (refresh) await _loadCustomHolidays();
+    return Map<String, String>.from(_customHolidaysCache);
+  }
+
+  /// Synchronous check for holiday that includes custom holidays from DB cache.
+  bool isHolidaySync(DateTime date) {
+    final iso = date.toIso8601String().substring(0, 10);
+    // Treat weekends as holidays as well
+    final isWeekend = date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+    return isWeekend || _customHolidaysCache.containsKey(iso);
+  }
+
+  /// Synchronous description lookup for a custom holiday (from cache).
+  /// Returns null if not present in cache.
+  String? getCustomHolidayDescriptionSync(DateTime date) {
+    final iso = date.toIso8601String().substring(0, 10);
+    return _customHolidaysCache[iso];
+  }
 
   SupabaseService._internal();
 
@@ -61,6 +101,10 @@ class SupabaseService {
         
         _client = Supabase.instance.client;
         _isInitialized = true;
+        // Attempt to load custom holidays cache (best-effort)
+        try {
+          await _loadCustomHolidays();
+        } catch (_) {}
       } on TimeoutException {
         _isInitialized = false;
       }
@@ -151,6 +195,10 @@ class SupabaseService {
       final session = _client.auth.currentSession;
 
       if (sessionUser != null && session != null) {
+        // Debug: print session user id on successful sign-in
+        try {
+          print('DEBUG signIn user id: ${sessionUser.id}');
+        } catch (e) {}
         // Ambil user profile dari tabel untuk isi role/outletId seperti model app.
         final profile = await _client
             .from('users')
@@ -270,7 +318,12 @@ class SupabaseService {
     
     final session = _client.auth.currentSession;
     if (session == null) return null;
-
+    // Debug: print current session user id to help identify logged-in user
+    try {
+      print('DEBUG currentUserId: ${session.user.id}');
+    } catch (e) {
+      // ignore
+    }
     // Create user from session metadata if cache is empty
     final user = user_model.User(
       id: session.user.id,
@@ -292,6 +345,13 @@ class SupabaseService {
 
     final session = _client.auth.currentSession;
     if (session == null) return null;
+
+    // Debug: print current session user id when resolving profile
+    try {
+      print('DEBUG currentUserWithProfileId: ${session.user.id}');
+    } catch (e) {
+      // ignore
+    }
 
     // Baseline user from session
     final baseline = user_model.User(
@@ -2866,7 +2926,7 @@ class SupabaseService {
       // Calculate bonus using tiered system with holiday detection
       // Determine if the date is a holiday (weekend or national holiday)
       final businessDate = date;  // This is the date from the query parameter
-      final isHolidayDate = isHoliday(businessDate);
+      final isHolidayDate = isHolidaySync(businessDate);
       
       // Use the same bonus calculation as in the Revenue tab
       double bonus = 0;
@@ -4779,10 +4839,14 @@ class SupabaseService {
 
       print('DEBUG getAllBaristaPayments - outlets count: ${outlets.length}');
 
-      // Create maps for quick lookup
+      // Create maps for quick lookup (use toString() to avoid type mismatch between
+      // numeric and string IDs coming from the database)
       Map<String, String> userNameMap = {};
       for (final user in users) {
-        userNameMap[user['id'] as String] = user['name'] as String? ?? 'Unknown';
+        final uid = user['id']?.toString();
+        if (uid != null) {
+          userNameMap[uid] = user['name'] as String? ?? 'Unknown';
+        }
       }
 
       Map<String, String> outletNameMap = {};
@@ -4790,9 +4854,11 @@ class SupabaseService {
       // correct business-day `date` (same logic as `getCashDepositData`).
       Map<String, int> outletBusinessStartMap = {};
       for (final outlet in outlets) {
-        final oid = outlet['id'] as String;
-        outletNameMap[oid] = outlet['name'] as String? ?? 'Outlet Unknown';
-        outletBusinessStartMap[oid] = (outlet['business_day_start_hour'] as int?) ?? 4;
+        final oid = outlet['id']?.toString();
+        if (oid != null) {
+          outletNameMap[oid] = outlet['name'] as String? ?? 'Outlet Unknown';
+          outletBusinessStartMap[oid] = (outlet['business_day_start_hour'] as int?) ?? 4;
+        }
       }
 
       // Get CASH and QRIS data from sales table for this date
@@ -4818,8 +4884,9 @@ class SupabaseService {
         
         for (final sale in sales) {
           try {
-            final baristaId = sale['barista_id'] as String?;
-            final outletId = sale['outlet_id'] as String?;
+            // Normalize IDs to String to match keys in user/outlet maps
+            final baristaId = sale['barista_id']?.toString();
+            final outletId = sale['outlet_id']?.toString();
             final totalAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
             final paymentMethod = (sale['payment_method'] as String?)?.toUpperCase() ?? 'UNKNOWN';
             
@@ -4872,7 +4939,7 @@ class SupabaseService {
       for (final entry in baristaDataMap.entries) {
         final baristaId = entry.key;
         final outletId = entry.value['outletId'] as String?;
-        if (baristaId == null || outletId == null) continue;
+        if (outletId == null) continue;
 
         final businessStart = outletBusinessStartMap[outletId] ?? 4;
 
@@ -5276,10 +5343,36 @@ class SupabaseService {
       }
 
       // Check which months have been approved (paid)
-      for (final monthKey in monthlyProfits.keys) {
-        // For now, assume all are pending since investor_profit_handovers table might not exist
-        // In production, this would query the actual table
-        monthlyStatus[monthKey] = 'pending';
+      if (monthlyProfits.isNotEmpty) {
+        try {
+          final monthKeys = monthlyProfits.keys.toList();
+            final handovers = await _client
+              .from('investor_profit_handovers')
+              .select('month_key, status')
+              .eq('investor_id', investorId)
+              .inFilter('month_key', monthKeys);
+
+          if (handovers is List) {
+            for (final h in handovers) {
+              try {
+                final mk = h['month_key'] as String;
+                final st = (h['status'] as String?) ?? 'pending';
+                monthlyStatus[mk] = st;
+              } catch (e) {
+                // ignore malformed row
+              }
+            }
+          }
+        } catch (e) {
+          // If table doesn't exist or query fails, fall back to pending
+          for (final monthKey in monthlyProfits.keys) {
+            monthlyStatus[monthKey] = 'pending';
+          }
+        }
+      } else {
+        for (final monthKey in monthlyProfits.keys) {
+          monthlyStatus[monthKey] = 'pending';
+        }
       }
 
       // Format response
@@ -5359,15 +5452,44 @@ class SupabaseService {
     try {
       print('DEBUG approveInvestorMonthlyProfit - Approving profit for $investorId, month: $monthKey');
 
-      // For now, this is a placeholder since investor_profit_handovers table doesn't exist
-      // In production, you would insert into investor_profit_handovers table
-      // TODO: Create investor_profit_handovers table and implement actual approval logic
-      
-      // Simulated success for now
-      print('DEBUG approveInvestorMonthlyProfit - Profit approved (simulated)');
+      // Determine profit amount for the month by reusing existing calculation
+      final profits = await getInvestorMonthlyProfits(investorId);
+      double profitAmount = 0.0;
+      for (final e in profits) {
+        try {
+          if ((e['monthKey'] as String) == monthKey) {
+            profitAmount = (e['profit'] as num?)?.toDouble() ?? 0.0;
+            break;
+          }
+        } catch (_) {}
+      }
+
+      // Get current approver id from session if available
+      String? approverId;
+      try {
+        final sessionUser = getCurrentUser();
+        approverId = sessionUser?.id;
+      } catch (_) {
+        approverId = null;
+      }
+
+      // Upsert into investor_profit_handovers to mark as approved
+      final now = DateTime.now().toIso8601String();
+      await _client.from('investor_profit_handovers').upsert({
+        'investor_id': investorId,
+        'month_key': monthKey,
+        'profit_amount': profitAmount,
+        'status': 'approved',
+        'approved_by': approverId,
+        'approved_at': now,
+        'submitted_at': now,
+      }, onConflict: 'investor_id,month_key');
+
+      print('DEBUG approveInvestorMonthlyProfit - Profit approved and recorded');
       return true;
     } catch (e) {
       print('Error approving investor monthly profit: $e');
+      // If insertion/query fails (e.g., table doesn't exist), still return false so UI can handle it
       return false;
     }
   }

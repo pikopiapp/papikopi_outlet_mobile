@@ -727,7 +727,7 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
   }
 
   Widget _buildBonusTierInfo() {
-    final bool isHolidayDate = isHoliday(_selectedDate);
+    final bool isHolidayDate = _supabaseService.isHolidaySync(_selectedDate);
     final String holidayDescription = isHolidayDate ? getHolidayDescription(_selectedDate) : '';
     
     return Container(
@@ -835,7 +835,7 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
     
     // Check if selected date is a holiday or weekend using holiday_detector utility
     // isHoliday checks for both weekends and Indonesian national holidays
-    final bool isHolidayDate = isHoliday(_selectedDate);
+    final bool isHolidayDate = _supabaseService.isHolidaySync(_selectedDate);
     
     if (isHolidayDate) {
       // Holiday calculation: 20% for all tiers

@@ -1,4 +1,4 @@
-# 📱 PapiKopi Mobile App - Setup Guide
+# 📱 PapiApps Outlets - Setup Guide
 
 ## ✅ Setup Checklist
 

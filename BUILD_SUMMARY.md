@@ -1,4 +1,4 @@
-# ✅ PapiKopi Mobile App - Build Summary
+# ✅ PapiApps Outlets - Build Summary
 
 **Build Date**: April 2026  
 **Version**: 1.0.0  

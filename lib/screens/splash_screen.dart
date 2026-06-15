@@ -110,18 +110,28 @@ class _SplashScreenState extends State<SplashScreen>
 
                 const SizedBox(height: 40),
 
-                // App name with fade animation
+                // App name with fade animation: 'PapiApps' main, 'Outlets' smaller below
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: Column(
                     children: [
                       const Text(
-                        'PapiKopi Outlets',
+                        'PapiApps',
                         style: TextStyle(
-                          fontSize: 36,
+                          fontSize: 40,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                           letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Outlets',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          letterSpacing: 1.5,
                         ),
                       ),
                       const SizedBox(height: 12),

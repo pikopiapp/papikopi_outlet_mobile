@@ -108,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'PapiKopi',
+                      'PapiApps Outlets',
                       style: Theme.of(context).textTheme.headlineLarge!.copyWith(
                             fontWeight: FontWeight.bold,
                             color: AppColors.primary,

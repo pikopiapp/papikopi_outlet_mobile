@@ -48,7 +48,33 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
         // Karena schema outlets belum memuat phone/whatsapp/isActive, kita set fallback.
         final id = (row['id'] as String?) ?? '';
         final name = (row['name'] as String?) ?? '';
-        final type = (row['type'] as String?)?.toLowerCase() ?? 'gerobak';
+        // Normalize outlet type to canonical values used by the backend
+        String? rawTypeStr = (row['type'] as String?)?.toLowerCase();
+        String normalizeType(dynamic input) {
+          if (input == null) return 'e-trike';
+          if (input is String) {
+            final v = input.trim().toLowerCase();
+            final legacyEtrike = {'gerobak', 'becak_listrik'};
+            final legacyCoffee = {'toko', 'warung', 'cafe', 'retail'};
+            if (v == 'e-trike' || v == 'coffee_stand') return v;
+            if (legacyEtrike.contains(v)) return 'e-trike';
+            if (legacyCoffee.contains(v)) return 'coffee_stand';
+            return v; // unknown string, return as-is (frontend can show it)
+          }
+          if (input is int) {
+            // defensive mapping for legacy numeric codes
+            switch (input) {
+              case 1:
+                return 'e-trike';
+              case 2:
+                return 'coffee_stand';
+              default:
+                return 'e-trike';
+            }
+          }
+          return 'e-trike';
+        }
+        final type = normalizeType(rawTypeStr ?? row['type']);
         final address = (row['address'] as String?) ?? '';
         final createdAtRaw = row['created_at'];
         final updatedAtRaw = row['updated_at'];
@@ -89,6 +115,14 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
 
   @override
   Widget build(BuildContext context) {
+    String displayType(String? type) {
+      if (type == null) return '';
+      final v = type.toLowerCase();
+      if (v == 'e-trike') return 'E-trike';
+      if (v == 'coffee_stand') return 'Coffee Stand';
+      // fallback: replace underscore and titlecase
+      return v.replaceAll('_', ' ').split(' ').map((s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}').join(' ');
+    }
     return Scaffold(
       appBar: PapikopiAppBar(
         onLogout: null,
@@ -203,7 +237,7 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          outlet.type,
+                                          displayType(outlet.type),
                                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                                 color: AppColors.textSecondary,
                                               ),

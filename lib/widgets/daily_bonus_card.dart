@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/bonus_calculator.dart';
 import '../utils/holiday_detector.dart';
+import '../services/supabase_service.dart';
 import 'package:intl/intl.dart';
 
 class DailyBonusCard extends StatelessWidget {
@@ -92,7 +93,7 @@ class DailyBonusCard extends StatelessWidget {
 
     // Determine if today/selected date is a holiday
     final dateToCheck = selectedDate ?? DateTime.now();
-    final isHolidayDate = isHoliday(dateToCheck);
+    final isHolidayDate = SupabaseService().isHolidaySync(dateToCheck);
     
     // Calculate bonus and wage components using the top-level functions
     final bonusData = calculateBonus(omset, isHoliday: isHolidayDate);

@@ -28,8 +28,14 @@ class PapikopiAppBar extends AppBar {
         const SizedBox(width: 8),
         const Expanded(
           child: Text(
-            'Papikopi Outlet',
+            'PapiApps Outlets',
             overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

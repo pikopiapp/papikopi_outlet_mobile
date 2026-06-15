@@ -4,7 +4,7 @@
 
 ### ✅ **Splash Screen - SELESAI**
 - ✅ Native splash screen untuk Android
-- ✅ Logo PapiKopi ditampilkan saat startup
+- ✅ Logo PapiApps Outlets ditampilkan saat startup
 - ✅ Background color brand (#1F4E5F)
 - ✅ Build APK berhasil dengan splash screen
 
@@ -27,7 +27,7 @@ android/app/src/main/res/drawable/launch_background.xml
 
 **Visual:**
 - Background: Solid color `#1F4E5F` (brand)
-- Image: Logo PapiKopi (512x512px)
+- Image: Logo PapiApps Outlets (512x512px)
 - Branding: Logo di bottom
 - Adaptive untuk semua ukuran layar
 
@@ -121,7 +121,7 @@ flutter run -d <device-id>
 ```
 
 Hasilnya:
-1. Splash screen tampil 3 detik dengan logo PapiKopi
+1. Splash screen tampil 3 detik dengan logo PapiApps Outlets
 2. Transisi halus ke app
 3. Icon app muncul di home screen
 
@@ -176,8 +176,8 @@ App Launch
     ↓
 Splash Screen (3 sec)
 ├─ Background: #1F4E5F gradient
-├─ Logo: PapiKopi icon (animated)
-├─ Branding: Text "PapiKopi"
+├─ Logo: PapiApps Outlets icon (animated)
+├─ Branding: Text "PapiApps Outlets"
 └─ Loading indicator
     ↓
 App Home Screen
@@ -185,7 +185,7 @@ App Home Screen
 
 **Home Screen Icon:**
 - Android launcher icon muncul
-- Logo PapiKopi sebagai app icon
+- Logo PapiApps Outlets sebagai app icon
 - Terlihat profesional di home screen
 
 ---

@@ -105,11 +105,12 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                     final transaction = _transactions[index];
                     final itemCountStr = transaction.items.length.toString();
                     // Special tracking for target transaction
-                    return TransactionCard(
-                      key: ValueKey('${transaction.id}-${transaction.totalAmount}-${itemCountStr}-${transaction.isEdited}'), // Include all data in key
-                      transaction: transaction,
-                      onTap: () => _showTransactionDetail(transaction),
-                    );
+                      return TransactionCard(
+                        key: ValueKey('${transaction.id}-${transaction.totalAmount}-${itemCountStr}-${transaction.isEdited}'), // Include all data in key
+                        transaction: transaction,
+                        onTap: () => _showTransactionDetail(transaction),
+                        onDelete: () => _confirmDelete(transaction),
+                      );
                   },
                 ),
     );
@@ -152,36 +153,23 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
 
       // Update sale items - update each existing item with new values
       for (var item in transaction.items) {
-        final itemSubtotal = item.quantity * item.unitPrice;
-        final itemTotalHpp = item.quantity * item.hpp;
-        
-        // 🆕 Check if this is a new item (id is empty string or doesn't exist in original)
-        final isNewItem = item.id.isEmpty || !_transactions.any((t) => 
-          t.id == transaction.id && t.items.any((i) => i.id == item.id)
-        );
-        
+        // Check if this is a new item (id is empty string or doesn't exist in original)
+        final isNewItem = item.id.isEmpty || !_transactions.any((t) =>
+            t.id == transaction.id && t.items.any((i) => i.id == item.id));
+
         if (isNewItem) {
-          // 🆕 INSERT new item
-          
           try {
-            await _supabase.client
-                .from('sale_items')
-                .insert({
-                  'sale_id': item.saleId,
-                  'product_id': item.productId,
-                  'quantity': item.quantity,
-                  'price': item.unitPrice,
-                  'hpp': item.hpp,
-                  'created_at': DateTime.now().toIso8601String(),
-                });
-          } catch (e) {
-          }
+            await _supabase.client.from('sale_items').insert({
+              'sale_id': item.saleId,
+              'product_id': item.productId,
+              'quantity': item.quantity,
+              'price': item.unitPrice,
+              'hpp': item.hpp,
+              'created_at': DateTime.now().toIso8601String(),
+            });
+          } catch (e) {}
         } else {
-          // Update existing item
-          
           try {
-            // Update sale_items with the columns that exist in the table:
-            // id, sale_id, product_id, quantity, price, hpp, created_at
             await _supabase.client
                 .from('sale_items')
                 .update({
@@ -191,8 +179,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                   'hpp': item.hpp,
                 })
                 .eq('id', item.id);
-          } catch (e) {
-          }
+          } catch (e) {}
         }
       }
 
@@ -215,21 +202,53 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
       }
     }
   }
+
+  Future<void> _confirmDelete(Sale transaction) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Pesanan'),
+        content: const Text('Anda yakin ingin menghapus pesanan ini? Tindakan ini tidak dapat dibatalkan.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus')),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteTransaction(transaction);
+    }
+  }
+
+  Future<void> _deleteTransaction(Sale transaction) async {
+    try {
+      await _supabase.client.from('sale_items').delete().eq('sale_id', transaction.id);
+      await _supabase.client.from('sales').delete().eq('id', transaction.id);
+      await _loadTransactions();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Pesanan dihapus')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error menghapus: $e')));
+    }
+  }
 }
 
 class TransactionCard extends StatelessWidget {
   final Sale transaction;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   const TransactionCard({
     super.key,
     required this.transaction,
     required this.onTap,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    final itemCount = transaction.items.length;
+    // fixed width for amount column so items align with top amount
+    const double amountColWidth = 110;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -249,88 +268,112 @@ class TransactionCard extends StatelessWidget {
         ),
         title: Row(
           children: [
+            // Tanggal (kolom 1) - expand to take remaining space so amount sits at right
             Expanded(
               child: Text(
-                'Pesanan #${transaction.id.substring(0, 8)}...',
+                DateFormat('dd MMM yyyy', 'id_ID')
+                    .format(transaction.createdAt.add(const Duration(hours: 7))),
                 style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
-            // 🔧 NEW: Show edited badge
-            if (transaction.isEdited)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.orange[100],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'Edited',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange,
-                  ),
+            // Rupiah (kolom 2) - fixed width column, right aligned
+            SizedBox(
+              width: amountColWidth,
+              child: Container(
+                alignment: Alignment.centerRight,
+                padding: EdgeInsets.zero,
+                child: Text(
+                  NumberFormatter.formatRupiah(transaction.totalAmount),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
+            ),
+            // (Edit/Delete moved to bottom row)
           ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
+            // show time under the date heading
             Text(
-              DateFormat('dd MMM yyyy HH:mm', 'id_ID')
+              DateFormat('HH:mm', 'id_ID')
                   .format(transaction.createdAt.add(const Duration(hours: 7))),
               style: const TextStyle(fontSize: 12),
             ),
-            Text(
-              '$itemCount item • ${transaction.paymentMethod}',
-              style: TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-        trailing: SizedBox(
-          width: 120,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
+            const SizedBox(height: 6),
+            // divider separating header/time from item details (light grey)
+            Divider(color: Colors.grey.shade200, height: 1, thickness: 1),
+            const SizedBox(height: 6),
+            // show each item as a row with left description and right subtotal
+            ...transaction.items.map((it) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: Row(
                   children: [
-                    Text(
-                      NumberFormatter.formatRupiah(transaction.totalAmount),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                        fontSize: 13,
+                    Expanded(
+                      child: Text(
+                        '${it.quantity}x ${it.productName}',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    // 🔧 NEW: Show edited date if edited
-                    if (transaction.isEdited && transaction.editedAt != null)
-                      Text(
-                        DateFormat('dd MMM', 'id_ID').format(transaction.editedAt!.add(const Duration(hours: 7))),
-                        style: const TextStyle(
-                          fontSize: 9,
-                          color: Colors.orange,
+                    SizedBox(
+                      width: amountColWidth,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          NumberFormatter.formatRupiah(it.unitPrice * it.quantity),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              // 🔧 NEW: Edit button
-              Icon(
-                Icons.edit,
-                size: 18,
-                color: AppColors.primary,
-              ),
-            ],
-          ),
+              );
+            }).toList(),
+            const SizedBox(height: 8),
+            // Bottom row: aligned to right with Edit and Delete
+            Row(
+              children: [
+                const Spacer(),
+                SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                    icon: const Icon(Icons.edit, size: 22),
+                    color: AppColors.primary,
+                    onPressed: onTap,
+                    tooltip: 'Edit',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                    icon: const Icon(Icons.delete_forever, size: 22),
+                    color: Colors.red,
+                    onPressed: onDelete,
+                    tooltip: 'Hapus',
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
         isThreeLine: true,
       ),
@@ -521,11 +564,6 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                         });
                       },
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Jumlah',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   const SizedBox(height: 8),
                   Container(

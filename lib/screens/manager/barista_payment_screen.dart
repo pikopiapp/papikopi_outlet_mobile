@@ -98,7 +98,7 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
     double bonusAmount = 0.0;
     
     // Check if selected date is a holiday or weekend
-    final bool isHolidayDate = isHoliday(_selectedDate);
+    final bool isHolidayDate = _supabaseService.isHolidaySync(_selectedDate);
     
     if (isHolidayDate) {
       // Holiday calculation: 20% for all tiers
@@ -144,7 +144,7 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
   }
 
   Widget _buildBonusTierInfo() {
-    final bool isHolidayDate = isHoliday(_selectedDate);
+    final bool isHolidayDate = _supabaseService.isHolidaySync(_selectedDate);
     final String holidayDescription = isHolidayDate ? getHolidayDescription(_selectedDate) : '';
     
     return Container(

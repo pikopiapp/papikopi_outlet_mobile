@@ -4,7 +4,7 @@
 
 ### 1. **Flutter Native Splash Screen** ✓
 - ✅ Konfigurasi splash screen di `pubspec.yaml`
-- ✅ Logo PapiKopi ditampilkan saat app startup
+- ✅ Logo PapiApps Outlets ditampilkan saat app startup
 - ✅ Background color: `#1F4E5F` (warna brand PapiKopi)
 - ✅ Tersedia untuk Android dan iOS
 
@@ -87,7 +87,7 @@ Atau manual:
 
 ### Native Splash (Android):
 - **Color**: `#1F4E5F` (brand color)
-- **Image**: Logo PapiKopi (512x512px recommended)
+- **Image**: Logo PapiApps Outlets (512x512px recommended)
 - **Supported**: Android 5.0+ (API 21+)
 - **Files Modified**:
   - `android/app/src/main/res/drawable/launch_background.xml`
@@ -167,7 +167,7 @@ flutter run -d <device-id>
 
 ## 📸 Visual Preview
 
-- **Logo**: PapiKopi (from assets/logo.png)
+- **Logo**: PapiApps Outlets (from assets/logo.png)
 - **Background**: Dark blue gradient (#1F4E5F)
 - **Animation**: Scale + Fade untuk smooth entry
 - **Branding**: Cocok dengan brand identity PapiKopi

@@ -299,14 +299,14 @@ class DemoService {
   static final demoOutlets = [
     {
       'id': 'outlet-1',
-      'name': 'Papikopi - Pusat',
+      'name': 'PapiApps Outlets - Pusat',
       'location': 'Jl. Merdeka No. 1',
       'phone': '021-1234567',
       'created_at': DateTime.now().subtract(Duration(days: 365)).toIso8601String(),
     },
     {
       'id': 'outlet-2',
-      'name': 'Papikopi - Cabang',
+      'name': 'PapiApps Outlets - Cabang',
       'location': 'Jl. Ahmad Yani No. 5',
       'phone': '021-7654321',
       'created_at': DateTime.now().subtract(Duration(days: 180)).toIso8601String(),
@@ -316,21 +316,17 @@ class DemoService {
   // Mock Staff Data
   static final demoStaff = [
     {
-      'id': 'user-1',
-      'name': 'Budi Santoso',
-      'role': 'barista',
-      'outlet_id': 'outlet-1',
-      'email': 'barista@papikopi.com',
-      'status': 'active',
-      'created_at': DateTime.now().subtract(Duration(days: 90)).toIso8601String(),
+      'id': 'outlet-1',
+      'name': 'PapiApps Outlets - Pusat',
+      'location': 'Jl. Merdeka No. 1',
+      'phone': '021-1234567',
+      'created_at': DateTime.now().subtract(Duration(days: 365)).toIso8601String(),
     },
     {
-      'id': 'user-2',
-      'name': 'Siti Nurhayati',
-      'role': 'manager',
-      'outlet_id': 'outlet-1',
-      'email': 'manager@papikopi.com',
-      'status': 'active',
+      'id': 'outlet-2',
+      'name': 'PapiApps Outlets - Cabang',
+      'location': 'Jl. Ahmad Yani No. 5',
+      'phone': '021-7654321',
       'created_at': DateTime.now().subtract(Duration(days: 180)).toIso8601String(),
     },
   ];

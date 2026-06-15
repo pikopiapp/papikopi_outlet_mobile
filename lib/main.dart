@@ -37,7 +37,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ProductProvider()),
       ],
       child: MaterialApp(
-        title: 'Papikopi Outlet',
+        title: 'PapiApps Outlets',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         home: _InitialScreen(),
@@ -198,7 +198,7 @@ class _InitialScreenState extends State<_InitialScreen>
                   child: Column(
                     children: [
                       const Text(
-                        'PapiKopi Outlets',
+                        'PapiApps Outlets',
                         style: TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.bold,

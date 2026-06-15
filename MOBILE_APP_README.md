@@ -1,8 +1,8 @@
-# PapiKopi Mobile App - Flutter POS Application
+# PapiApps Outlets Mobile App - Flutter POS Application
 
-## 📱 Aplikasi Mobile PapiKopi
+## 📱 Aplikasi Mobile PapiApps Outlets
 
-Aplikasi mobile **Point of Sale (POS)** berbasis Flutter untuk barista di outlet kopi PapiKopi. Dirancang untuk mengelola penjualan dengan cepat dan stabil, dengan dukungan offline.
+Aplikasi mobile **Point of Sale (POS)** berbasis Flutter untuk barista di outlet PapiApps Outlets. Dirancang untuk mengelola penjualan dengan cepat dan stabil, dengan dukungan offline.
 
 ## 🎯 Fitur Utama
 
@@ -391,7 +391,7 @@ Untuk issues atau questions:
 
 ## 📄 License
 
-Private project untuk PapiKopi
+Private project untuk PapiApps Outlets
 
 ---
 

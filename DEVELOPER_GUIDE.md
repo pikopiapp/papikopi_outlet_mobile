@@ -1,4 +1,4 @@
-# 🎓 PapiKopi Mobile - Developer Guide
+# 🎓 PapiApps Outlets - Developer Guide
 
 ## 📖 Architecture Overview
 

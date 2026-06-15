@@ -60,18 +60,27 @@ class _FinanceScreenState extends State<FinanceScreen>
     
     // Get outlet ID from AuthProvider
     // Note: We'll get it in the callback to ensure context is available
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         final authProvider = context.read<AuthProvider>();
         if (authProvider.currentUser != null) {
           _outletId = authProvider.currentUser!.outletId;
           _baristaId = authProvider.currentUser!.id; // 🆕 Cache barista ID
-          
-          // Load business day start hour for this outlet
-          _loadBusinessDayStartHour();
 
-          
-          
+          // Load business day start hour for this outlet and wait for it
+          await _loadBusinessDayStartHour();
+
+          // Adjust _selectedDate so that times before the business day start
+          // are treated as part of the previous business day. For example,
+          // if business day starts at 04:00 and now is 01:22, we want the
+          // finance screen to show the previous calendar day's business day.
+          final now = DateTime.now();
+          if (now.hour < _businessDayStartHour) {
+            _selectedDate = now.subtract(const Duration(days: 1));
+          } else {
+            _selectedDate = now;
+          }
+
           // Set loading states
           if (mounted) {
             setState(() {
@@ -80,8 +89,8 @@ class _FinanceScreenState extends State<FinanceScreen>
               _isLoadingLeaderboard = true;
             });
           }
-          
-          // Load data
+
+          // Load data (now that business day start and selectedDate are correct)
           _loadLeaderboard();
           _loadRevenue();
           _loadCashDeposit();
@@ -1045,6 +1054,8 @@ class _FinanceScreenState extends State<FinanceScreen>
               ),
             ),
             const SizedBox(height: 16),
+
+            // (Calendar button moved below calculator to improve visibility)
             
             // Daily Bonus Card
             DailyBonusCard(
@@ -1071,6 +1082,31 @@ class _FinanceScreenState extends State<FinanceScreen>
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Button: Lihat Kalender Hari Libur & Weekend (moved below calculator for visibility)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const HolidayCalendarScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.calendar_month),
+                label: const Text('Lihat Kalender Hari Libur & Weekend'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: BorderSide(color: AppColors.primary),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -2336,7 +2372,7 @@ class _FinanceScreenState extends State<FinanceScreen>
           final depositStatus = daily['depositStatus'] as String;
           
           // Calculate upah using proper bonus calculator
-          final isHolidayDate = isHoliday(dateTime);
+          final isHolidayDate = SupabaseService().isHolidaySync(dateTime);
           final bonusData = calculateBonus(salesAmount, isHoliday: isHolidayDate);
           final totalBonus = bonusData.totalBonus;
           
@@ -2434,7 +2470,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 final depositStatus = (daily['depositStatus'] as String).toLowerCase();
                 
                 // Calculate upah using proper bonus calculator
-                final isHolidayDate = isHoliday(dateTime);
+                final isHolidayDate = SupabaseService().isHolidaySync(dateTime);
                 final bonusData = calculateBonus(salesAmount, isHoliday: isHolidayDate);
                 final totalBonus = bonusData.totalBonus;
                 
@@ -2672,7 +2708,7 @@ class _FinanceScreenState extends State<FinanceScreen>
     final depositStatus = daily['depositStatus'] as String;
     
     // Calculate upah components
-    final isHolidayDate = isHoliday(dateTime);
+    final isHolidayDate = SupabaseService().isHolidaySync(dateTime);
     final bonusData = calculateBonus(salesAmount, isHoliday: isHolidayDate);
     final totalBonus = bonusData.totalBonus;
     final mealAllowance = salesAmount >= 300000 ? 34000.0 : 25000.0;
@@ -3087,6 +3123,174 @@ class _FinanceScreenState extends State<FinanceScreen>
   void _handleSettings() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const SettingsScreen()),
+    );
+  }
+}
+
+// Simple calendar screen to view weekends and Indonesian national holidays
+class HolidayCalendarScreen extends StatefulWidget {
+  const HolidayCalendarScreen({super.key});
+
+  @override
+  State<HolidayCalendarScreen> createState() => _HolidayCalendarScreenState();
+}
+
+class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
+  late DateTime _displayMonth;
+  Map<String, String> _customHolidays = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _displayMonth = DateTime(now.year, now.month, 1);
+    // Load custom holidays from Supabase (best-effort)
+    getCustomHolidaysFromDb().then((map) {
+      if (mounted) {
+        setState(() {
+          _customHolidays = map;
+        });
+      }
+    });
+  }
+
+  void _prevMonth() {
+    setState(() {
+      _displayMonth = DateTime(_displayMonth.year, _displayMonth.month - 1, 1);
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      _displayMonth = DateTime(_displayMonth.year, _displayMonth.month + 1, 1);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final year = _displayMonth.year;
+    final month = _displayMonth.month;
+
+    final firstWeekday = DateTime(year, month, 1).weekday % 7; // make Sunday=0
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+
+    final cells = List<Widget>.generate(42, (index) {
+      final day = index - firstWeekday + 1;
+      if (day < 1 || day > daysInMonth) {
+        return const SizedBox.shrink();
+      }
+
+      final date = DateTime(year, month, day);
+      final iso = date.toIso8601String().substring(0, 10);
+      final customDesc = _customHolidays[iso];
+      final isWeekend = date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+
+      Color bg = Colors.transparent;
+      if (customDesc != null) bg = Colors.red.withOpacity(0.18);
+      else if (isWeekend) bg = Colors.orange.withOpacity(0.12);
+
+      return GestureDetector(
+        onTap: () {
+          if (customDesc != null) {
+            showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: Text('$day ${DateFormat.MMMM().format(_displayMonth)} $year'),
+                content: Text(customDesc),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+                ],
+              ),
+            );
+            return;
+          }
+          // If not a custom DB holiday, show weekend/local description if applicable
+          if (isWeekend || isHoliday(date)) {
+            final desc = getHolidayDescription(date);
+            if (desc.isNotEmpty) {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: Text('$day ${DateFormat.MMMM().format(_displayMonth)} $year'),
+                  content: Text(desc),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+                  ],
+                ),
+              );
+            }
+          }
+        },
+        child: Container(
+          margin: const EdgeInsets.all(4),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$day',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: customDesc != null ? Colors.red.shade700 : isWeekend ? Colors.orange.shade800 : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Kalender ${DateFormat.yMMMM().format(_displayMonth)}'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(onPressed: _prevMonth, icon: const Icon(Icons.chevron_left)),
+          IconButton(onPressed: _nextMonth, icon: const Icon(Icons.chevron_right)),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Expanded(child: Center(child: Text('Min'))),
+                Expanded(child: Center(child: Text('Sen'))),
+                Expanded(child: Center(child: Text('Sel'))),
+                Expanded(child: Center(child: Text('Rab'))),
+                Expanded(child: Center(child: Text('Kam'))),
+                Expanded(child: Center(child: Text('Jum'))),
+                Expanded(child: Center(child: Text('Sab'))),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 7,
+                children: cells,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(width: 12, height: 12, color: Colors.red.withOpacity(0.18)),
+                const SizedBox(width: 8),
+                const Text('Hari Libur (dari Database)'),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
     );
   }
 }

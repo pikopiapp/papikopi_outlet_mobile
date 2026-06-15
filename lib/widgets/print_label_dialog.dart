@@ -133,8 +133,8 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
       // Note: XP-4601BT doesn't support image printing directly
       // Alternative: Use BarTender integration or print QR as text
 
-      // Line 5: Instagram
-      _addText(bytes, '@papikopi_bdg', size: 1, centered: true);
+      // Line 5: Instagram / branding tag
+      _addText(bytes, '@papiapps_outlets_bdg', size: 1, centered: true);
       _addNewline(bytes);
 
       // Cut paper

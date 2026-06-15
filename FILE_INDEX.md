@@ -1,10 +1,10 @@
-# 🗂️ PapiKopi Mobile App - File Index & Architecture
+# 🗂️ PapiApps Outlets - File Index & Architecture
 
 ## 📊 Project Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  PAPIKOPI MOBILE APP - FLUTTER POS SYSTEM                  │
+│  PAPIAPPS OUTLETS - FLUTTER POS SYSTEM                    │
 │  Version 1.0.0 | Status: Ready for Development             │
 │  Total Files: 17 Dart files | Total Lines: ~1,500+         │
 └─────────────────────────────────────────────────────────────┘

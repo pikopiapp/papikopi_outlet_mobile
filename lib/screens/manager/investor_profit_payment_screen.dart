@@ -69,347 +69,365 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
     final investorName = investorData['name'] as String;
     final investorId = investorData['investorId'] as String;
 
-    showModalBottomSheet(
+    // Keep optimistic status per modal instance
+    final Map<String, String> optimisticStatus = {};
+
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
-        return FutureBuilder<List<Map<String, dynamic>>>(
-          future: _supabaseService.getInvestorMonthlyProfits(investorId),
-          builder: (context, snapshot) {
-            return SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  20,
-                  20,
-                  MediaQuery.of(context).viewInsets.bottom + 20,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header bar
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
+      builder: (modalContext) {
+        return StatefulBuilder(
+          builder: (modalContext, modalSetState) {
+            return FutureBuilder<List<Map<String, dynamic>>>(
+              future: _supabaseService.getInvestorMonthlyProfits(investorId),
+              builder: (context, snapshot) {
+                return SingleChildScrollView(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      20,
+                      20,
+                      MediaQuery.of(context).viewInsets.bottom + 20,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header bar
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                    // Investor Info Card
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.primary),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            investorName,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Pemilik Investor',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Monthly Profits Title
-                    Text(
-                      '📊 Daftar Profit Per Bulan',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Monthly Profits List
-                    if (snapshot.connectionState == ConnectionState.waiting)
-                      const Center(
-                        child: CircularProgressIndicator(),
-                      )
-                    else if (!snapshot.hasData || snapshot.data!.isEmpty)
-                      Center(
-                        child: Padding(
+                        // Investor Info Card
+                        Container(
                           padding: const EdgeInsets.all(16),
-                          child: Text(
-                            'Belum ada data profit',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                            ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.primary),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                investorName,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Pemilik Investor',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      )
-                    else
-                      Container(
-                        constraints: const BoxConstraints(maxHeight: 300),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: snapshot.data!.length,
-                          itemBuilder: (context, index) {
-                            final profit = snapshot.data![index];
-                            final month = profit['month'] as String;
-                            final monthKey = profit['monthKey'] as String;
-                            final profitAmount =
-                                (profit['profit'] as num?)?.toDouble() ?? 0.0;
-                            final status = profit['status'] as String;
-                            final statusColor =
-                                status.toLowerCase() == 'approved'
-                                    ? Colors.green
-                                    : Colors.orange;
-                            
-                            // Get calculation details if available
-                            final totalOmset = (profit['totalOmset'] as num?)?.toDouble() ?? 0.0;
-                            final totalBonus = (profit['totalBonus'] as num?)?.toDouble() ?? 0.0;
-                            final totalShortfall = (profit['totalShortfall'] as num?)?.toDouble() ?? 0.0;
-                            final marginPercentage = (profit['marginPercentage'] as num?)?.toDouble() ?? 0.0;
-                            final isExpanded = _expandedProfitDetails[monthKey] ?? false;
+                        const SizedBox(height: 20),
 
-                            return Column(
-                              children: [
-                                Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: statusColor.withOpacity(0.05),
-                                    border: Border.all(
-                                        color: statusColor.withOpacity(0.3)),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      // Header Row
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
+                        // Monthly Profits Title
+                        Text(
+                          '📊 Daftar Profit Per Bulan',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Monthly Profits List
+                        if (snapshot.connectionState == ConnectionState.waiting)
+                          const Center(child: CircularProgressIndicator())
+                        else if (!snapshot.hasData || snapshot.data!.isEmpty)
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                'Belum ada data profit',
+                                style: TextStyle(color: AppColors.textSecondary),
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 300),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: snapshot.data!.length,
+                              itemBuilder: (ctx, index) {
+                                final profit = snapshot.data![index];
+                                final month = profit['month'] as String;
+                                final monthKey = profit['monthKey'] as String;
+                                final profitAmount =
+                                    (profit['profit'] as num?)?.toDouble() ?? 0.0;
+                                final rawStatus = profit['status'] as String;
+                                final status =
+                                    (optimisticStatus[monthKey] ?? rawStatus)
+                                        .toLowerCase();
+                                final statusColor =
+                                    status == 'approved' ? Colors.green : Colors.orange;
+
+                                final totalOmset =
+                                    (profit['totalOmset'] as num?)?.toDouble() ?? 0.0;
+                                final totalBonus =
+                                    (profit['totalBonus'] as num?)?.toDouble() ?? 0.0;
+                                final totalShortfall =
+                                    (profit['totalShortfall'] as num?)?.toDouble() ?? 0.0;
+                                final marginPercentage =
+                                    (profit['marginPercentage'] as num?)?.toDouble() ?? 0.0;
+                                final isExpanded =
+                                    _expandedProfitDetails[monthKey] ?? false;
+
+                                return Column(
+                                  children: [
+                                    Container(
+                                      margin: const EdgeInsets.only(bottom: 10),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withOpacity(0.05),
+                                        border: Border.all(
+                                            color: statusColor.withOpacity(0.3)),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Column(
                                         children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  month,
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  'Rp ${formatRupiah(profitAmount)}',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: AppColors.primary,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
                                             children: [
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 4,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: statusColor.withOpacity(0.2),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  status.toLowerCase() == 'approved'
-                                                      ? 'Dibayar'
-                                                      : 'Pending',
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    color: statusColor,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      month,
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      'Rp ${formatRupiah(profitAmount)}',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: AppColors.primary,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                              const SizedBox(height: 4),
-                                              GestureDetector(
-                                                onTap:
-                                                    status.toLowerCase() == 'pending'
-                                                        ? () =>
-                                                            _approveMonthlyProfit(
-                                                              investorId,
-                                                              monthKey,
-                                                              investorName,
-                                                            )
-                                                        : null,
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: status.toLowerCase() ==
-                                                            'pending'
-                                                        ? Colors.blue
-                                                        : Colors.grey,
-                                                    borderRadius:
-                                                        BorderRadius.circular(6),
-                                                  ),
-                                                  child: Text(
-                                                    status.toLowerCase() == 'pending'
-                                                        ? 'Bayar'
-                                                        : 'Dibayar',
-                                                    style: const TextStyle(
-                                                      fontSize: 10,
-                                                      color: Colors.white,
-                                                      fontWeight: FontWeight.bold,
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: statusColor.withOpacity(0.2),
+                                                      borderRadius:
+                                                          BorderRadius.circular(6),
+                                                    ),
+                                                    child: Text(
+                                                      status == 'approved' ? 'Dibayar' : 'Pending',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: statusColor,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
+                                                  const SizedBox(height: 4),
+                                                  GestureDetector(
+                                                    onTap: status == 'pending'
+                                                        ? () async {
+                                                            modalSetState(() {
+                                                              optimisticStatus[monthKey] = 'approved';
+                                                            });
+
+                                                            final success = await _supabaseService
+                                                                .approveInvestorMonthlyProfit(
+                                                                    investorId, monthKey);
+
+                                                            if (mounted) {
+                                                              if (success) {
+                                                                ScaffoldMessenger.of(context)
+                                                                    .showSnackBar(SnackBar(
+                                                                  content: Text(
+                                                                      '✅ Pembayaran profit $monthKey untuk $investorName berhasil'),
+                                                                  backgroundColor: Colors.green,
+                                                                ));
+                                                              } else {
+                                                                modalSetState(() {
+                                                                  optimisticStatus.remove(monthKey);
+                                                                });
+                                                                ScaffoldMessenger.of(context)
+                                                                    .showSnackBar(const SnackBar(
+                                                                  content: Text('❌ Gagal memproses pembayaran'),
+                                                                  backgroundColor: Colors.red,
+                                                                ));
+                                                              }
+                                                            }
+                                                          }
+                                                        : null,
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: status == 'pending' ? Colors.blue : Colors.grey,
+                                                        borderRadius: BorderRadius.circular(6),
+                                                      ),
+                                                      child: Text(
+                                                        status == 'pending' ? 'Bayar' : 'Dibayar',
+                                                        style: const TextStyle(
+                                                          fontSize: 10,
+                                                          color: Colors.white,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ],
                                           ),
+
+                                          if (totalOmset > 0)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 8),
+                                              child: GestureDetector(
+                                                onTap: () {
+                                                  setState(() {
+                                                    _expandedProfitDetails[monthKey] = !isExpanded;
+                                                  });
+                                                },
+                                                child: Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      isExpanded ? 'Sembunyikan Detail' : 'Tampilkan Detail',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: AppColors.primary,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Icon(
+                                                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                                                      size: 16,
+                                                      color: AppColors.primary,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
                                         ],
                                       ),
-                                      
-                                      // Expand Details Button
-                                      if (totalOmset > 0)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 8),
-                                          child: GestureDetector(
-                                            onTap: () {
-                                              setState(() {
-                                                _expandedProfitDetails[monthKey] = !isExpanded;
-                                              });
-                                            },
-                                            child: Row(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  isExpanded ? 'Sembunyikan Detail' : 'Tampilkan Detail',
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: AppColors.primary,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Icon(
-                                                  isExpanded ? Icons.expand_less : Icons.expand_more,
-                                                  size: 16,
-                                                  color: AppColors.primary,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                
-                                // Expandable Detail Section
-                                if (isExpanded && totalOmset > 0)
-                                  Container(
-                                    margin: const EdgeInsets.only(bottom: 10),
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade50,
-                                      border: Border.all(color: Colors.grey.shade300),
-                                      borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Rincian Perhitungan:',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11,
-                                            color: AppColors.textPrimary,
-                                          ),
+
+                                    if (isExpanded && totalOmset > 0)
+                                      Container(
+                                        margin: const EdgeInsets.only(bottom: 10),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade50,
+                                          border: Border.all(color: Colors.grey.shade300),
+                                          borderRadius: BorderRadius.circular(8),
                                         ),
-                                        const SizedBox(height: 8),
-                                        _buildDetailLine(
-                                          'Total Omset Toko',
-                                          'Rp ${formatRupiah(totalOmset)}',
-                                          Colors.black,
-                                        ),
-                                        const SizedBox(height: 6),
-                                        _buildDetailLine(
-                                          'Bonus/Bagi Hasil',
-                                          '-Rp ${formatRupiah(totalBonus)}',
-                                          Colors.red,
-                                        ),
-                                        const SizedBox(height: 6),
-                                        if (totalShortfall > 0)
-                                          ...[
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Rincian Perhitungan:',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 11,
+                                                color: AppColors.textPrimary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
                                             _buildDetailLine(
-                                              'Kekurangan Upah',
-                                              '-Rp ${formatRupiah(totalShortfall)}',
-                                              Colors.orange,
+                                              'Total Omset Toko',
+                                              'Rp ${formatRupiah(totalOmset)}',
+                                              Colors.black,
                                             ),
                                             const SizedBox(height: 6),
+                                            _buildDetailLine(
+                                              'Bonus/Bagi Hasil',
+                                              '-Rp ${formatRupiah(totalBonus)}',
+                                              Colors.red,
+                                            ),
+                                            const SizedBox(height: 6),
+                                            if (totalShortfall > 0) ...[
+                                              _buildDetailLine(
+                                                'Kekurangan Upah',
+                                                '-Rp ${formatRupiah(totalShortfall)}',
+                                                Colors.orange,
+                                              ),
+                                              const SizedBox(height: 6),
+                                            ],
+                                            _buildDetailLine(
+                                              'Net Profit Toko',
+                                              'Rp ${formatRupiah(totalOmset - totalBonus - totalShortfall)}',
+                                              Colors.green,
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(vertical: 6),
+                                              decoration: BoxDecoration(
+                                                border: Border(top: BorderSide(color: Colors.grey.shade300)),
+                                              ),
+                                              child: _buildDetailLine(
+                                                'Margin Investor ($marginPercentage%)',
+                                                'Rp ${formatRupiah(profitAmount)}',
+                                                AppColors.primary,
+                                              ),
+                                            ),
                                           ],
-                                        _buildDetailLine(
-                                          'Net Profit Toko',
-                                          'Rp ${formatRupiah(totalOmset - totalBonus - totalShortfall)}',
-                                          Colors.green,
                                         ),
-                                        const SizedBox(height: 10),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 6),
-                                          decoration: BoxDecoration(
-                                            border: Border(top: BorderSide(color: Colors.grey.shade300)),
-                                          ),
-                                          child: _buildDetailLine(
-                                            'Margin Investor ($marginPercentage%)',
-                                            'Rp ${formatRupiah(profitAmount)}',
-                                            AppColors.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 20),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
 
-                    // Close Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Tutup'),
-                      ),
+                        const SizedBox(height: 20),
+
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Tutup'),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             );
           },
         );
