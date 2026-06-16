@@ -3334,12 +3334,12 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: const [
                           Text(
-                            'Tidak ada hari libur terdaftar di database untuk bulan ini.',
+                            'Tidak ada hari libur terdaftar untuk bulan ini.',
                             style: TextStyle(fontSize: 13, color: Color(0xFF7A8B99)),
                           ),
                           SizedBox(height: 8),
                           Text(
-                            'hari libur dan weekend barista mendapat bonus 20% per tier',
+                            'Hari libur dan weekend barista mendapat bonus 20% per tier',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accentDark),
                           ),
                         ],

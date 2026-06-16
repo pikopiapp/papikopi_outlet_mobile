@@ -20,6 +20,10 @@ void main() async {
   
   // Initialize services
   await SupabaseService().initialize();
+  // Force reload custom holidays cache so `isHolidaySync` works immediately
+  try {
+    await SupabaseService().getCustomHolidays(refresh: true);
+  } catch (_) {}
   await AuthService().initialize();
   
   runApp(const MyApp());

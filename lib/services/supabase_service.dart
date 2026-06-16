@@ -29,9 +29,19 @@ class SupabaseService {
       if (res is List) {
         _customHolidaysCache.clear();
         for (final row in res.cast<Map<String, dynamic>>()) {
-          final date = row['date'] as String?;
+          final rawDate = row['date'];
+          String? dateIso;
+          if (rawDate is String) {
+            dateIso = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
+          } else if (rawDate is DateTime) {
+            dateIso = rawDate.toIso8601String().substring(0, 10);
+          } else if (rawDate != null) {
+            final s = rawDate.toString();
+            dateIso = s.length >= 10 ? s.substring(0, 10) : s;
+          }
+
           final desc = row['description'] as String? ?? '';
-          if (date != null) _customHolidaysCache[date] = desc;
+          if (dateIso != null) _customHolidaysCache[dateIso] = desc;
         }
       }
     } catch (e) {
