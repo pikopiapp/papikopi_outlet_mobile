@@ -11,12 +11,12 @@ class CartProvider extends ChangeNotifier {
   double get totalHpp => _items.fold(0, (sum, item) => sum + item.totalHpp);
   double get totalProfit => totalAmount - totalHpp;
   int get itemCount => _items.length;
-  int get totalQuantity =>
-      _items.fold(0, (sum, item) => sum + item.quantity);
+  int get totalQuantity => _items.fold(0, (sum, item) => sum + item.quantity);
 
   void addItem(Product product, {int quantity = 1}) {
-    final existingIndex =
-        _items.indexWhere((item) => item.product.id == product.id);
+    final existingIndex = _items.indexWhere(
+      (item) => item.product.id == product.id,
+    );
 
     if (existingIndex >= 0) {
       _items[existingIndex] = _items[existingIndex].copyWith(

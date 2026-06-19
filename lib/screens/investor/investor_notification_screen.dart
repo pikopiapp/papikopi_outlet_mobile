@@ -32,10 +32,7 @@ class _InvestorNotificationScreenState
   }
 
   Future<List<Map<String, dynamic>>> _fetchNotifications(String outletId) {
-    return _supabaseService.getRecentTransactions(
-      outletId: outletId,
-      limit: 5,
-    );
+    return _supabaseService.getRecentTransactions(outletId: outletId, limit: 5);
   }
 
   void _showAnnouncementDetail(Map<String, dynamic> announcement) {
@@ -83,24 +80,12 @@ class _InvestorNotificationScreenState
               const SizedBox(height: 8),
               Text(
                 createdAt,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 16),
-              Container(
-                height: 1,
-                color: Colors.grey[300],
-              ),
+              Container(height: 1, color: Colors.grey[300]),
               const SizedBox(height: 16),
-              Text(
-                content,
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1.6,
-                ),
-              ),
+              Text(content, style: const TextStyle(fontSize: 14, height: 1.6)),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -143,13 +128,15 @@ class _InvestorNotificationScreenState
                     _PillButton(
                       active: _selectedTab == 'transactions',
                       label: '💳 Transaksi',
-                      onTap: () => setState(() => _selectedTab = 'transactions'),
+                      onTap: () =>
+                          setState(() => _selectedTab = 'transactions'),
                     ),
                     const SizedBox(width: 8),
                     _PillButton(
                       active: _selectedTab == 'announcements',
                       label: '📢 Pengumuman',
-                      onTap: () => setState(() => _selectedTab = 'announcements'),
+                      onTap: () =>
+                          setState(() => _selectedTab = 'announcements'),
                     ),
                     const SizedBox(width: 8),
                     _PillButton(
@@ -199,8 +186,9 @@ class _InvestorNotificationScreenState
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const SizedBox(
-                  height: 160,
-                  child: Center(child: CircularProgressIndicator()));
+                height: 160,
+                child: Center(child: CircularProgressIndicator()),
+              );
             }
             if (snapshot.hasError) {
               return _InfoBox(
@@ -229,8 +217,7 @@ class _InvestorNotificationScreenState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: items.map((t) {
                   final id = t['id']?.toString() ?? '';
-                  final total =
-                      (t['total_amount'] as num?)?.toDouble() ?? 0.0;
+                  final total = (t['total_amount'] as num?)?.toDouble() ?? 0.0;
                   final payment = t['payment_method']?.toString() ?? '';
                   final createdAt = t['created_at']?.toString() ?? '';
 
@@ -342,9 +329,8 @@ class _InvestorNotificationScreenState
                           Expanded(
                             child: Text(
                               createdAt,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.grey,
-                              ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: Colors.grey),
                             ),
                           ),
                           TextButton.icon(
@@ -432,7 +418,8 @@ class _InvestorNotificationScreenState
               final index = entry.key;
               final message = entry.value;
 
-              final senderName = message['sender_name']?.toString() ?? 'Unknown';
+              final senderName =
+                  message['sender_name']?.toString() ?? 'Unknown';
               final content = message['message']?.toString() ?? '';
               final createdAt = message['created_at']?.toString() ?? '';
 
@@ -451,24 +438,18 @@ class _InvestorNotificationScreenState
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      content,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    Text(content, style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 4),
                     Text(
                       createdAt,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                     ),
                     if (index < messages.length - 1)
                       Padding(
                         padding: const EdgeInsets.only(top: 12),
-                        child: Divider(
-                          height: 1,
-                          color: AppColors.altSurface,
-                        ),
+                        child: Divider(height: 1, color: AppColors.altSurface),
                       ),
                   ],
                 ),
@@ -500,10 +481,14 @@ class _PillButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? AppColors.primary.withOpacity(0.14) : AppColors.surface,
+          color: active
+              ? AppColors.primary.withValues(alpha: 0.14)
+              : AppColors.surface,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: active ? AppColors.primary.withOpacity(0.55) : AppColors.altSurface,
+            color: active
+                ? AppColors.primary.withValues(alpha: 0.55)
+                : AppColors.altSurface,
           ),
         ),
         child: Text(
@@ -539,9 +524,9 @@ class _InfoBox extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Text(value),

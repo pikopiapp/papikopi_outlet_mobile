@@ -34,9 +34,7 @@ class _MoveStockDialogState extends State<MoveStockDialog> {
 
   void _loadOutlets() async {
     try {
-      final response = await supabaseService.client
-          .from('outlets')
-          .select();
+      final response = await supabaseService.client.from('outlets').select();
       setState(() {
         _outlets = response;
       });
@@ -105,9 +103,9 @@ class _MoveStockDialogState extends State<MoveStockDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       setState(() => _isLoading = false);
@@ -177,9 +175,9 @@ class _MoveStockDialogState extends State<MoveStockDialog> {
                         trailing: ElevatedButton.icon(
                           onPressed: stock.quantity > 0
                               ? () => _addMoveItem(
-                                    stock.ingredientId,
-                                    stock.ingredientName,
-                                  )
+                                  stock.ingredientId,
+                                  stock.ingredientName,
+                                )
                               : null,
                           icon: const Icon(Icons.add),
                           label: const Text('Tambah'),
@@ -207,7 +205,7 @@ class _MoveStockDialogState extends State<MoveStockDialog> {
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.accentLight.withOpacity(0.2),
+                          color: AppColors.accentLight.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Row(
@@ -218,7 +216,9 @@ class _MoveStockDialogState extends State<MoveStockDialog> {
                                 children: [
                                   Text(
                                     item['ingredient_name'],
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -271,7 +271,9 @@ class _MoveStockDialogState extends State<MoveStockDialog> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : const Text('Kirim Pindah Stok'),

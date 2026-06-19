@@ -45,7 +45,7 @@ class QRScannerDialog extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-            
+
             // Instructions
             Container(
               padding: const EdgeInsets.all(12),
@@ -56,10 +56,7 @@ class QRScannerDialog extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, 
-                    size: 20, 
-                    color: AppColors.primary
-                  ),
+                  Icon(Icons.info_outline, size: 20, color: AppColors.primary),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -74,7 +71,7 @@ class QRScannerDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Scan with Camera Button
             SizedBox(
               width: double.infinity,
@@ -88,7 +85,7 @@ class QRScannerDialog extends StatelessWidget {
                       builder: (context) => const QRCameraScreen(),
                     ),
                   );
-                  
+
                   if (scannedCode != null && scannedCode.isNotEmpty) {
                     if (context.mounted) {
                       Navigator.pop(context, scannedCode);
@@ -98,7 +95,11 @@ class QRScannerDialog extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                 ),
-                icon: const Icon(Icons.camera_alt, color: Colors.white, size: 24),
+                icon: const Icon(
+                  Icons.camera_alt,
+                  color: Colors.white,
+                  size: 24,
+                ),
                 label: const Text(
                   'Buka Kamera',
                   style: TextStyle(
@@ -110,7 +111,7 @@ class QRScannerDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Cancel Button
             SizedBox(
               width: double.infinity,

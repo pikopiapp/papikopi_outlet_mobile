@@ -7,7 +7,7 @@ import 'checkout_modal.dart';
 
 class CartSummary extends StatelessWidget {
   final TabController? tabController;
-  
+
   const CartSummary({super.key, this.tabController});
 
   @override
@@ -95,7 +95,9 @@ class CartSummary extends StatelessWidget {
                           },
                           onQuantityChanged: (quantity) {
                             cartProvider.updateQuantity(
-                                item.product.id, quantity);
+                              item.product.id,
+                              quantity,
+                            );
                           },
                         );
                       },
@@ -106,9 +108,7 @@ class CartSummary extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
                 color: AppColors.background,
-                border: Border(
-                  top: BorderSide(color: AppColors.altSurface),
-                ),
+                border: Border(top: BorderSide(color: AppColors.altSurface)),
               ),
               child: Column(
                 children: [
@@ -142,9 +142,8 @@ class CartSummary extends StatelessWidget {
                     children: [
                       Text(
                         'Total',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       Text(
                         NumberFormatter.formatRupiah(cartProvider.totalAmount),
@@ -168,9 +167,8 @@ class CartSummary extends StatelessWidget {
                               // 🔧 Show Checkout modal dialog
                               showDialog(
                                 context: context,
-                                builder: (context) => CheckoutModal(
-                                  tabController: tabController,
-                                ),
+                                builder: (context) =>
+                                    CheckoutModal(tabController: tabController),
                               );
                             },
                       style: ElevatedButton.styleFrom(
@@ -251,8 +249,9 @@ class _CartItemWidgetState extends State<CartItemWidget> {
   @override
   void initState() {
     super.initState();
-    _quantityController =
-        TextEditingController(text: widget.item.quantity.toString());
+    _quantityController = TextEditingController(
+      text: widget.item.quantity.toString(),
+    );
   }
 
   @override
@@ -358,8 +357,9 @@ class _CartItemWidgetState extends State<CartItemWidget> {
                     children: [
                       GestureDetector(
                         onTap: widget.item.quantity > 1
-                            ? () =>
-                                widget.onQuantityChanged(widget.item.quantity - 1)
+                            ? () => widget.onQuantityChanged(
+                                widget.item.quantity - 1,
+                              )
                             : null,
                         child: Icon(
                           Icons.remove_circle_outline,
@@ -433,9 +433,7 @@ class _CartItemWidgetState extends State<CartItemWidget> {
                     onPressed: widget.onRemove,
                     icon: const Icon(Icons.delete_outline, size: 16),
                     label: const Text('Hapus'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.red,
-                    ),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
                   ),
                 ],
               ),

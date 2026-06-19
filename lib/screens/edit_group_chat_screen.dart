@@ -9,12 +9,12 @@ class EditGroupChatScreen extends StatefulWidget {
   final Function() onGroupUpdated;
 
   const EditGroupChatScreen({
-    Key? key,
+    super.key,
     required this.groupId,
     required this.groupName,
     this.groupDescription,
     required this.onGroupUpdated,
-  }) : super(key: key);
+  });
 
   @override
   State<EditGroupChatScreen> createState() => _EditGroupChatScreenState();
@@ -35,7 +35,9 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
     super.initState();
     supabaseService = SupabaseService();
     nameController = TextEditingController(text: widget.groupName);
-    descriptionController = TextEditingController(text: widget.groupDescription ?? '');
+    descriptionController = TextEditingController(
+      text: widget.groupDescription ?? '',
+    );
     _loadData();
   }
 
@@ -56,15 +58,17 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
           .eq('group_id', widget.groupId);
 
       groupMembers = List<Map<String, dynamic>>.from(membersResponse);
-      selectedMemberIds = Set.from(groupMembers.map((m) => m['user_id'] as String));
+      selectedMemberIds = Set.from(
+        groupMembers.map((m) => m['user_id'] as String),
+      );
 
       setState(() => isLoading = false);
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -85,9 +89,9 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
     }
 
     if (selectedMemberIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih minimal 1 anggota')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Pilih minimal 1 anggota')));
       return;
     }
 
@@ -104,7 +108,9 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
           .eq('id', widget.groupId);
 
       // Get current members
-      final currentMemberIds = Set.from(groupMembers.map((m) => m['user_id'] as String));
+      final currentMemberIds = Set.from(
+        groupMembers.map((m) => m['user_id'] as String),
+      );
 
       // Find members to remove
       final membersToRemove = currentMemberIds.difference(selectedMemberIds);
@@ -117,7 +123,7 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
         try {
           await supabaseService.removeGroupMember(widget.groupId, userId);
         } catch (e) {
-          print('Error removing member $userId: $e');
+          debugPrint('Error removing member $userId: $e');
         }
       }
 
@@ -126,7 +132,7 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
         try {
           await supabaseService.addGroupMember(widget.groupId, userId);
         } catch (e) {
-          print('Error adding member $userId: $e');
+          debugPrint('Error adding member $userId: $e');
         }
       }
 
@@ -140,9 +146,9 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       setState(() => isLoading = false);
@@ -154,10 +160,7 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primary,
-        title: const Text(
-          'Edit Group',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Edit Group', style: TextStyle(color: Colors.white)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
@@ -166,7 +169,12 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 150, top: 16, left: 16, right: 16),
+              padding: const EdgeInsets.only(
+                bottom: 150,
+                top: 16,
+                left: 16,
+                right: 16,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -179,7 +187,10 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -193,7 +204,10 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -227,7 +241,9 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
                             itemBuilder: (context, index) {
                               final user = allUsers[index];
                               final userId = user['id'] as String;
-                              final isSelected = selectedMemberIds.contains(userId);
+                              final isSelected = selectedMemberIds.contains(
+                                userId,
+                              );
                               return CheckboxListTile(
                                 value: isSelected,
                                 onChanged: (value) {
@@ -239,9 +255,12 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
                                     }
                                   });
                                 },
-                                title: Text(user['name'] ?? user['email'] ?? 'Unknown'),
+                                title: Text(
+                                  user['name'] ?? user['email'] ?? 'Unknown',
+                                ),
                                 subtitle: Text(user['email'] ?? ''),
-                                controlAffinity: ListTileControlAffinity.leading,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
                               );
                             },
                           ),
@@ -249,10 +268,7 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
                   const SizedBox(height: 16),
                   Text(
                     '${selectedMemberIds.length} anggota dipilih',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
@@ -269,7 +285,9 @@ class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
                               width: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             )
                           : const Text(

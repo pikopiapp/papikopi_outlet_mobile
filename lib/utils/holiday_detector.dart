@@ -1,7 +1,8 @@
 import '../services/supabase_service.dart';
 
 // Weekend helper
-bool _isWeekend(DateTime date) => date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+bool _isWeekend(DateTime date) =>
+    date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
 
 /// Holiday detection that relies only on the Supabase `custom_holidays` cache.
 ///
@@ -22,7 +23,9 @@ String getHolidayDescription(DateTime date) {
 }
 
 /// Async: get custom holidays map from DB (refresh optional)
-Future<Map<String, String>> getCustomHolidaysFromDb({bool refresh = false}) async {
+Future<Map<String, String>> getCustomHolidaysFromDb({
+  bool refresh = false,
+}) async {
   try {
     final svc = SupabaseService();
     return await svc.getCustomHolidays(refresh: refresh);

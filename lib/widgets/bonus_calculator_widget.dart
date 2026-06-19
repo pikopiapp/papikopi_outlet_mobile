@@ -8,10 +8,10 @@ class BonusCalculatorWidget extends StatefulWidget {
   final bool showBreakdown;
 
   const BonusCalculatorWidget({
-    Key? key,
+    super.key,
     this.onCalculate,
     this.showBreakdown = true,
-  }) : super(key: key);
+  });
 
   @override
   State<BonusCalculatorWidget> createState() => _BonusCalculatorWidgetState();
@@ -21,11 +21,6 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
   final TextEditingController _omsetController = TextEditingController();
   bool _isHoliday = false;
   BonusCalculationResult? _result;
-  final NumberFormat _currencyFormat = NumberFormat.currency(
-    locale: 'id_ID',
-    symbol: 'IDR ',
-    decimalDigits: 0,
-  );
 
   @override
   void dispose() {
@@ -128,7 +123,7 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
                         });
                       },
                       contentPadding: EdgeInsets.zero,
-                      activeColor: Colors.green,
+                      fillColor: WidgetStatePropertyAll(Colors.green),
                     ),
                     if (_isHoliday)
                       Container(
@@ -141,10 +136,7 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
                         ),
                         child: const Text(
                           '🎉 Mode hari libur aktif: Semua tier mendapatkan bonus 20% (weekend atau hari libur nasional)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.green,
-                          ),
+                          style: TextStyle(fontSize: 12, color: Colors.green),
                         ),
                       ),
                   ],
@@ -186,10 +178,7 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: const Text(
-                      'Reset',
-                      style: TextStyle(fontSize: 16),
-                    ),
+                    child: const Text('Reset', style: TextStyle(fontSize: 16)),
                   ),
                 ),
               ],
@@ -250,9 +239,11 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
                     ),
                     const SizedBox(height: 12),
                     (() {
-                      final mealAllowance = _result!.omset >= 300000 ? 34000.0 : 25000.0;
+                      final mealAllowance = _result!.omset >= 300000
+                          ? 34000.0
+                          : 25000.0;
                       final totalWage = _result!.totalBonus + mealAllowance;
-                      
+
                       return Column(
                         children: [
                           Row(
@@ -297,10 +288,7 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          Divider(
-                            color: Colors.green.shade200,
-                            thickness: 1,
-                          ),
+                          Divider(color: Colors.green.shade200, thickness: 1),
                           const SizedBox(height: 12),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -446,7 +434,7 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
-        border: Border.all(color: textColor.withOpacity(0.2)),
+        border: Border.all(color: textColor.withValues(alpha: 0.2)),
         borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.all(12),
@@ -458,7 +446,7 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
-              color: textColor.withOpacity(0.7),
+              color: textColor.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 4),
@@ -530,7 +518,10 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
               ],
             ),
             const SizedBox(height: 12),
-            _buildTierInfo('Range', '${_formatCurrency(tier.fromAmount)} - ${_formatCurrency(tier.toAmount)}'),
+            _buildTierInfo(
+              'Range',
+              '${_formatCurrency(tier.fromAmount)} - ${_formatCurrency(tier.toAmount)}',
+            ),
             _buildTierInfo('Amount', _formatCurrency(tier.amount)),
             _buildTierInfo('Rate', '${tier.percentage}%'),
             const SizedBox(height: 8),
@@ -649,14 +640,14 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
                 ...BonusTier.defaultTiers.asMap().entries.map((entry) {
                   final index = entry.key;
                   final tier = entry.value;
-                  final maxStr = tier.max != null ? _formatCurrency(tier.max!) : '∞';
-                  
+                  final maxStr = tier.max != null
+                      ? _formatCurrency(tier.max!)
+                      : '∞';
+
                   return Container(
                     decoration: BoxDecoration(
                       border: Border(
-                        bottom: BorderSide(
-                          color: Colors.grey.shade200,
-                        ),
+                        bottom: BorderSide(color: Colors.grey.shade200),
                       ),
                     ),
                     padding: const EdgeInsets.all(12),
@@ -697,7 +688,7 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
                       ],
                     ),
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
@@ -778,14 +769,14 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
                 ...BonusTier.holidayTiers.asMap().entries.map((entry) {
                   final index = entry.key;
                   final tier = entry.value;
-                  final maxStr = tier.max != null ? _formatCurrency(tier.max!) : '∞';
-                  
+                  final maxStr = tier.max != null
+                      ? _formatCurrency(tier.max!)
+                      : '∞';
+
                   return Container(
                     decoration: BoxDecoration(
                       border: Border(
-                        bottom: BorderSide(
-                          color: Colors.green.shade200,
-                        ),
+                        bottom: BorderSide(color: Colors.green.shade200),
                       ),
                     ),
                     padding: const EdgeInsets.all(12),
@@ -826,7 +817,7 @@ class _BonusCalculatorWidgetState extends State<BonusCalculatorWidget> {
                       ],
                     ),
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
@@ -842,10 +833,10 @@ class BonusSummaryWidget extends StatelessWidget {
   final bool isHoliday;
 
   const BonusSummaryWidget({
-    Key? key,
+    super.key,
     required this.omset,
     this.isHoliday = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

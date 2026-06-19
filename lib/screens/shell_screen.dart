@@ -34,22 +34,13 @@ class _ShellScreenState extends State<ShellScreen> {
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
             icon: Icon(Icons.shopping_cart),
             label: 'Pemesanan',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.inventory_2),
-            label: 'Stok',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.wallet),
-            label: 'Dompet',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Stok'),
+          BottomNavigationBarItem(icon: Icon(Icons.wallet), label: 'Dompet'),
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,

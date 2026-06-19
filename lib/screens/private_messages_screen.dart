@@ -11,7 +11,7 @@ import 'new_announcement_screen.dart';
 import 'package:intl/intl.dart';
 
 class PrivateMessagesScreen extends StatefulWidget {
-  const PrivateMessagesScreen({Key? key}) : super(key: key);
+  const PrivateMessagesScreen({super.key});
 
   @override
   State<PrivateMessagesScreen> createState() => _PrivateMessagesScreenState();
@@ -266,7 +266,7 @@ class _PrivateMessagesScreenState extends State<PrivateMessagesScreen> with Sing
                           color: Colors.white,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
+                              color: Colors.black.withValues(alpha: 0.08),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -466,7 +466,7 @@ class _PrivateMessagesScreenState extends State<PrivateMessagesScreen> with Sing
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),

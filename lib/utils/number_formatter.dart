@@ -1,7 +1,7 @@
 /// Utility class untuk memformat angka dengan separator ribuan
 class NumberFormatter {
   /// Format angka dengan separator ribuan (e.g., 1.000.000)
-  /// 
+  ///
   /// Contoh:
   /// - 1000 -> "1.000"
   /// - 1000000 -> "1.000.000"
@@ -15,7 +15,7 @@ class NumberFormatter {
   }
 
   /// Format harga lengkap dengan "Rp" prefix
-  /// 
+  ///
   /// Contoh:
   /// - 1000 -> "Rp1.000"
   /// - 1000000 -> "Rp1.000.000"
@@ -25,7 +25,7 @@ class NumberFormatter {
 
   /// Format harga dengan separator (untuk text yang sudah ada "Rp" prefix)
   /// Gunakan ini untuk compatibility dengan kode yang sudah ada
-  /// 
+  ///
   /// Contoh:
   /// - 1000 -> "1.000"
   /// - 50000 -> "50.000"

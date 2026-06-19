@@ -11,10 +11,10 @@ class GroupChatDetailScreen extends StatefulWidget {
   final String groupName;
 
   const GroupChatDetailScreen({
-    Key? key,
+    super.key,
     required this.groupChatId,
     required this.groupName,
-  }) : super(key: key);
+  });
 
   @override
   State<GroupChatDetailScreen> createState() => _GroupChatDetailScreenState();
@@ -77,17 +77,14 @@ class _GroupChatDetailScreenState extends State<GroupChatDetailScreen> {
             senderMap[sender['id']] = sender;
           }
         } catch (e) {
-          print('Error fetching senders: $e');
+          debugPrint('Error fetching senders: $e');
         }
       }
 
       List<Map<String, dynamic>> messagesWithSenders = [];
       for (var msg in messagesResponse) {
         final sender = senderMap[msg['sender_id']];
-        messagesWithSenders.add({
-          ...msg,
-          'sender': sender,
-        });
+        messagesWithSenders.add({...msg, 'sender': sender});
       }
 
       setState(() {
@@ -99,9 +96,9 @@ class _GroupChatDetailScreenState extends State<GroupChatDetailScreen> {
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -127,9 +124,9 @@ class _GroupChatDetailScreenState extends State<GroupChatDetailScreen> {
       await _loadMessages();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -161,9 +158,7 @@ class _GroupChatDetailScreenState extends State<GroupChatDetailScreen> {
           ),
           TextButton(
             onPressed: _deleteGroup,
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Hapus'),
           ),
         ],
@@ -174,20 +169,20 @@ class _GroupChatDetailScreenState extends State<GroupChatDetailScreen> {
   Future<void> _deleteGroup() async {
     try {
       Navigator.pop(context); // Close dialog
-      
+
       await supabaseService.deleteGroupChat(widget.groupChatId);
-      
+
       if (mounted) {
         Navigator.pop(context); // Close detail screen
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Group berhasil dihapus')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Group berhasil dihapus')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -251,10 +246,15 @@ class _GroupChatDetailScreenState extends State<GroupChatDetailScreen> {
                             final sender = message['sender'];
                             final senderName = sender?['name'] ?? 'Unknown';
                             final messageText = message['message'] ?? '';
-                            final timestamp = DateTime.parse(message['created_at']);
-                            final timeString = DateFormat('HH:mm').format(timestamp);
+                            final timestamp = DateTime.parse(
+                              message['created_at'],
+                            );
+                            final timeString = DateFormat(
+                              'HH:mm',
+                            ).format(timestamp);
                             final auth = context.read<AuthProvider>();
-                            final isCurrentUser = message['sender_id'] == auth.currentUser?.id;
+                            final isCurrentUser =
+                                message['sender_id'] == auth.currentUser?.id;
 
                             return Align(
                               alignment: isCurrentUser

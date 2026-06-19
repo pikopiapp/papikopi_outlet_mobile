@@ -63,11 +63,11 @@ class SelectiveRebuild<T> extends StatelessWidget {
   final bool Function(T, T)? shouldRebuild;
 
   const SelectiveRebuild({
-    Key? key,
+    super.key,
     required this.selector,
     required this.builder,
     this.shouldRebuild,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

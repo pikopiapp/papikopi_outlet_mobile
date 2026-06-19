@@ -9,9 +9,9 @@ class AnnouncementDetailScreen extends StatefulWidget {
   final String announcementId;
 
   const AnnouncementDetailScreen({
-    Key? key,
+    super.key,
     required this.announcementId,
-  }) : super(key: key);
+  });
 
   @override
   State<AnnouncementDetailScreen> createState() =>

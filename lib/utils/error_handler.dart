@@ -5,7 +5,7 @@ class ErrorHandler {
   static String getErrorMessage(dynamic error) {
     if (error is Exception) {
       String message = error.toString();
-      
+
       // Parse specific error patterns
       if (message.contains('no element')) {
         return 'Data tidak ditemukan. Coba refresh.';
@@ -22,7 +22,7 @@ class ErrorHandler {
       } else if (message.contains('foreign key')) {
         return 'Data terkait tidak ditemukan.';
       }
-      
+
       return message;
     }
     return 'Terjadi kesalahan yang tidak terduga.';
@@ -94,11 +94,11 @@ class ErrorDisplay extends StatelessWidget {
   final IconData icon;
 
   const ErrorDisplay({
-    Key? key,
+    super.key,
     required this.message,
     this.onRetry,
     this.icon = Icons.error_outline,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -108,18 +108,14 @@ class ErrorDisplay extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 48,
-              color: Colors.red[400],
-            ),
+            Icon(icon, size: 48, color: Colors.red[400]),
             const SizedBox(height: 16),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.red[700],
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: Colors.red[700]),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 24),
@@ -141,13 +137,15 @@ class LoadingOverlay extends StatelessWidget {
   final bool dismissible;
 
   const LoadingOverlay({
-    Key? key,
+    super.key,
     this.message = 'Loading...',
     this.dismissible = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
+    // ignore: deprecated_member_use
+    // TODO: migrate to PopScope when project-wide API is updated
     return WillPopScope(
       onWillPop: () async => dismissible,
       child: Dialog(
@@ -188,7 +186,8 @@ Future<T?> safeAsyncOperation<T>({
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => LoadingOverlay(message: loadingMessage ?? 'Loading...'),
+        builder: (context) =>
+            LoadingOverlay(message: loadingMessage ?? 'Loading...'),
       );
     }
 

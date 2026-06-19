@@ -29,8 +29,14 @@ class _CheckoutModalState extends State<CheckoutModal> {
   }
 
   Future<void> _showGratisReasonDialog() async {
-    final List<String> reasons = ['Preman', 'Sample', 'Rusak/Expired', 'Permintaan Manager', 'Lainnya'];
-    
+    final List<String> reasons = [
+      'Preman',
+      'Sample',
+      'Rusak/Expired',
+      'Permintaan Manager',
+      'Lainnya',
+    ];
+
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -39,16 +45,22 @@ class _CheckoutModalState extends State<CheckoutModal> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: reasons
-                .map((reason) => RadioListTile<String>(
-                      title: Text(reason),
-                      value: reason,
-                      groupValue: _gratiReason,
-                      onChanged: (value) {
-                        setState(() => _gratiReason = value ?? '');
-                        Navigator.pop(context);
-                      },
-                      contentPadding: EdgeInsets.zero,
-                    ))
+                .map(
+                  (reason) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      _gratiReason == reason
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: AppColors.primary,
+                    ),
+                    title: Text(reason),
+                    onTap: () {
+                      setState(() => _gratiReason = reason);
+                      Navigator.pop(context);
+                    },
+                  ),
+                )
                 .toList(),
           ),
         ),
@@ -66,21 +78,21 @@ class _CheckoutModalState extends State<CheckoutModal> {
     try {
       final authProvider = context.read<AuthProvider>();
       final supabaseService = SupabaseService();
-      
+
       if (authProvider.currentUser == null) return;
 
       // Get current month's transactions
       final now = DateTime.now();
       final monthStart = DateTime(now.year, now.month, 1);
-      
+
       final result = await supabaseService.getMonthlyGratisStats(
         outletId: authProvider.currentUser!.outletId,
         monthStart: monthStart,
       );
-      
+
       final totalTransactions = result['total'] as int;
       final gratisCount = result['gratis_count'] as int;
-      
+
       if (totalTransactions == 0) {
         setState(() {
           _showWarning = false;
@@ -88,24 +100,26 @@ class _CheckoutModalState extends State<CheckoutModal> {
         });
         return;
       }
-      
+
       final gratisPercentage = (gratisCount / totalTransactions) * 100;
-      
+
       if (gratisPercentage >= 3.0) {
         setState(() {
           _showWarning = true;
-          _warningMessage = '⚠️ Limit gratis 3% sudah tercapai! (${gratisPercentage.toStringAsFixed(1)}% dari $totalTransactions transaksi)';
+          _warningMessage =
+              '⚠️ Limit gratis 3% sudah tercapai! (${gratisPercentage.toStringAsFixed(1)}% dari $totalTransactions transaksi)';
         });
       } else {
         setState(() {
           _showWarning = false;
-          _warningMessage = 'Gratis: ${gratisPercentage.toStringAsFixed(1)}% dari 3% limit';
+          _warningMessage =
+              'Gratis: ${gratisPercentage.toStringAsFixed(1)}% dari 3% limit';
         });
       }
     } catch (e) {
+      // intentionally left empty (non-fatal helper failure)
     }
   }
-
 
   Future<void> _handleCheckout() async {
     final cartProvider = context.read<CartProvider>();
@@ -114,9 +128,9 @@ class _CheckoutModalState extends State<CheckoutModal> {
 
     // Validation
     if (cartProvider.items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Keranjang kosong')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Keranjang kosong')));
       return;
     }
 
@@ -152,9 +166,9 @@ class _CheckoutModalState extends State<CheckoutModal> {
     }
 
     if (authProvider.currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User tidak ditemukan')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User tidak ditemukan')));
       return;
     }
 
@@ -165,10 +179,10 @@ class _CheckoutModalState extends State<CheckoutModal> {
       if (!supabaseService.isInitialized) {
         throw Exception('Sistem belum terhubung ke server');
       }
-      
+
       // Calculate totals
-      double totalAmount = _selectedPaymentMethod == 'GRATIS' 
-          ? 0 
+      double totalAmount = _selectedPaymentMethod == 'GRATIS'
+          ? 0
           : cartProvider.totalAmount;
       final totalHpp = cartProvider.totalHpp;
       final totalBonus = _selectedPaymentMethod == 'GRATIS'
@@ -178,20 +192,24 @@ class _CheckoutModalState extends State<CheckoutModal> {
 
       // Prepare sale items
       final items = cartProvider.items
-          .map((item) => {
-                'product_id': item.product.id,
-                'product_name': item.product.name,
-                'quantity': item.quantity,
-                'unit_price': item.product.price,
-                'hpp': item.product.hpp ?? 0,
-              })
+          .map(
+            (item) => {
+              'product_id': item.product.id,
+              'product_name': item.product.name,
+              'quantity': item.quantity,
+              'unit_price': item.product.price,
+              'hpp': item.product.hpp ?? 0,
+            },
+          )
           .toList();
 
+      // Capture outletId early to avoid using BuildContext after awaits
+      final outletId = authProvider.currentUser!.outletId;
+
       // Create sale in POS system
-      if (_selectedPaymentMethod == 'GRATIS') {
-      }
-      
-      final saleId = await supabaseService.createSale(
+      if (_selectedPaymentMethod == 'GRATIS') {}
+
+      await supabaseService.createSale(
         outletId: authProvider.currentUser!.outletId,
         baristaId: authProvider.currentUser!.id,
         paymentMethod: _selectedPaymentMethod,
@@ -204,36 +222,35 @@ class _CheckoutModalState extends State<CheckoutModal> {
 
       // Record sales to warehouse system (sales_records table)
       // This tracks batch sales for inventory management
-      
+
       try {
         // Get available batches for this outlet
         final batches = await supabaseService.getAvailableBatches(
           authProvider.currentUser!.outletId,
         );
-        
+
         if (batches.isEmpty) {
         } else {
-          
           // Record sales for each product in cart to matching batch
           for (final cartItem in cartProvider.items) {
             // Find batch with matching product
             Map<String, dynamic>? matchingBatch;
             for (final batch in batches) {
-              if (batch['product_id'] == cartItem.product.id && 
+              if (batch['product_id'] == cartItem.product.id &&
                   batch['quantity'] >= cartItem.quantity) {
                 matchingBatch = batch;
                 break;
               }
             }
-            
+
             if (matchingBatch != null) {
-              
               // Build notes with gratis reason if applicable
-              String notes = 'Penjualan dari POS - ${cartItem.product.name} - Payment: $_selectedPaymentMethod';
+              String notes =
+                  'Penjualan dari POS - ${cartItem.product.name} - Payment: $_selectedPaymentMethod';
               if (_selectedPaymentMethod == 'GRATIS') {
                 notes += ' - Alasan: $_gratiReason';
               }
-              
+
               await supabaseService.recordSaleToWarehouse(
                 batchId: matchingBatch['id'] as String,
                 outletId: authProvider.currentUser!.outletId,
@@ -241,55 +258,27 @@ class _CheckoutModalState extends State<CheckoutModal> {
                 saleDate: DateTime.now(),
                 notes: notes,
               );
-              
+
               // Update batch quantity (reduce stock)
               await supabaseService.updateBatchQuantity(
                 batchId: matchingBatch['id'] as String,
                 quantitySold: cartItem.quantity,
               );
-              
-            } else {
-            }
+            } else {}
           }
-          
         }
       } catch (e) {
         // Don't fail checkout if warehouse recording fails - it's a secondary system
       }
 
+      // Perform UI/context work in a guarded helper to avoid using
+      // BuildContext across async gaps.
+      await _afterCheckoutCleanup(outletId, cartProvider);
+    } catch (e) {
       if (mounted) {
-        // 🔧 Refresh product stock after sale
-        try {
-          final productProvider = context.read<ProductProvider>();
-          await productProvider.loadProductsWithStock(
-            authProvider.currentUser!.outletId,
-          );
-        } catch (e) {
-        }
-
-        // Clear cart
-        cartProvider.clear();
-
-        // Show success
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Transaksi berhasil')),
-        );
-
-        // Add small delay to ensure data is persisted before refresh
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        // Close dialog and navigate to ordering tab
-        if (Navigator.canPop(context)) {
-          Navigator.pop(context);
-          // Go to ordering tab (index 0) to start new order
-          tabController?.animateTo(0);
-        }
-      }
-    } catch (e, stackTrace) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
         setState(() => _isProcessing = false);
       }
     } finally {
@@ -299,6 +288,43 @@ class _CheckoutModalState extends State<CheckoutModal> {
           setState(() => _isProcessing = false);
         }
       }
+    }
+  }
+
+  Future<void> _afterCheckoutCleanup(
+    String outletId,
+    CartProvider cartProvider,
+  ) async {
+    if (!mounted) return;
+
+    // Best-effort product refresh
+    try {
+      final productProvider = context.read<ProductProvider>();
+      await productProvider.loadProductsWithStock(outletId);
+    } catch (e) {
+      // ignore - best effort
+    }
+
+    // Clear cart
+    cartProvider.clear();
+
+    if (!mounted) return;
+
+    // Show success
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('✅ Transaksi berhasil')));
+
+    // Add small delay to ensure data is persisted before refresh
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (!mounted) return;
+
+    // Close dialog and navigate to ordering tab
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+      // Go to ordering tab (index 0) to start new order
+      tabController?.animateTo(0);
     }
   }
 
@@ -323,10 +349,7 @@ class _CheckoutModalState extends State<CheckoutModal> {
                   // Header
                   const Text(
                     'Konfirmasi Checkout',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 24),
                   // Order Summary
@@ -361,8 +384,12 @@ class _CheckoutModalState extends State<CheckoutModal> {
                           children: [
                             const Text('Total Harga:'),
                             Text(
-                              NumberFormatter.formatRupiah(cartProvider.totalAmount),
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              NumberFormatter.formatRupiah(
+                                cartProvider.totalAmount,
+                              ),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
@@ -374,10 +401,7 @@ class _CheckoutModalState extends State<CheckoutModal> {
                   // Payment Method
                   const Text(
                     'Metode Pembayaran',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(height: 12),
                   Column(
@@ -385,40 +409,56 @@ class _CheckoutModalState extends State<CheckoutModal> {
                       Row(
                         children: [
                           Expanded(
-                            child: RadioListTile<String>(
-                              title: const Text('Cash'),
-                              value: 'CASH',
-                              groupValue: _selectedPaymentMethod,
-                              onChanged: _isProcessing
-                                  ? null
-                                  : (value) {
-                                      setState(() => _selectedPaymentMethod = value ?? 'CASH');
-                                    },
+                            child: ListTile(
                               contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                _selectedPaymentMethod == 'CASH'
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_unchecked,
+                                color: AppColors.primary,
+                              ),
+                              title: const Text('Cash'),
+                              onTap: _isProcessing
+                                  ? null
+                                  : () => setState(
+                                      () => _selectedPaymentMethod = 'CASH',
+                                    ),
                             ),
                           ),
                           Expanded(
-                            child: RadioListTile<String>(
-                              title: const Text('QRIS'),
-                              value: 'QRIS',
-                              groupValue: _selectedPaymentMethod,
-                              onChanged: _isProcessing
-                                  ? null
-                                  : (value) {
-                                      setState(() => _selectedPaymentMethod = value ?? 'CASH');
-                                    },
+                            child: ListTile(
                               contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                _selectedPaymentMethod == 'QRIS'
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_unchecked,
+                                color: AppColors.primary,
+                              ),
+                              title: const Text('QRIS'),
+                              onTap: _isProcessing
+                                  ? null
+                                  : () => setState(
+                                      () => _selectedPaymentMethod = 'QRIS',
+                                    ),
                             ),
                           ),
                         ],
                       ),
                       // Gratis button - only for barista
-                      if (context.read<AuthProvider>().currentUser?.role == 'barista')
+                      if (context.read<AuthProvider>().currentUser?.role ==
+                          'barista')
                         Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Column(
                             children: [
-                              RadioListTile<String>(
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(
+                                  _selectedPaymentMethod == 'GRATIS'
+                                      ? Icons.radio_button_checked
+                                      : Icons.radio_button_unchecked,
+                                  color: AppColors.primary,
+                                ),
                                 title: Row(
                                   children: [
                                     const Text('Gratis'),
@@ -432,28 +472,34 @@ class _CheckoutModalState extends State<CheckoutModal> {
                                       ),
                                   ],
                                 ),
-                                value: 'GRATIS',
-                                groupValue: _selectedPaymentMethod,
-                                onChanged: _isProcessing
+                                onTap: _isProcessing
                                     ? null
-                                    : (value) async {
-                                        if (value != null) {
-                                          setState(() => _selectedPaymentMethod = value);
-                                          await _checkMonthlyGratisLimit();
-                                          await _showGratisReasonDialog();
-                                        }
+                                    : () async {
+                                        if (!mounted) return;
+                                        setState(
+                                          () =>
+                                              _selectedPaymentMethod = 'GRATIS',
+                                        );
+                                        await _checkMonthlyGratisLimit();
+                                        if (!mounted) return;
+                                        await _showGratisReasonDialog();
                                       },
-                                contentPadding: EdgeInsets.zero,
                               ),
                               // Warning message
-                              if (_selectedPaymentMethod == 'GRATIS' && _warningMessage.isNotEmpty)
+                              if (_selectedPaymentMethod == 'GRATIS' &&
+                                  _warningMessage.isNotEmpty)
                                 Padding(
-                                  padding: const EdgeInsets.only(left: 16, top: 4),
+                                  padding: const EdgeInsets.only(
+                                    left: 16,
+                                    top: 4,
+                                  ),
                                   child: Text(
                                     _warningMessage,
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: _showWarning ? Colors.red[400] : Colors.green[400],
+                                      color: _showWarning
+                                          ? Colors.red[400]
+                                          : Colors.green[400],
                                     ),
                                   ),
                                 ),
@@ -490,7 +536,8 @@ class _CheckoutModalState extends State<CheckoutModal> {
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                     valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white),
+                                      Colors.white,
+                                    ),
                                   ),
                                 )
                               : const Text(

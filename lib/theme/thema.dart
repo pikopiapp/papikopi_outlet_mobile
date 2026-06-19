@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Brand Colors
-  static const primary = Color(0xFF4BC5D9); // Turquoise / Cyan - warna dominan brand
-  static const primaryDark = Color(0xFF485C69); // Dark Slate / Abu kebiruan gelap
+  static const primary = Color(
+    0xFF4BC5D9,
+  ); // Turquoise / Cyan - warna dominan brand
+  static const primaryDark = Color(
+    0xFF485C69,
+  ); // Dark Slate / Abu kebiruan gelap
   static const primaryLight = Color(0xFF4BC5D9); // Turquoise
 
   static const background = Color(0xFFFAFAFA); // Light Gray
@@ -14,11 +18,19 @@ class AppColors {
   static const accentLight = Color(0xFFFFB366);
   static const accentDark = Color(0xFFE67E22);
 
-static const textPrimary = Color(0xFF485C69); // Dark Slate untuk text primary
-  static const textSecondary = Color(0xFF7A8B99); // Light slate untuk text secondary
+  static const textPrimary = Color(0xFF485C69); // Dark Slate untuk text primary
+  static const textSecondary = Color(
+    0xFF7A8B99,
+  ); // Light slate untuk text secondary
 
   static const error = Color(0xFFE53935);
   static const success = Color(0xFF4CAF50);
+  // Additional legacy/alias colors used across screens
+  static const neutralGrey = Color(0xFF757575);
+  static const putih = Color(0xFFFFFFFF);
+  static const hitam = Color(0xFF212121);
+  static const hijau = Color(0xFF388E3C);
+  static const greenSoft = Color(0xFFE8F5E9);
 }
 
 class AppTheme {
@@ -35,8 +47,6 @@ class AppTheme {
         onSecondary: Colors.white,
         error: Color(0xFFE53935),
         onError: Colors.white,
-        background: AppColors.background,
-        onBackground: AppColors.textPrimary,
         surface: AppColors.surface,
         onSurface: AppColors.textPrimary,
       ),
@@ -49,9 +59,7 @@ class AppTheme {
 
       cardTheme: CardThemeData(
         color: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -70,9 +78,7 @@ class AppTheme {
           color: AppColors.textPrimary,
           fontWeight: FontWeight.bold,
         ),
-        bodyMedium: TextStyle(
-          color: AppColors.textSecondary,
-        ),
+        bodyMedium: TextStyle(color: AppColors.textSecondary),
       ),
     );
   }

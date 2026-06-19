@@ -108,7 +108,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                   child: Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -136,7 +136,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                         child: Container(
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
+                            color: Colors.black.withValues(alpha: 0.6),
                           ),
                         ),
                       ),
@@ -153,7 +153,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withOpacity(0.3),
+                              color: AppColors.primary.withValues(alpha: 0.3),
                               blurRadius: 16,
                               spreadRadius: 4,
                             ),
@@ -169,7 +169,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                    color: AppColors.primary.withOpacity(0.5),
+                                    color: AppColors.primary.withValues(alpha: 0.5),
                                     width: 1,
                                   ),
                                 ),
@@ -191,14 +191,14 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                                         begin: Alignment.centerLeft,
                                         end: Alignment.centerRight,
                                         colors: [
-                                          AppColors.primary.withOpacity(0),
-                                          AppColors.primary.withOpacity(1),
-                                          AppColors.primary.withOpacity(0),
+                                          AppColors.primary.withValues(alpha: 0),
+                                          AppColors.primary.withValues(alpha: 1),
+                                          AppColors.primary.withValues(alpha: 0),
                                         ],
                                       ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: AppColors.primary.withOpacity(0.8),
+                                          color: AppColors.primary.withValues(alpha: 0.8),
                                           blurRadius: 8,
                                         ),
                                       ],
@@ -216,7 +216,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                         child: Container(
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
+                            color: Colors.black.withValues(alpha: 0.6),
                           ),
                         ),
                       ),
@@ -230,7 +230,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                   child: Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -238,13 +238,13 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                         Icon(
                           Icons.qr_code_2,
                           size: 56,
-                          color: AppColors.primary.withOpacity(0.8),
+                          color: AppColors.primary.withValues(alpha: 0.8),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           'Menunggu QR Code...',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white.withOpacity(0.8),
+                            color: Colors.white.withValues(alpha: 0.8),
                             fontSize: 14,
                           ),
                         ),
@@ -258,7 +258,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                               margin: const EdgeInsets.symmetric(horizontal: 4),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: AppColors.primary.withOpacity(0.6),
+                                color: AppColors.primary.withValues(alpha: 0.6),
                               ),
                             ),
                             Container(
@@ -267,7 +267,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                               margin: const EdgeInsets.symmetric(horizontal: 4),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: AppColors.primary.withOpacity(0.8),
+                                color: AppColors.primary.withValues(alpha: 0.8),
                               ),
                             ),
                             Container(
@@ -276,7 +276,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
                               margin: const EdgeInsets.symmetric(horizontal: 4),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: AppColors.primary.withOpacity(0.6),
+                                color: AppColors.primary.withValues(alpha: 0.6),
                               ),
                             ),
                           ],
@@ -295,7 +295,7 @@ class _QRCameraScreenState extends State<QRCameraScreen>
             right: 16,
             child: FloatingActionButton(
               mini: true,
-              backgroundColor: Colors.black.withOpacity(0.6),
+              backgroundColor: Colors.black.withValues(alpha: 0.6),
               onPressed: () => Navigator.pop(context),
               child: const Icon(Icons.close, color: Colors.white, size: 20),
             ),

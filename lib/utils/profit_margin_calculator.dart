@@ -26,16 +26,20 @@ class ProfitCalculationResult {
   });
 
   /// Margin percentage terhadap total sales
-  double get marginPercentage => totalSales > 0 ? (netProfit / totalSales * 100) : 0;
+  double get marginPercentage =>
+      totalSales > 0 ? (netProfit / totalSales * 100) : 0;
 
   /// HPP percentage terhadap total sales
-  double get hppPercentage => totalSales > 0 ? (totalHpp / totalSales * 100) : 0;
+  double get hppPercentage =>
+      totalSales > 0 ? (totalHpp / totalSales * 100) : 0;
 
   /// Expenses percentage terhadap total sales
-  double get expensesPercentage => totalSales > 0 ? (totalExpenses / totalSales * 100) : 0;
+  double get expensesPercentage =>
+      totalSales > 0 ? (totalExpenses / totalSales * 100) : 0;
 
   /// Investor profit percentage terhadap total sales
-  double get investorProfitPercentage => totalSales > 0 ? (investorProfit / totalSales * 100) : 0;
+  double get investorProfitPercentage =>
+      totalSales > 0 ? (investorProfit / totalSales * 100) : 0;
 }
 
 /// Menghitung profit investor berdasarkan data penjualan
@@ -217,12 +221,7 @@ class ProfitBreakdown {
         'color': 'red',
         'icon': '📦',
       },
-      {
-        'label': 'Bonus Barista',
-        'value': -bonus,
-        'color': 'red',
-        'icon': '👤',
-      },
+      {'label': 'Bonus Barista', 'value': -bonus, 'color': 'red', 'icon': '👤'},
       {
         'label': 'Uang Makan',
         'value': -mealAllowance,
@@ -243,7 +242,8 @@ class ProfitBreakdown {
         'icon': '👨‍💼',
       },
       {
-        'label': 'Profit Outlet (${(100 - investorPercentage).toStringAsFixed(0)}%)',
+        'label':
+            'Profit Outlet (${(100 - investorPercentage).toStringAsFixed(0)}%)',
         'value': outletProfit,
         'color': 'green',
         'icon': '🏪',

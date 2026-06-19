@@ -18,10 +18,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _handleLogout() async {
     if (!mounted) return;
-    
+
     final authProvider = context.read<AuthProvider>();
     await authProvider.signOut();
-    
+
     if (mounted) {
       Navigator.of(context).pushReplacementNamed('/login');
     }
@@ -39,24 +39,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            RadioListTile<String>(
+            ListTile(
+              leading: Icon(
+                _language == 'id'
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+              ),
               title: const Text('Bahasa Indonesia'),
-              value: 'id',
-              groupValue: _language,
-              onChanged: (value) {
+              onTap: () {
                 setState(() {
-                  _language = value!;
+                  _language = 'id';
                 });
                 Navigator.pop(context);
               },
             ),
-            RadioListTile<String>(
+            ListTile(
+              leading: Icon(
+                _language == 'en'
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+              ),
               title: const Text('English'),
-              value: 'en',
-              groupValue: _language,
-              onChanged: (value) {
+              onTap: () {
                 setState(() {
-                  _language = value!;
+                  _language = 'en';
                 });
                 Navigator.pop(context);
               },
@@ -85,9 +91,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Text(
                 'Pengaturan',
                 style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
               ),
               const SizedBox(height: 24),
 
@@ -147,15 +153,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(
                       'PapiApps Outlets',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Sistem POS terpadu untuk mengelola outlet kopi dengan fitur penjualan, keuangan, dan inventori stok.',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -189,9 +195,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: AppColors.primary,
-          ),
+        fontWeight: FontWeight.bold,
+        color: AppColors.primary,
+      ),
     );
   }
 
@@ -204,14 +210,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Card(
       child: ListTile(
         title: Text(title),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(fontSize: 12),
-        ),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
         trailing: Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: AppColors.primary,
+          activeThumbColor: AppColors.primary,
         ),
       ),
     );
@@ -236,16 +239,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              title,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            Text(title, style: Theme.of(context).textTheme.bodyMedium),
             Text(
               value,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
             ),
           ],
         ),

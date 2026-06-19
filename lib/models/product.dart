@@ -62,9 +62,9 @@ class Product {
       stock: (json['stock'] as num?)?.toInt() ?? 0,
       tersedia: (json['tersedia'] as num?)?.toInt() ?? 0,
       imageUrl: json['image_url'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at'] as String) 
+        createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
+        updatedAt: json['updated_at'] != null 
+          ? DateTime.parse(json['updated_at'] as String).toUtc() 
           : null,
     );
   }
@@ -95,6 +95,6 @@ class Product {
   /// Returns JSON with product information that can be encoded in QR code
   /// Format matches web dashboard batch QR code structure
   String getQRData() {
-    return '{\"product\":\"$name\",\"id\":\"$id\",\"price\":$price}';
+    return '{"product":"${name}","id":"${id}","price":$price}';
   }
 }

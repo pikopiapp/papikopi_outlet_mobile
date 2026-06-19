@@ -9,8 +9,8 @@ class ProfitBreakdownCard extends StatelessWidget {
   const ProfitBreakdownCard({
     required this.result,
     required this.outletName,
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -109,14 +109,16 @@ class ProfitBreakdownCard extends StatelessWidget {
                       Divider(color: Colors.green.shade200),
                       const SizedBox(height: 12),
                       _DetailRow(
-                        label: 'Profit Investor (${result.investorPercentage.toStringAsFixed(0)}%)',
+                        label:
+                            'Profit Investor (${result.investorPercentage.toStringAsFixed(0)}%)',
                         value: result.investorProfit,
                         color: Colors.green,
                         isInvestor: true,
                       ),
                       const SizedBox(height: 8),
                       _DetailRow(
-                        label: 'Profit Outlet (${(100 - result.investorPercentage).toStringAsFixed(0)}%)',
+                        label:
+                            'Profit Outlet (${(100 - result.investorPercentage).toStringAsFixed(0)}%)',
                         value: result.outletProfit,
                         color: Colors.amber,
                       ),
@@ -130,7 +132,8 @@ class ProfitBreakdownCard extends StatelessWidget {
                     Expanded(
                       child: _PercentageBox(
                         label: 'Margin',
-                        percentage: '${result.marginPercentage.toStringAsFixed(2)}%',
+                        percentage:
+                            '${result.marginPercentage.toStringAsFixed(2)}%',
                         color: Colors.green,
                       ),
                     ),
@@ -138,7 +141,8 @@ class ProfitBreakdownCard extends StatelessWidget {
                     Expanded(
                       child: _PercentageBox(
                         label: 'HPP',
-                        percentage: '${result.hppPercentage.toStringAsFixed(2)}%',
+                        percentage:
+                            '${result.hppPercentage.toStringAsFixed(2)}%',
                         color: Colors.red,
                       ),
                     ),
@@ -146,7 +150,8 @@ class ProfitBreakdownCard extends StatelessWidget {
                     Expanded(
                       child: _PercentageBox(
                         label: 'Expenses',
-                        percentage: '${result.expensesPercentage.toStringAsFixed(2)}%',
+                        percentage:
+                            '${result.expensesPercentage.toStringAsFixed(2)}%',
                         color: Colors.orange,
                       ),
                     ),
@@ -186,7 +191,9 @@ class _DetailRow extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: isTotal ? 13 : 12,
-            fontWeight: isTotal || isInvestor ? FontWeight.bold : FontWeight.w500,
+            fontWeight: isTotal || isInvestor
+                ? FontWeight.bold
+                : FontWeight.w500,
             color: Colors.black87,
           ),
         ),
@@ -194,7 +201,9 @@ class _DetailRow extends StatelessWidget {
           CurrencyFormatter.format(value),
           style: TextStyle(
             fontSize: isTotal ? 13 : 12,
-            fontWeight: isTotal || isInvestor ? FontWeight.bold : FontWeight.w600,
+            fontWeight: isTotal || isInvestor
+                ? FontWeight.bold
+                : FontWeight.w600,
             color: color,
           ),
         ),
@@ -220,9 +229,9 @@ class _PercentageBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
@@ -230,7 +239,7 @@ class _PercentageBox extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 10,
-              color: color.withOpacity(0.7),
+              color: color.withValues(alpha: 0.7),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -261,12 +270,14 @@ class ProfitSummaryCard extends StatelessWidget {
     required this.investorProfit,
     required this.totalSales,
     required this.title,
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final profitPercentage = totalSales > 0 ? (totalProfit / totalSales * 100) : 0.0;
+    final profitPercentage = totalSales > 0
+        ? (totalProfit / totalSales * 100)
+        : 0.0;
 
     return Card(
       elevation: 2,
@@ -277,10 +288,7 @@ class ProfitSummaryCard extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.green.shade50,
-              Colors.green.shade100,
-            ],
+            colors: [Colors.green.shade50, Colors.green.shade100],
           ),
         ),
         padding: const EdgeInsets.all(16),

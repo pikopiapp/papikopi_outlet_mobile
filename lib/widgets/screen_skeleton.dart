@@ -22,8 +22,12 @@ class ScreenSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final base = theme.brightness == Brightness.dark ? Colors.white12 : Colors.grey[300];
-    final highlight = theme.brightness == Brightness.dark ? Colors.white24 : Colors.grey[100];
+    final base = theme.brightness == Brightness.dark
+        ? Colors.white12
+        : Colors.grey[300];
+    final highlight = theme.brightness == Brightness.dark
+        ? Colors.white24
+        : Colors.grey[100];
 
     return Padding(
       padding: padding,
@@ -47,8 +51,8 @@ class ScreenSkeleton extends StatelessWidget {
               width: i == 0
                   ? MediaQuery.of(context).size.width * 0.85
                   : i % 3 == 0
-                      ? MediaQuery.of(context).size.width * 0.7
-                      : MediaQuery.of(context).size.width * 0.95,
+                  ? MediaQuery.of(context).size.width * 0.7
+                  : MediaQuery.of(context).size.width * 0.95,
               base: base!,
               highlight: highlight!,
             ),
@@ -77,8 +81,12 @@ class ScreenListSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final base = theme.brightness == Brightness.dark ? Colors.white12 : Colors.grey[300];
-    final highlight = theme.brightness == Brightness.dark ? Colors.white24 : Colors.grey[100];
+    final base = theme.brightness == Brightness.dark
+        ? Colors.white12
+        : Colors.grey[300];
+    final highlight = theme.brightness == Brightness.dark
+        ? Colors.white24
+        : Colors.grey[100];
 
     return ListView.separated(
       padding: EdgeInsets.all(padding),
@@ -87,10 +95,7 @@ class ScreenListSkeleton extends StatelessWidget {
       itemBuilder: (context, index) {
         return Container(
           height: itemHeight,
-          decoration: BoxDecoration(
-            color: base,
-            borderRadius: borderRadius,
-          ),
+          decoration: BoxDecoration(color: base, borderRadius: borderRadius),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
@@ -108,9 +113,11 @@ class ScreenListSkeleton extends StatelessWidget {
                 _ShimmerBar(
                   height: 12,
                   borderRadius: borderRadius,
-                  width: MediaQuery.of(context).size.width * (index % 2 == 0 ? 0.8 : 0.65),
+                  width:
+                      MediaQuery.of(context).size.width *
+                      (index % 2 == 0 ? 0.8 : 0.65),
                   base: base,
-                  highlight: highlight!,
+                  highlight: highlight,
                 ),
               ],
             ),
@@ -168,4 +175,3 @@ class _ShimmerBar extends StatelessWidget {
     );
   }
 }
-

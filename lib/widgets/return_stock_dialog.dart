@@ -76,9 +76,9 @@ class _ReturnStockDialogState extends State<ReturnStockDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       setState(() => _isLoading = false);
@@ -114,16 +114,16 @@ class _ReturnStockDialogState extends State<ReturnStockDialog> {
                   isExpanded: true,
                   hint: const Text('Pilih produk yang dikembalikan'),
                   value: _selectedIngredientId,
-                  items: widget.availableStock
-                      .map<DropdownMenuItem<String>>((stock) {
-                        return DropdownMenuItem<String>(
-                          value: stock.ingredientId,
-                          child: Text(
-                            '${stock.ingredientName} (Stok: ${stock.quantity.toStringAsFixed(1)})',
-                          ),
-                        );
-                      })
-                      .toList(),
+                  items: widget.availableStock.map<DropdownMenuItem<String>>((
+                    stock,
+                  ) {
+                    return DropdownMenuItem<String>(
+                      value: stock.ingredientId,
+                      child: Text(
+                        '${stock.ingredientName} (Stok: ${stock.quantity.toStringAsFixed(1)})',
+                      ),
+                    );
+                  }).toList(),
                   onChanged: (value) {
                     setState(() {
                       _selectedIngredientId = value;
@@ -161,14 +161,12 @@ class _ReturnStockDialogState extends State<ReturnStockDialog> {
                 DropdownButton<String>(
                   isExpanded: true,
                   value: _selectedReason,
-                  items: _returnReasons
-                      .map<DropdownMenuItem<String>>((reason) {
-                        return DropdownMenuItem<String>(
-                          value: reason,
-                          child: Text(_reasonLabels[reason] ?? reason),
-                        );
-                      })
-                      .toList(),
+                  items: _returnReasons.map<DropdownMenuItem<String>>((reason) {
+                    return DropdownMenuItem<String>(
+                      value: reason,
+                      child: Text(_reasonLabels[reason] ?? reason),
+                    );
+                  }).toList(),
                   onChanged: (value) {
                     setState(() => _selectedReason = value ?? 'damage');
                   },
@@ -207,7 +205,9 @@ class _ReturnStockDialogState extends State<ReturnStockDialog> {
                             width: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : const Text('Buat Pengembalian'),

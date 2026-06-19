@@ -43,7 +43,7 @@ class AuthProvider extends ChangeNotifier {
           email: email,
           password: password,
         );
-        
+
         // Save user locally for offline access
         await _authService.saveUser(_currentUser!);
         _isLoading = false;
@@ -52,14 +52,14 @@ class AuthProvider extends ChangeNotifier {
       } catch (e) {
         attempt++;
         _error = e.toString();
-        
+
         // If last attempt failed, stop retrying
         if (attempt >= retryCount) {
           _isLoading = false;
           notifyListeners();
           rethrow;
         }
-        
+
         // Wait before retry with exponential backoff
         await Future.delayed(Duration(milliseconds: 500 * attempt));
       }

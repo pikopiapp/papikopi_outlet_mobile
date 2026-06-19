@@ -35,7 +35,9 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
       final user = authProvider.currentUser;
       if (user == null) return [];
 
-      final outlets = await _supabaseService.getInvestorAssignments(investorId: user.id);
+      final outlets = await _supabaseService.getInvestorAssignments(
+        investorId: user.id,
+      );
       if (outlets.isEmpty) return [];
 
       final spots = <FlSpot>[];
@@ -45,13 +47,21 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
       for (int i = 29; i >= 0; i--) {
         final date = now.subtract(Duration(days: i));
         final startOfDay = DateTime(date.year, date.month, date.day, 21, 0);
-        final endOfDay = DateTime(date.year, date.month, date.day + 1, 20, 59, 59);
+        final endOfDay = DateTime(
+          date.year,
+          date.month,
+          date.day + 1,
+          20,
+          59,
+          59,
+        );
 
         double totalProfit = 0;
         for (final outlet in outlets) {
           final outletId = outlet['outlet_id'] as String? ?? '';
-          final margin = (outlet['margin_percentage'] as num?)?.toDouble() ?? 0.0;
-          
+          final margin =
+              (outlet['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+
           final hppData = await _supabaseService.getHppSummary(
             outletId: outletId,
             startDate: startOfDay,
@@ -79,7 +89,9 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
       final user = authProvider.currentUser;
       if (user == null) return [];
 
-      final outlets = await _supabaseService.getInvestorAssignments(investorId: user.id);
+      final outlets = await _supabaseService.getInvestorAssignments(
+        investorId: user.id,
+      );
       if (outlets.isEmpty) return [];
 
       final spots = <FlSpot>[];
@@ -89,13 +101,21 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
       for (int i = 11; i >= 0; i--) {
         final monthDate = DateTime(now.year, now.month - i, 1);
         final startOfMonth = DateTime(monthDate.year, monthDate.month, 1);
-        final endOfMonth = DateTime(monthDate.year, monthDate.month + 1, 0, 23, 59, 59);
+        final endOfMonth = DateTime(
+          monthDate.year,
+          monthDate.month + 1,
+          0,
+          23,
+          59,
+          59,
+        );
 
         double totalProfit = 0;
         for (final outlet in outlets) {
           final outletId = outlet['outlet_id'] as String? ?? '';
-          final margin = (outlet['margin_percentage'] as num?)?.toDouble() ?? 0.0;
-          
+          final margin =
+              (outlet['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+
           final hppData = await _supabaseService.getHppSummary(
             outletId: outletId,
             startDate: startOfMonth,
@@ -130,20 +150,26 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
             children: [
               Text(
                 'Selamat Datang, ${user?.name ?? "Investor"}! 👋',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Pantau performa investasi Anda',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
               ),
               const SizedBox(height: 24),
               // Chart Header
               Text(
                 'Tren Profit ${_chartPeriod == 'daily' ? '30 Hari Terakhir' : '12 Bulan Terakhir'}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 12),
               // Period Selection
@@ -156,14 +182,14 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
-                          color: _chartPeriod == 'daily' 
-                            ? AppColors.primary.withOpacity(0.2) 
-                            : AppColors.surface,
+                          color: _chartPeriod == 'daily'
+                              ? AppColors.primary.withValues(alpha: 0.2)
+                              : AppColors.surface,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: _chartPeriod == 'daily' 
-                              ? AppColors.primary 
-                              : Colors.grey[300]!,
+                            color: _chartPeriod == 'daily'
+                                ? AppColors.primary
+                                : Colors.grey[300]!,
                           ),
                         ),
                         child: Text(
@@ -171,9 +197,9 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: _chartPeriod == 'daily' 
-                              ? AppColors.primary 
-                              : Colors.grey[600],
+                            color: _chartPeriod == 'daily'
+                                ? AppColors.primary
+                                : Colors.grey[600],
                           ),
                         ),
                       ),
@@ -187,14 +213,14 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
-                          color: _chartPeriod == 'monthly' 
-                            ? AppColors.primary.withOpacity(0.2) 
-                            : AppColors.surface,
+                          color: _chartPeriod == 'monthly'
+                              ? AppColors.primary.withValues(alpha: 0.2)
+                              : AppColors.surface,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: _chartPeriod == 'monthly' 
-                              ? AppColors.primary 
-                              : Colors.grey[300]!,
+                            color: _chartPeriod == 'monthly'
+                                ? AppColors.primary
+                                : Colors.grey[300]!,
                           ),
                         ),
                         child: Text(
@@ -202,9 +228,9 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: _chartPeriod == 'monthly' 
-                              ? AppColors.primary 
-                              : Colors.grey[600],
+                            color: _chartPeriod == 'monthly'
+                                ? AppColors.primary
+                                : Colors.grey[600],
                           ),
                         ),
                       ),
@@ -215,9 +241,9 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
               const SizedBox(height: 16),
               // Line Chart
               FutureBuilder<List<FlSpot>>(
-                future: _chartPeriod == 'daily' 
-                  ? _fetchDailyChartData() 
-                  : _fetchMonthlyChartData(),
+                future: _chartPeriod == 'daily'
+                    ? _fetchDailyChartData()
+                    : _fetchMonthlyChartData(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return Container(
@@ -231,7 +257,9 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                     );
                   }
 
-                  if (snapshot.hasError || snapshot.data == null || snapshot.data!.isEmpty) {
+                  if (snapshot.hasError ||
+                      snapshot.data == null ||
+                      snapshot.data!.isEmpty) {
                     return Container(
                       height: 250,
                       decoration: BoxDecoration(
@@ -246,9 +274,10 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                   }
 
                   final spots = snapshot.data!;
-                  final maxYValue = spots.isNotEmpty 
-                    ? (spots.map((e) => e.y).reduce((a, b) => a > b ? a : b) * 1.2)
-                    : 10.0;
+                  final maxYValue = spots.isNotEmpty
+                      ? (spots.map((e) => e.y).reduce((a, b) => a > b ? a : b) *
+                            1.2)
+                      : 10.0;
 
                   return Container(
                     height: 250,
@@ -288,7 +317,9 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                                 if (_chartPeriod == 'daily') {
                                   final dayIndex = value.toInt();
                                   final now = DateTime.now();
-                                  final date = now.subtract(Duration(days: 29 - dayIndex));
+                                  final date = now.subtract(
+                                    Duration(days: 29 - dayIndex),
+                                  );
                                   if (dayIndex % 5 == 0) {
                                     return Text(
                                       '${date.day}/${date.month}',
@@ -300,7 +331,9 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                                   final monthIndex = value.toInt();
                                   final now = DateTime.now();
                                   final month = now.month - (11 - monthIndex);
-                                  final displayMonth = month > 0 ? month : month + 12;
+                                  final displayMonth = month > 0
+                                      ? month
+                                      : month + 12;
                                   if (monthIndex % 2 == 0) {
                                     return Text(
                                       '$displayMonth',
@@ -318,7 +351,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                               interval: maxYValue / 4,
                               getTitlesWidget: (value, meta) {
                                 return Text(
-                                  '${value.toStringAsFixed(0)}',
+                                  value.toStringAsFixed(0),
                                   style: const TextStyle(fontSize: 10),
                                 );
                               },
@@ -338,7 +371,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                             gradient: LinearGradient(
                               colors: [
                                 AppColors.primary,
-                                AppColors.primary.withOpacity(0.6),
+                                AppColors.primary.withValues(alpha: 0.6),
                               ],
                             ),
                             barWidth: 3,
@@ -358,8 +391,8 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                               show: true,
                               gradient: LinearGradient(
                                 colors: [
-                                  AppColors.primary.withOpacity(0.2),
-                                  AppColors.primary.withOpacity(0.0),
+                                  AppColors.primary.withValues(alpha: 0.2),
+                                  AppColors.primary.withValues(alpha: 0.0),
                                 ],
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
@@ -371,7 +404,9 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                           handleBuiltInTouches: true,
                           enabled: true,
                           touchTooltipData: LineTouchTooltipData(
-                            tooltipBgColor: AppColors.primary.withOpacity(0.8),
+                            tooltipBgColor: AppColors.primary.withValues(
+                              alpha: 0.8,
+                            ),
                             tooltipBorder: BorderSide(
                               color: AppColors.primary,
                               width: 1,
@@ -407,33 +442,41 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                   }
 
                   final outlets = snap.data ?? [];
-                  
+
                   // Calculate summary
                   double totalInvestment = 0;
                   double avgMonthlyProfit = 0;
                   String bestPerformer = 'N/A';
                   double bestMargin = 0;
-                  
+
                   for (final outlet in outlets) {
-                    final amount = (outlet['investment_amount'] as num?)?.toDouble() ?? 0.0;
-                    final margin = (outlet['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+                    final amount =
+                        (outlet['investment_amount'] as num?)?.toDouble() ??
+                        0.0;
+                    final margin =
+                        (outlet['margin_percentage'] as num?)?.toDouble() ??
+                        0.0;
                     totalInvestment += amount;
-                    
+
                     if (margin > bestMargin) {
                       bestMargin = margin;
-                      bestPerformer = (outlet['outlet_name'] as String?) ?? 'N/A';
+                      bestPerformer =
+                          (outlet['outlet_name'] as String?) ?? 'N/A';
                     }
                   }
-                  
-                  avgMonthlyProfit = (totalInvestment * (bestMargin / 100)) / 12;
 
-                  final formattedTotal = totalInvestment.toStringAsFixed(0)
+                  avgMonthlyProfit =
+                      (totalInvestment * (bestMargin / 100)) / 12;
+
+                  final formattedTotal = totalInvestment
+                      .toStringAsFixed(0)
                       .replaceAllMapped(
                         RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
                         (match) => '${match.group(1)}.',
                       );
-                  
-                  final formattedProfit = avgMonthlyProfit.toStringAsFixed(0)
+
+                  final formattedProfit = avgMonthlyProfit
+                      .toStringAsFixed(0)
                       .replaceAllMapped(
                         RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
                         (match) => '${match.group(1)}.',
@@ -446,13 +489,18 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                         width: double.infinity,
                         child: Card(
                           elevation: 2,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               gradient: LinearGradient(
-                                colors: [Colors.orange.shade50, Colors.orange.shade100],
+                                colors: [
+                                  Colors.orange.shade50,
+                                  Colors.orange.shade100,
+                                ],
                               ),
                             ),
                             child: Column(
@@ -460,7 +508,10 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                               children: [
                                 Text(
                                   'Total Investasi',
-                                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey[600],
+                                  ),
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
@@ -485,13 +536,18 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                           Expanded(
                             child: Card(
                               elevation: 1,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                               child: Container(
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(10),
                                   gradient: LinearGradient(
-                                    colors: [Colors.green.shade50, Colors.green.shade100],
+                                    colors: [
+                                      Colors.green.shade50,
+                                      Colors.green.shade100,
+                                    ],
                                   ),
                                 ),
                                 child: Column(
@@ -499,7 +555,10 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                                   children: [
                                     Text(
                                       'Profit Estimasi/Bulan',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey[600],
+                                      ),
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
@@ -520,13 +579,18 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                           Expanded(
                             child: Card(
                               elevation: 1,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                               child: Container(
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(10),
                                   gradient: LinearGradient(
-                                    colors: [Colors.blue.shade50, Colors.blue.shade100],
+                                    colors: [
+                                      Colors.blue.shade50,
+                                      Colors.blue.shade100,
+                                    ],
                                   ),
                                 ),
                                 child: Column(
@@ -534,7 +598,10 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                                   children: [
                                     Text(
                                       'Outlet Terbaik',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey[600],
+                                      ),
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
@@ -550,7 +617,10 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                                     const SizedBox(height: 4),
                                     Text(
                                       '$bestMargin% profit',
-                                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey[600],
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -563,7 +633,10 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                       // Quick Links
                       const Text(
                         'Akses Cepat',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -596,7 +669,10 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                                     ),
                                     Text(
                                       'Detail Analisis',
-                                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey[600],
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -632,7 +708,10 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                                     ),
                                     Text(
                                       'Kelola Investasi',
-                                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey[600],
+                                      ),
                                     ),
                                   ],
                                 ),

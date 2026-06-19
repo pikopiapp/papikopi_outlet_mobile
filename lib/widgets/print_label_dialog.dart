@@ -14,12 +14,12 @@ class PrintLabelDialog extends StatefulWidget {
   final String? expiryDate;
 
   const PrintLabelDialog({
-    Key? key,
+    super.key,
     required this.product,
     required this.batch,
     required this.productionDate,
     this.expiryDate,
-  }) : super(key: key);
+  });
 
   @override
   State<PrintLabelDialog> createState() => _PrintLabelDialogState();
@@ -30,7 +30,7 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
   bool _isConnected = false;
   bool _isPrinting = false;
   // List<BluetoothDevice> _devices = [];
-  List<dynamic> _devices = [];
+  final List<dynamic> _devices = [];
 
   @override
   void initState() {
@@ -89,15 +89,15 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
       };
 
       // Format dates
-      final prodDate = DateFormat('dd/MM/yyyy').format(
-        DateTime.parse(widget.productionDate),
-      );
+      final prodDate = DateFormat(
+        'dd/MM/yyyy',
+      ).format(DateTime.parse(widget.productionDate));
       final expDate = widget.expiryDate != null
           ? DateFormat('dd/MM/yyyy').format(DateTime.parse(widget.expiryDate!))
           : 'N/A';
 
       // Generate QR code image (100x100 for thermal printer)
-      final qrImage = await QrPainter(
+      await QrPainter(
         data: qrData.toString(),
         version: QrVersions.auto,
         gapless: true,
@@ -151,9 +151,9 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('❌ Error: $e')));
       }
     } finally {
       if (mounted) {
@@ -162,8 +162,13 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
     }
   }
 
-  void _addText(List<int> bytes, String text,
-      {bool bold = false, int size = 1, bool centered = false}) {
+  void _addText(
+    List<int> bytes,
+    String text, {
+    bool bold = false,
+    int size = 1,
+    bool centered = false,
+  }) {
     // Set font size (1=normal, 2=double)
     if (size > 1) {
       bytes.addAll([0x1D, 0x21, 0x11]); // GS ! (double height & width)
@@ -312,7 +317,9 @@ class _PrintLabelDialogState extends State<PrintLabelDialog> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.print),
-                label: Text(_isPrinting ? 'Sedang mencetak...' : 'Cetak Sekarang'),
+                label: Text(
+                  _isPrinting ? 'Sedang mencetak...' : 'Cetak Sekarang',
+                ),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   backgroundColor: Colors.blue,

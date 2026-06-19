@@ -5,10 +5,7 @@ import 'dart:async';
 class SplashScreen extends StatefulWidget {
   final Widget nextScreen;
 
-  const SplashScreen({
-    Key? key,
-    required this.nextScreen,
-  }) : super(key: key);
+  const SplashScreen({super.key, required this.nextScreen});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -94,7 +91,7 @@ class _SplashScreenState extends State<SplashScreen>
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                             blurRadius: 20,
                             offset: const Offset(0, 10),
                           ),
@@ -139,7 +136,7 @@ class _SplashScreenState extends State<SplashScreen>
                         'Kelola Outlet Kopi Dengan Mudah',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.white.withOpacity(0.8),
+                          color: Colors.white.withValues(alpha: 0.8),
                           letterSpacing: 0.5,
                           fontStyle: FontStyle.italic,
                         ),
@@ -166,7 +163,7 @@ class _SplashScreenState extends State<SplashScreen>
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.white.withOpacity(0.7),
+                        Colors.white.withValues(alpha: 0.7),
                       ),
                     ),
                   ),
@@ -174,7 +171,7 @@ class _SplashScreenState extends State<SplashScreen>
                   Text(
                     'Initializing...',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
+                      color: Colors.white.withValues(alpha: 0.6),
                       fontSize: 12,
                       letterSpacing: 1,
                     ),

@@ -16,32 +16,35 @@ class PapikopiAppBar extends AppBar {
     this.onRefresh,
     this.onMessages,
     this.additionalActions,
-    Key? key,
+    super.key,
   }) : super(
-    key: key,
-    backgroundColor: AppColors.primary,
-    foregroundColor: Colors.white,
-    elevation: 2,
-    title: Row(
-      children: [
-        Image.asset('assets/logo.png', height: 40),
-        const SizedBox(width: 8),
-        const Expanded(
-          child: Text(
-            'PapiApps Outlets',
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            softWrap: false,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    ),
-    actions: _buildActions(onLogout, onProfile, onSettings, onRefresh, onMessages, additionalActions),
-  );
+         backgroundColor: AppColors.primary,
+         foregroundColor: Colors.white,
+         elevation: 2,
+         title: Row(
+           children: [
+             Image.asset('assets/logo.png', height: 40),
+             const SizedBox(width: 8),
+             const Expanded(
+               child: Text(
+                 'PapiApps Outlets',
+                 overflow: TextOverflow.ellipsis,
+                 maxLines: 1,
+                 softWrap: false,
+                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+               ),
+             ),
+           ],
+         ),
+         actions: _buildActions(
+           onLogout,
+           onProfile,
+           onSettings,
+           onRefresh,
+           onMessages,
+           additionalActions,
+         ),
+       );
 
   static List<Widget> _buildActions(
     VoidCallback? onLogout,
@@ -71,9 +74,7 @@ class PapikopiAppBar extends AppBar {
 
     // Refresh button jika ada
     if (onRefresh != null) {
-      actions.add(
-        _RefreshButton(onRefresh: onRefresh),
-      );
+      actions.add(_RefreshButton(onRefresh: onRefresh));
     }
 
     // Menu button (Profile, Setting, Logout)
@@ -136,7 +137,8 @@ class _RefreshButton extends StatefulWidget {
   State<_RefreshButton> createState() => _RefreshButtonState();
 }
 
-class _RefreshButtonState extends State<_RefreshButton> with SingleTickerProviderStateMixin {
+class _RefreshButtonState extends State<_RefreshButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -157,10 +159,10 @@ class _RefreshButtonState extends State<_RefreshButton> with SingleTickerProvide
   void _handleRefresh() {
     // Start spinning animation
     _controller.repeat();
-    
+
     // Call the refresh callback
     widget.onRefresh();
-    
+
     // Stop animation after 3 seconds (or when data loads)
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted && _controller.isAnimating) {

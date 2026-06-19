@@ -25,14 +25,14 @@ class _ManagerProductReturnsScreenState
   Map<String, int> _soldMap = {}; // product_id -> total_quantity_sold
 
   String? _selectedOutletId;
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
 
   bool _isLoading = true;
   bool _isSubmitting = false;
   String? _error;
   String? _successMessage;
   int _currentTabIndex = 0;
-  
+
   // Temporary buffer for scanned returns (before batch submit)
   List<Map<String, dynamic>> _tempReturns = [];
   DateTime? _tempReturnsTimestamp;
@@ -46,6 +46,14 @@ class _ManagerProductReturnsScreenState
   void initState() {
     super.initState();
     _quantityControllers = {};
+    final now = DateTime.now();
+    _selectedDate = (now.hour < 4)
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(now.year, now.month, now.day);
     _loadTempReturns();
   }
 
@@ -53,32 +61,36 @@ class _ManagerProductReturnsScreenState
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonString = prefs.getString(_tempDataStorageKey);
-      
+
       if (jsonString != null) {
         final data = jsonDecode(jsonString) as Map<String, dynamic>;
         final savedTime = DateTime.parse(data['timestamp'] as String);
         final hoursDiff = DateTime.now().difference(savedTime).inHours;
-        
+
         // Auto-clear if older than threshold
         if (hoursDiff > _clearAfterHours) {
-          print('[ManagerProductReturnsScreen] Temp data expired, clearing...');
+          debugPrint(
+            '[ManagerProductReturnsScreen] Temp data expired, clearing...',
+          );
           await prefs.remove(_tempDataStorageKey);
           return;
         }
-        
+
         setState(() {
           _tempReturns = List<Map<String, dynamic>>.from(
             data['returns'] as List? ?? [],
           );
           _tempReturnsTimestamp = savedTime;
         });
-        
-        print('[ManagerProductReturnsScreen] Loaded ${_tempReturns.length} temp returns from storage');
+
+        debugPrint(
+          '[ManagerProductReturnsScreen] Loaded ${_tempReturns.length} temp returns from storage',
+        );
       }
     } catch (e) {
-      print('[ManagerProductReturnsScreen] Error loading temp data: $e');
+      debugPrint('[ManagerProductReturnsScreen] Error loading temp data: $e');
     }
-    
+
     // Then fetch outlets
     _fetchOutlets();
   }
@@ -90,22 +102,22 @@ class _ManagerProductReturnsScreenState
         await prefs.remove(_tempDataStorageKey);
         return;
       }
-      
+
       final prefs = await SharedPreferences.getInstance();
       final timestamp = DateTime.now();
       final data = {
         'returns': _tempReturns,
         'timestamp': timestamp.toIso8601String(),
       };
-      
+
       await prefs.setString(_tempDataStorageKey, jsonEncode(data));
       setState(() {
         _tempReturnsTimestamp = timestamp;
       });
-      
-      print('[ManagerProductReturnsScreen] Saved temp returns to storage');
+
+      debugPrint('[ManagerProductReturnsScreen] Saved temp returns to storage');
     } catch (e) {
-      print('[ManagerProductReturnsScreen] Error saving temp data: $e');
+      debugPrint('[ManagerProductReturnsScreen] Error saving temp data: $e');
     }
   }
 
@@ -113,15 +125,20 @@ class _ManagerProductReturnsScreenState
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedOutletId = prefs.getString(_selectedOutletStorageKey);
-      
-      if (savedOutletId != null && _outlets.any((o) => o['id'] == savedOutletId)) {
+
+      if (savedOutletId != null &&
+          _outlets.any((o) => o['id'] == savedOutletId)) {
         setState(() {
           _selectedOutletId = savedOutletId;
         });
-        print('[ManagerProductReturnsScreen] Loaded selected outlet: $savedOutletId');
+        debugPrint(
+          '[ManagerProductReturnsScreen] Loaded selected outlet: $savedOutletId',
+        );
       }
     } catch (e) {
-      print('[ManagerProductReturnsScreen] Error loading selected outlet: $e');
+      debugPrint(
+        '[ManagerProductReturnsScreen] Error loading selected outlet: $e',
+      );
     }
   }
 
@@ -130,10 +147,14 @@ class _ManagerProductReturnsScreenState
       final prefs = await SharedPreferences.getInstance();
       if (outletId != null) {
         await prefs.setString(_selectedOutletStorageKey, outletId);
-        print('[ManagerProductReturnsScreen] Saved selected outlet: $outletId');
+        debugPrint(
+          '[ManagerProductReturnsScreen] Saved selected outlet: $outletId',
+        );
       }
     } catch (e) {
-      print('[ManagerProductReturnsScreen] Error saving selected outlet: $e');
+      debugPrint(
+        '[ManagerProductReturnsScreen] Error saving selected outlet: $e',
+      );
     }
   }
 
@@ -145,20 +166,22 @@ class _ManagerProductReturnsScreenState
       });
 
       final outletsData = await _supabaseService.fetchOutlets();
-      print('[ManagerProductReturnsScreen] Fetched ${outletsData.length} outlets');
+      debugPrint(
+        '[ManagerProductReturnsScreen] Fetched ${outletsData.length} outlets',
+      );
       for (final outlet in outletsData) {
-        print('  - ${outlet['name']} (id: ${outlet['id']})');
+        debugPrint('  - ${outlet['name']} (id: ${outlet['id']})');
       }
 
       setState(() {
         _outlets = outletsData;
         _isLoading = false;
       });
-      
+
       // Load saved outlet selection after outlets are available
       await _loadSelectedOutlet();
     } catch (e) {
-      print('[ManagerProductReturnsScreen] Error fetching outlets: $e');
+      debugPrint('[ManagerProductReturnsScreen] Error fetching outlets: $e');
       setState(() {
         _error = 'Error fetching outlets: $e';
         _isLoading = false;
@@ -185,9 +208,13 @@ class _ManagerProductReturnsScreenState
 
       // Fetch allocations FOR THIS OUTLET (what was allocated to it)
       // Convert local date to UTC range for database query
-      final startOfDayUTC = DateTime.utc(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      final startOfDayUTC = DateTime.utc(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+      );
       final endOfDayUTC = startOfDayUTC.add(const Duration(days: 1));
-      
+
       final allocationsData = await _supabaseService.fetchAssignmentsForOutlet(
         outletId: _selectedOutletId!,
         startDate: startOfDayUTC,
@@ -199,13 +226,19 @@ class _ManagerProductReturnsScreenState
         outletId: _selectedOutletId!,
       );
       // Convert sales to map of product_id -> sold_quantity and filter by date
-      final startDate = DateTime.utc(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      final startDate = DateTime.utc(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+      );
       final endDate = startDate.add(const Duration(days: 1));
       final soldMap = <String, int>{};
       for (final sale in salesList) {
-        if (sale.createdAt.isAfter(startDate) && sale.createdAt.isBefore(endDate)) {
+        if (sale.createdAt.isAfter(startDate) &&
+            sale.createdAt.isBefore(endDate)) {
           for (final item in sale.items) {
-            soldMap[item.productId] = (soldMap[item.productId] ?? 0) + item.quantity;
+            soldMap[item.productId] =
+                (soldMap[item.productId] ?? 0) + item.quantity;
           }
         }
       }
@@ -217,9 +250,15 @@ class _ManagerProductReturnsScreenState
         endDate: endDate,
       );
 
-      print('[ManagerProductReturnsScreen] Fetched ${allocationsData.length} allocations for outlet');
-      print('[ManagerProductReturnsScreen] Fetched ${soldMap.length} products sold from outlet');
-      print('[ManagerProductReturnsScreen] Fetched ${returnsData.length} returns from outlet');
+      debugPrint(
+        '[ManagerProductReturnsScreen] Fetched ${allocationsData.length} allocations for outlet',
+      );
+      debugPrint(
+        '[ManagerProductReturnsScreen] Fetched ${soldMap.length} products sold from outlet',
+      );
+      debugPrint(
+        '[ManagerProductReturnsScreen] Fetched ${returnsData.length} returns from outlet',
+      );
 
       // Get unique product IDs from allocations (only show products allocated to this outlet)
       final allocatedProductIds = allocationsData
@@ -252,7 +291,11 @@ class _ManagerProductReturnsScreenState
     }
   }
 
-  Future<void> _returnProduct(String productId, String productName, String showcaseProductId) async {
+  Future<void> _returnProduct(
+    String productId,
+    String productName,
+    String showcaseProductId,
+  ) async {
     final quantityStr = _quantityControllers[showcaseProductId]?.text ?? '';
 
     if (quantityStr.isEmpty) {
@@ -286,7 +329,7 @@ class _ManagerProductReturnsScreenState
       'Rasa tidak sesuai',
       'Kemasan bermasalah',
       'Stock excess',
-      'Lainnya'
+      'Lainnya',
     ];
 
     if (mounted) {
@@ -324,7 +367,9 @@ class _ManagerProductReturnsScreenState
         _successMessage = null;
       });
 
-      print('[ManagerProductReturnsScreen] Returning product: $productId, qty: $quantity, reason: $selectedReason');
+      debugPrint(
+        '[ManagerProductReturnsScreen] Returning product: $productId, qty: $quantity, reason: $selectedReason',
+      );
 
       final result = await _supabaseService.recordProductReturn(
         productId: productId,
@@ -333,10 +378,12 @@ class _ManagerProductReturnsScreenState
         returnReason: selectedReason,
       );
 
-      print('[ManagerProductReturnsScreen] Return result: $result');
+      debugPrint('[ManagerProductReturnsScreen] Return result: $result');
 
       if (result['success'] == true) {
-        print('[ManagerProductReturnsScreen] Return successful, refreshing data...');
+        debugPrint(
+          '[ManagerProductReturnsScreen] Return successful, refreshing data...',
+        );
         _quantityControllers[showcaseProductId]?.clear();
         setState(() {
           _successMessage = result['message'] ?? 'Pengembalian berhasil';
@@ -414,9 +461,7 @@ class _ManagerProductReturnsScreenState
     }
 
     final scannedCode = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (context) => const QRCameraScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const QRCameraScreen()),
     );
 
     if (scannedCode != null && mounted) {
@@ -426,10 +471,12 @@ class _ManagerProductReturnsScreenState
 
   Future<void> _addProductByQRCode(String code) async {
     try {
-      print('[ManagerProductReturnsScreen] Scanned QR: $code');
-      print('[ManagerProductReturnsScreen] Available products: ${_products.length}');
+      debugPrint('[ManagerProductReturnsScreen] Scanned QR: $code');
+      debugPrint(
+        '[ManagerProductReturnsScreen] Available products: ${_products.length}',
+      );
       for (final p in _products) {
-        print('  Product: ${p.toString()}');
+        debugPrint('  Product: ${p.toString()}');
       }
 
       String? productId;
@@ -438,15 +485,23 @@ class _ManagerProductReturnsScreenState
       // Try parsing as JSON first
       try {
         final jsonData = jsonDecode(code) as Map<String, dynamic>;
-        productId = jsonData['product_id']?.toString() ?? jsonData['id']?.toString();
-        productName = jsonData['name']?.toString() ?? jsonData['product_name']?.toString() ?? jsonData['product']?.toString();
+        productId =
+            jsonData['product_id']?.toString() ?? jsonData['id']?.toString();
+        productName =
+            jsonData['name']?.toString() ??
+            jsonData['product_name']?.toString() ??
+            jsonData['product']?.toString();
       } catch (e) {
         // If JSON parsing fails, treat the code as a product ID
         productId = code;
-        print('[ManagerProductReturnsScreen] JSON parse failed, using code as product ID: $productId');
+        debugPrint(
+          '[ManagerProductReturnsScreen] JSON parse failed, using code as product ID: $productId',
+        );
       }
 
-      print('[ManagerProductReturnsScreen] Looking for product - ID: $productId, Name: $productName');
+      debugPrint(
+        '[ManagerProductReturnsScreen] Looking for product - ID: $productId, Name: $productName',
+      );
 
       if (productId == null || productId.isEmpty) {
         if (mounted) {
@@ -465,26 +520,36 @@ class _ManagerProductReturnsScreenState
 
       // 1. Exact match by ID (try both 'id' and 'product_id' fields)
       foundProduct = _products.firstWhere(
-        (p) => p['id'].toString() == productId || p['product_id']?.toString() == productId,
+        (p) =>
+            p['id'].toString() == productId ||
+            p['product_id']?.toString() == productId,
         orElse: () => {},
       );
       if (foundProduct.isEmpty && productName != null) {
         // 2. Match by name
         foundProduct = _products.firstWhere(
-          (p) => (p['name'] as String?)?.toLowerCase() == productName?.toLowerCase(),
+          (p) =>
+              (p['name'] as String?)?.toLowerCase() ==
+              productName?.toLowerCase(),
           orElse: () => {},
         );
       }
       if (foundProduct.isEmpty) {
         // 3. Partial match by name
         foundProduct = _products.firstWhere(
-          (p) => (p['name'] as String?)?.toLowerCase().contains(productName?.toLowerCase() ?? '') ?? false,
+          (p) =>
+              (p['name'] as String?)?.toLowerCase().contains(
+                productName?.toLowerCase() ?? '',
+              ) ??
+              false,
           orElse: () => {},
         );
       }
 
       if (foundProduct.isEmpty) {
-        print('[ManagerProductReturnsScreen] Product not found with ID: $productId, Name: $productName');
+        debugPrint(
+          '[ManagerProductReturnsScreen] Product not found with ID: $productId, Name: $productName',
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -496,11 +561,14 @@ class _ManagerProductReturnsScreenState
         return;
       }
 
-      print('[ManagerProductReturnsScreen] Found product: ${foundProduct['name']} (id: ${foundProduct['id']}, product_id: ${foundProduct['product_id']})');
+      debugPrint(
+        '[ManagerProductReturnsScreen] Found product: ${foundProduct['name']} (id: ${foundProduct['id']}, product_id: ${foundProduct['product_id']})',
+      );
 
       final showcaseProductId = foundProduct['id']?.toString() ?? '';
       final actualProductId = foundProduct['product_id']?.toString() ?? '';
-      final displayProductName = foundProduct['product_name']?.toString() ?? 'Produk';
+      final displayProductName =
+          foundProduct['product_name']?.toString() ?? 'Produk';
 
       // Calculate returnable quantity same as in form
       // Total allocated to this outlet
@@ -516,19 +584,22 @@ class _ManagerProductReturnsScreenState
           .where((r) => r['product_id'] == actualProductId)
           .fold<int>(0, (sum, r) => sum + (r['quantity'] as int? ?? 0));
 
-      final returnableQty = allocatedToOutlet - soldFromOutlet - returnedFromOutlet;
+      final returnableQty =
+          allocatedToOutlet - soldFromOutlet - returnedFromOutlet;
 
-      print('[ManagerProductReturnsScreen] Quantity calculation:');
-      print('  - Allocated: $allocatedToOutlet');
-      print('  - Sold: $soldFromOutlet');
-      print('  - Returned: $returnedFromOutlet');
-      print('  - Returnable: $returnableQty');
+      debugPrint('[ManagerProductReturnsScreen] Quantity calculation:');
+      debugPrint('  - Allocated: $allocatedToOutlet');
+      debugPrint('  - Sold: $soldFromOutlet');
+      debugPrint('  - Returned: $returnedFromOutlet');
+      debugPrint('  - Returnable: $returnableQty');
 
       if (returnableQty <= 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('$displayProductName tidak ada sisa untuk dikembalikan'),
+              content: Text(
+                '$displayProductName tidak ada sisa untuk dikembalikan',
+              ),
               duration: const Duration(seconds: 2),
             ),
           );
@@ -542,14 +613,16 @@ class _ManagerProductReturnsScreenState
         final existingIndex = _tempReturns.indexWhere(
           (r) => r['actual_product_id'] == actualProductId,
         );
-        
+
         if (existingIndex >= 0) {
           // Increment quantity
-          _tempReturns[existingIndex]['quantity'] = 
-            (_tempReturns[existingIndex]['quantity'] as int) + 1;
+          _tempReturns[existingIndex]['quantity'] =
+              (_tempReturns[existingIndex]['quantity'] as int) + 1;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('$displayProductName: ${_tempReturns[existingIndex]['quantity']} unit'),
+              content: Text(
+                '$displayProductName: ${_tempReturns[existingIndex]['quantity']} unit',
+              ),
               duration: const Duration(seconds: 1),
             ),
           );
@@ -570,13 +643,15 @@ class _ManagerProductReturnsScreenState
           );
         }
       });
-      
+
       // Save to persistent storage
       await _saveTempReturns();
 
-      print('[ManagerProductReturnsScreen] Added to temp buffer: $displayProductName (qty: 1)');
+      debugPrint(
+        '[ManagerProductReturnsScreen] Added to temp buffer: $displayProductName (qty: 1)',
+      );
     } catch (e) {
-      print('[ManagerProductReturnsScreen] Error in QR handling: $e');
+      debugPrint('[ManagerProductReturnsScreen] Error in QR handling: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -711,11 +786,11 @@ class _ManagerProductReturnsScreenState
                     onPressed: (_tempReturns[i]['quantity'] as int) <= 1
                         ? null
                         : () {
-                      setDialogState(() {
-                        _tempReturns[i]['quantity'] =
-                            (_tempReturns[i]['quantity'] as int) - 1;
-                      });
-                    },
+                            setDialogState(() {
+                              _tempReturns[i]['quantity'] =
+                                  (_tempReturns[i]['quantity'] as int) - 1;
+                            });
+                          },
                     padding: EdgeInsets.zero,
                   ),
                 ),
@@ -756,12 +831,12 @@ class _ManagerProductReturnsScreenState
       'Rasa tidak sesuai',
       'Kemasan bermasalah',
       'Stock excess',
-      'Lainnya'
+      'Lainnya',
     ];
 
     for (int i = 0; i < _tempReturns.length; i++) {
       final item = _tempReturns[i];
-      
+
       // Show reason dialog for each product
       String? selectedReason = await showDialog<String>(
         context: context,
@@ -811,7 +886,7 @@ class _ManagerProductReturnsScreenState
       _tempReturns.clear();
       _tempReturnsTimestamp = null;
     });
-    
+
     // Clear persistent storage
     await _saveTempReturns();
 
@@ -841,10 +916,9 @@ class _ManagerProductReturnsScreenState
                     children: [
                       Text(
                         'Kembalian Produk',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleLarge
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       if (_outlets.isNotEmpty)
@@ -855,13 +929,14 @@ class _ManagerProductReturnsScreenState
                               vertical: 8,
                             ),
                           ),
-                          value: _selectedOutletId,
+                          initialValue: _selectedOutletId,
                           hint: const Text('Pilih outlet...'),
                           items: _outlets.map((outlet) {
                             return DropdownMenuItem<String>(
                               value: outlet['id'] as String,
-                              child:
-                                  Text(outlet['name'] as String? ?? 'Unknown'),
+                              child: Text(
+                                outlet['name'] as String? ?? 'Unknown',
+                              ),
                             );
                           }).toList(),
                           onChanged: (value) {
@@ -870,12 +945,12 @@ class _ManagerProductReturnsScreenState
                               _successMessage = null;
                               _error = null;
                             });
-                            
+
                             // Save outlet selection
                             if (value != null) {
                               _saveSelectedOutlet(value);
                             }
-                            
+
                             _fetchProductsAndReturns();
                           },
                         )
@@ -888,12 +963,8 @@ class _ManagerProductReturnsScreenState
                           ),
                           child: Text(
                             'Tidak ada outlet tersedia',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
                           ),
                         ),
                     ],
@@ -941,8 +1012,7 @@ class _ManagerProductReturnsScreenState
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                      ],
+                      children: [],
                     ),
                   ),
                 // Pending returns indicator
@@ -1059,9 +1129,8 @@ class _ManagerProductReturnsScreenState
                                     left: 16,
                                     right: 16,
                                     top: 16,
-                                    bottom: MediaQuery.of(context)
-                                            .padding
-                                            .bottom +
+                                    bottom:
+                                        MediaQuery.of(context).padding.bottom +
                                         16,
                                   ),
                                   child: _buildReturnCard(),
@@ -1071,9 +1140,8 @@ class _ManagerProductReturnsScreenState
                                     left: 16,
                                     right: 16,
                                     top: 16,
-                                    bottom: MediaQuery.of(context)
-                                            .padding
-                                            .bottom +
+                                    bottom:
+                                        MediaQuery.of(context).padding.bottom +
                                         16,
                                   ),
                                   child: _buildReturnListCard(),
@@ -1093,12 +1161,8 @@ class _ManagerProductReturnsScreenState
                         child: Text(
                           'Pilih outlet di atas untuk memulai pengembalian produk',
                           textAlign: TextAlign.center,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(color: AppColors.textSecondary),
                         ),
                       ),
                     ),
@@ -1109,8 +1173,12 @@ class _ManagerProductReturnsScreenState
           ? FloatingActionButton(
               onPressed: _handleQRScan,
               backgroundColor: AppColors.primary,
-              child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
               tooltip: 'Scan QR Code',
+              child: const Icon(
+                Icons.qr_code_scanner,
+                color: Colors.white,
+                size: 28,
+              ),
             )
           : null,
     );
@@ -1126,10 +1194,9 @@ class _ManagerProductReturnsScreenState
           children: [
             Text(
               'Pengembalian Produk',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             // Date Picker
@@ -1149,7 +1216,10 @@ class _ManagerProductReturnsScreenState
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.altSurface,
                   borderRadius: BorderRadius.circular(8),
@@ -1161,11 +1231,13 @@ class _ManagerProductReturnsScreenState
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        DateFormat('EEEE, dd MMM yyyy', 'id_ID')
-                            .format(_selectedDate),
+                        DateFormat(
+                          'EEEE, dd MMM yyyy',
+                          'id_ID',
+                        ).format(_selectedDate),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                     const Icon(Icons.expand_more, size: 18),
@@ -1180,7 +1252,7 @@ class _ManagerProductReturnsScreenState
                   for (final product in _products) ...[
                     _buildProductCard(context, product),
                     const SizedBox(height: 12),
-                  ]
+                  ],
                 ],
               )
             else
@@ -1193,10 +1265,9 @@ class _ManagerProductReturnsScreenState
                 child: Center(
                   child: Text(
                     'Tidak ada produk tersedia',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppColors.textSecondary),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -1227,7 +1298,10 @@ class _ManagerProductReturnsScreenState
     final remaining = allocatedToOutlet - soldFromOutlet - returnedFromOutlet;
     final canReturn = remaining > 0;
 
-    _quantityControllers.putIfAbsent(showcaseProductId, () => TextEditingController());
+    _quantityControllers.putIfAbsent(
+      showcaseProductId,
+      () => TextEditingController(),
+    );
 
     return Container(
       width: double.infinity,
@@ -1246,9 +1320,9 @@ class _ManagerProductReturnsScreenState
         children: [
           Text(
             productName,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1256,11 +1330,16 @@ class _ManagerProductReturnsScreenState
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total Alokasi:', style: Theme.of(context).textTheme.bodySmall),
-              Text(allocatedToOutlet.toString(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      )),
+              Text(
+                'Total Alokasi:',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              Text(
+                allocatedToOutlet.toString(),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -1268,22 +1347,28 @@ class _ManagerProductReturnsScreenState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Terjual:', style: Theme.of(context).textTheme.bodySmall),
-              Text(soldFromOutlet.toString(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      )),
+              Text(
+                soldFromOutlet.toString(),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Dikembalikan:',
-                  style: Theme.of(context).textTheme.bodySmall),
-              Text(returnedFromOutlet.toString(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      )),
+              Text(
+                'Dikembalikan:',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              Text(
+                returnedFromOutlet.toString(),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -1291,10 +1376,13 @@ class _ManagerProductReturnsScreenState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Sisa:', style: Theme.of(context).textTheme.bodySmall),
-              Text(remaining.toString(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: canReturn ? Colors.green : Colors.red)),
+              Text(
+                remaining.toString(),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: canReturn ? Colors.green : Colors.red,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -1306,8 +1394,10 @@ class _ManagerProductReturnsScreenState
                     controller: _quantityControllers[showcaseProductId],
                     decoration: InputDecoration(
                       hintText: 'Qty kembalian',
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
                       ),
@@ -1319,7 +1409,11 @@ class _ManagerProductReturnsScreenState
                 ElevatedButton(
                   onPressed: _isSubmitting
                       ? null
-                      : () => _returnProduct(actualProductId, productName, showcaseProductId),
+                      : () => _returnProduct(
+                          actualProductId,
+                          productName,
+                          showcaseProductId,
+                        ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     disabledBackgroundColor: AppColors.textSecondary,
@@ -1341,9 +1435,9 @@ class _ManagerProductReturnsScreenState
               child: Center(
                 child: Text(
                   'Tidak ada produk untuk dikembalikan',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.red,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.red),
                 ),
               ),
             ),
@@ -1362,10 +1456,9 @@ class _ManagerProductReturnsScreenState
           children: [
             Text(
               'Daftar Pengembalian',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             // Date Picker
@@ -1385,7 +1478,10 @@ class _ManagerProductReturnsScreenState
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.altSurface,
                   borderRadius: BorderRadius.circular(8),
@@ -1397,11 +1493,13 @@ class _ManagerProductReturnsScreenState
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        DateFormat('EEEE, dd MMM yyyy', 'id_ID')
-                            .format(_selectedDate),
+                        DateFormat(
+                          'EEEE, dd MMM yyyy',
+                          'id_ID',
+                        ).format(_selectedDate),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                     const Icon(Icons.expand_more, size: 18),
@@ -1452,7 +1550,8 @@ class _ManagerProductReturnsScreenState
                       Expanded(
                         child: _buildReturnStatCard(
                           label: 'Sisa Tersedia',
-                          value: '${_getTotalAllocated() - _getTotalSold() - _getTotalReturned()}',
+                          value:
+                              '${_getTotalAllocated() - _getTotalSold() - _getTotalReturned()}',
                           icon: Icons.coffee,
                           color: Colors.green,
                         ),
@@ -1465,9 +1564,9 @@ class _ManagerProductReturnsScreenState
             const SizedBox(height: 16),
             Text(
               '${_returns.length} pengembalian tercatat',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
             // Per-product summary
@@ -1475,9 +1574,9 @@ class _ManagerProductReturnsScreenState
               Text(
                 'Per Produk',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textSecondary,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 8),
               _buildProductSummary(),
@@ -1485,9 +1584,9 @@ class _ManagerProductReturnsScreenState
               Text(
                 'Detail Pengembalian',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textSecondary,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 8),
               Column(
@@ -1506,10 +1605,9 @@ class _ManagerProductReturnsScreenState
                 child: Center(
                   child: Text(
                     'Belum ada pengembalian',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppColors.textSecondary),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -1519,22 +1617,25 @@ class _ManagerProductReturnsScreenState
     );
   }
 
-  Widget _buildReturnItem(
-      BuildContext context, Map<String, dynamic> return_) {
+  Widget _buildReturnItem(BuildContext context, Map<String, dynamic> return_) {
     final productName = return_['product_name'] as String? ?? 'Unknown';
     final quantity = return_['quantity'] as int? ?? 0;
-    
+
     // Handle id which could be String or int
     final idValue = return_['id'];
-    final id = idValue is String ? idValue : (idValue is int ? idValue.toString() : '');
-    
+    final id = idValue is String
+        ? idValue
+        : (idValue is int ? idValue.toString() : '');
+
     // Handle return_date which could be String or int
     String returnDateStr = '';
     final returnDateValue = return_['return_date'];
     if (returnDateValue is String) {
       returnDateStr = returnDateValue;
     } else if (returnDateValue is int) {
-      returnDateStr = DateTime.fromMillisecondsSinceEpoch(returnDateValue).toIso8601String();
+      returnDateStr = DateTime.fromMillisecondsSinceEpoch(
+        returnDateValue,
+      ).toIso8601String();
     }
 
     // Parse and format the return_date
@@ -1564,10 +1665,9 @@ class _ManagerProductReturnsScreenState
               children: [
                 Text(
                   productName,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Container(
@@ -1582,18 +1682,18 @@ class _ManagerProductReturnsScreenState
                   child: Text(
                     'Qty: $quantity',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Tanggal: $formattedDate',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                      ),
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -1619,7 +1719,10 @@ class _ManagerProductReturnsScreenState
   }
 
   int _getTotalAllocated() {
-    return _allocations.fold<int>(0, (sum, a) => sum + (a['quantity'] as int? ?? 0));
+    return _allocations.fold<int>(
+      0,
+      (sum, a) => sum + (a['quantity'] as int? ?? 0),
+    );
   }
 
   int _getTotalSold() {
@@ -1627,7 +1730,10 @@ class _ManagerProductReturnsScreenState
   }
 
   int _getTotalReturned() {
-    return _returns.fold<int>(0, (sum, r) => sum + (r['quantity'] as int? ?? 0));
+    return _returns.fold<int>(
+      0,
+      (sum, r) => sum + (r['quantity'] as int? ?? 0),
+    );
   }
 
   Widget _buildProductSummary() {
@@ -1636,7 +1742,8 @@ class _ManagerProductReturnsScreenState
     for (final return_ in _returns) {
       final productName = return_['product_name'] as String? ?? 'Unknown';
       final quantity = return_['quantity'] as int? ?? 0;
-      productReturns[productName] = (productReturns[productName] ?? 0) + quantity;
+      productReturns[productName] =
+          (productReturns[productName] ?? 0) + quantity;
     }
 
     return Column(
@@ -1660,8 +1767,8 @@ class _ManagerProductReturnsScreenState
                       Text(
                         entry.key,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          fontWeight: FontWeight.bold,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1681,9 +1788,9 @@ class _ManagerProductReturnsScreenState
                   child: Text(
                     'Qty: ${entry.value}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
               ],
@@ -1722,10 +1829,7 @@ class _ManagerProductReturnsScreenState
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 9,
-              color: AppColors.textSecondary,
-            ),
+            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],

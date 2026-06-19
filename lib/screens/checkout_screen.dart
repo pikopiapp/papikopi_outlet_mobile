@@ -25,7 +25,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedDate = DateTime.now();
+    final now = DateTime.now();
+    _selectedDate = (now.hour < 4)
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(now.year, now.month, now.day);
   }
 
   @override
@@ -42,9 +49,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   void _addToCart() {
     if (_selectedDrink == null || _quantity == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih minuman dan jumlah')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Pilih minuman dan jumlah')));
       return;
     }
 
@@ -54,7 +61,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${_quantity}x ${_selectedDrink!.name} ditambahkan')),
+      SnackBar(
+        content: Text('${_quantity}x ${_selectedDrink!.name} ditambahkan'),
+      ),
     );
 
     // Reset form
@@ -77,10 +86,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             Image.asset('assets/logo.png', height: 40),
             const SizedBox(width: 8),
             const Expanded(
-              child: Text(
-                'Checkout',
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text('Checkout', overflow: TextOverflow.ellipsis),
             ),
           ],
         ),
@@ -223,13 +229,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       isExpanded: true,
                       underline: const SizedBox(),
                       items: productProvider.products
-                          .map((product) => DropdownMenuItem(
-                                value: product,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Text(product.name),
-                                ),
-                              ))
+                          .map(
+                            (product) => DropdownMenuItem(
+                              value: product,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Text(product.name),
+                              ),
+                            ),
+                          )
                           .toList(),
                       onChanged: (product) {
                         setState(() => _selectedDrink = product);

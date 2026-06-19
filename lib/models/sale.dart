@@ -22,7 +22,7 @@ class SaleItem {
   factory SaleItem.fromJson(Map<String, dynamic> json) {
     // Get product name from direct field or from nested products relationship
     String productName = 'Product'; // Default fallback
-    
+
     // Try direct product_name field first
     if (json['product_name'] != null) {
       productName = json['product_name'] as String;
@@ -30,11 +30,12 @@ class SaleItem {
     // Try nested products relationship (from JOIN)
     else if (json['products'] != null) {
       final productsData = json['products'];
-      if (productsData is Map<String, dynamic> && productsData['name'] != null) {
+      if (productsData is Map<String, dynamic> &&
+          productsData['name'] != null) {
         productName = productsData['name'] as String;
       }
     }
-    
+
     return SaleItem(
       id: json['id'] as String,
       saleId: json['sale_id'] as String,
@@ -43,7 +44,7 @@ class SaleItem {
       quantity: json['quantity'] as int,
       unitPrice: (json['price'] as num).toDouble(),
       hpp: (json['hpp'] as num).toDouble(),
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
     );
   }
 
@@ -82,11 +83,12 @@ class Sale {
   });
 
   factory Sale.fromJson(Map<String, dynamic> json) {
-    final itemsList = (json['sale_items'] as List<dynamic>?)
+    final itemsList =
+        (json['sale_items'] as List<dynamic>?)
             ?.map((item) => SaleItem.fromJson(item as Map<String, dynamic>))
             .toList() ??
         [];
-    
+
     return Sale(
       id: json['id'] as String,
       outletId: json['outlet_id'] as String,
@@ -99,7 +101,9 @@ class Sale {
       items: itemsList,
       createdAt: DateTime.parse(json['created_at'] as String),
       isEdited: json['is_edited'] as bool? ?? false, // 🔧 NEW
-      editedAt: json['edited_at'] != null ? DateTime.parse(json['edited_at'] as String) : null, // 🔧 NEW
+        editedAt: json['edited_at'] != null
+          ? DateTime.parse(json['edited_at'] as String).toUtc()
+          : null, // 🔧 NEW
     );
   }
 

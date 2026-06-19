@@ -20,7 +20,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   bool _isRefreshing = false;
   Map<String, dynamic>? _salesData;
   Map<String, dynamic>? _yesterdaySalesData;
@@ -52,48 +53,39 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     try {
       final supabaseService = SupabaseService();
       final auth = context.read<AuthProvider>();
-      
+
       if (auth.currentUser != null) {
         final outletId = auth.currentUser!.outletId;
         final userId = auth.currentUser!.id;
-        
-        
+
         // Get sales data for today, week, and month using business day
         final today = DateTime.now();
-        
+
         // Fetch sales data using business day
         final revenueData = await supabaseService.getRevenueData(
           outletId: outletId,
           selectedDate: today,
         );
-        
+
         // Fetch announcements, private messages, group chats
         List<Map<String, dynamic>>? announcements;
-        List<Map<String, dynamic>>? privateMessages;
-        List<Map<String, dynamic>>? groupChats;
-        
+
         try {
           announcements = await supabaseService.getAnnouncements();
-          for (var ann in announcements) {
-          }
         } catch (e) {
           announcements = [];
         }
-        
+
         try {
-          privateMessages = await supabaseService.getPrivateMessagesWithSenderInfo(userId: userId);
-          for (var msg in privateMessages) {
-          }
-        } catch (e) {
-          privateMessages = [];
-        }
-        
+          await supabaseService.getPrivateMessagesWithSenderInfo(
+            userId: userId,
+          );
+        } catch (e) {}
+
         try {
-          groupChats = await supabaseService.getGroupChats();
-        } catch (e) {
-          groupChats = [];
-        }
-        
+          await supabaseService.getGroupChats();
+        } catch (e) {}
+
         if (mounted) {
           setState(() {
             _salesData = revenueData;
@@ -101,20 +93,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           });
         }
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> _loadOutletStatus() async {
     try {
       final supabaseService = SupabaseService();
       final auth = context.read<AuthProvider>();
-      
+
       if (auth.currentUser != null) {
         final outletId = auth.currentUser!.outletId;
-        final status = await supabaseService.getOutletStatus(outletId: outletId);
-        final businessDayStartHour = await supabaseService.getBusinessDayStartHour(outletId: outletId);
-        
+        final status = await supabaseService.getOutletStatus(
+          outletId: outletId,
+        );
+        final businessDayStartHour = await supabaseService
+            .getBusinessDayStartHour(outletId: outletId);
+
         if (mounted) {
           setState(() {
             _outletStatus = status;
@@ -122,18 +116,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           });
         }
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> _loadLowStockProducts() async {
     try {
       final supabaseService = SupabaseService();
       final auth = context.read<AuthProvider>();
-      
+
       if (auth.currentUser != null) {
         final outletId = auth.currentUser!.outletId;
-        
+
         // Fetch ingredients with stock <= 10 units
         final response = await supabaseService.client
             .from('outlet_stock')
@@ -141,18 +134,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             .eq('outlet_id', outletId)
             .lte('quantity', 10)
             .order('quantity', ascending: true);
-        
+
         if (response.isNotEmpty) {
           // Fetch ingredient details
           final ingredientIds = List<String>.from(
             response.map((item) => item['ingredient_id']).toList(),
           );
-          
+
           final ingredients = await supabaseService.client
               .from('ingredients')
               .select('id, name')
               .inFilter('id', ingredientIds);
-          
+
           // Merge stock data with ingredient details
           final merged = response.map((stockItem) {
             final ingredient = ingredients.firstWhere(
@@ -164,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               'ingredient_name': ingredient['name'] ?? 'Unknown',
             };
           }).toList();
-          
+
           if (mounted) {
             setState(() {
               _lowStockProducts = merged;
@@ -172,8 +165,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           }
         }
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> _loadYesterdaySalesData() async {
@@ -184,8 +176,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       final outletId = auth.currentUser!.outletId;
 
-      final yesterdayData =
-          await supabaseService.getYesterdaySalesData(
+      final yesterdayData = await supabaseService.getYesterdaySalesData(
         outletId: outletId,
       );
 
@@ -194,8 +185,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           _yesterdaySalesData = yesterdayData;
         });
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> _loadRecentTransactions() async {
@@ -206,8 +196,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       final outletId = auth.currentUser!.outletId;
 
-      final transactions =
-          await supabaseService.getRecentTransactions(
+      final transactions = await supabaseService.getRecentTransactions(
         outletId: outletId,
         limit: 5,
       );
@@ -217,8 +206,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           _recentTransactions = transactions;
         });
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   double _calculatePercentageChange(double today, double yesterday) {
@@ -227,10 +215,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   String _formatCurrency(double amount) {
-    return 'Rp${amount.toStringAsFixed(0).replaceAllMapped(
-          RegExp(r'\B(?=(\d{3})+(?!\d))'),
-          (match) => '.',
-        )}';
+    return 'Rp${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (match) => '.')}';
   }
 
   /// Format transaction time considering business day (default 4 AM)
@@ -246,9 +231,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   /// If business day starts at hour H, it runs from H:00 on one date to (H-1):59 on the next date
   String _buildBusinessDayText() {
     final startHour = _businessDayStartHour.toString().padLeft(2, '0');
-    final endHour = (_businessDayStartHour - 1 < 0 
-        ? 23 
-        : _businessDayStartHour - 1).toString().padLeft(2, '0');
+    final endHour =
+        (_businessDayStartHour - 1 < 0 ? 23 : _businessDayStartHour - 1)
+            .toString()
+            .padLeft(2, '0');
     return 'Hari Bisnis: jam $startHour:00 hari ini s/d jam $endHour:59 hari besok (WIB)';
   }
 
@@ -263,7 +249,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _refreshData() async {
-    
     // Prevent multiple simultaneous refreshes
     if (_isRefreshing) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -274,14 +259,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       );
       return;
     }
-    
+
     setState(() {
       _isRefreshing = true;
     });
-    
+
     try {
       await _loadHomeData();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -358,8 +343,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   Text(
                     'Pengumuman (${_announcements.length})',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   if (_announcements.isEmpty)
@@ -381,7 +366,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               const SizedBox(width: 12),
                               Text(
                                 'Belum ada pengumuman',
-                                style: TextStyle(color: AppColors.textSecondary),
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                             ],
                           ),
@@ -398,65 +385,89 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         side: BorderSide(color: AppColors.altSurface),
                       ),
                       child: Column(
-                        children: _announcements.take(3).toList().asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final announcement = entry.value;
-                          return Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      announcement['title'] ?? 'Pengumuman',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
+                        children: _announcements
+                            .take(3)
+                            .toList()
+                            .asMap()
+                            .entries
+                            .map((entry) {
+                              final index = entry.key;
+                              final announcement = entry.value;
+                              return Column(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 14,
                                     ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      announcement['description'] ?? '',
-                                      style: TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 12,
-                                        height: 1.4,
-                                      ),
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 10),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: ElevatedButton(
-                                        onPressed: () {
-                                          _showAnnouncementDetail(announcement);
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.accent,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(8),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          announcement['title'] ?? 'Pengumuman',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          announcement['description'] ?? '',
+                                          style: TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 12,
+                                            height: 1.4,
+                                          ),
+                                          maxLines: 3,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 10),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: ElevatedButton(
+                                            onPressed: () {
+                                              _showAnnouncementDetail(
+                                                announcement,
+                                              );
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppColors.accent,
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 8,
+                                                  ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'Lihat Detail',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                        child: const Text(
-                                          'Lihat Detail',
-                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              ),
-                              if (index < (_announcements.take(3).length - 1))
-                                Divider(color: AppColors.altSurface, height: 0, indent: 0),
-                            ],
-                          );
-                        }).toList(),
+                                  ),
+                                  if (index <
+                                      (_announcements.take(3).length - 1))
+                                    Divider(
+                                      color: AppColors.altSurface,
+                                      height: 0,
+                                      indent: 0,
+                                    ),
+                                ],
+                              );
+                            })
+                            .toList(),
                       ),
                     ),
                 ],
@@ -490,13 +501,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         Tab(
                           child: Text(
                             'Ringkasan Penjualan',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                         Tab(
                           child: Text(
                             'Transaksi Terakhir',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -519,7 +536,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     )
                   else
                     const ScreenSkeleton(lineCount: 6, showTitle: false),
-
                 ],
               ),
             ),
@@ -534,14 +550,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final dailyData = _salesData?['daily'] ?? {'amount': 0.0, 'count': 0};
     final weeklyData = _salesData?['weekly'] ?? {'amount': 0.0, 'count': 0};
     final monthlyData = _salesData?['monthly'] ?? {'amount': 0.0, 'count': 0};
-    
+
     final todaySales = (dailyData['amount'] as num?)?.toDouble() ?? 0.0;
     final weekSales = (weeklyData['amount'] as num?)?.toDouble() ?? 0.0;
     final monthSales = (monthlyData['amount'] as num?)?.toDouble() ?? 0.0;
     final totalTransactions = (dailyData['count'] as num?)?.toInt() ?? 0;
 
-    final yesterdaySales = (_yesterdaySalesData?['amount'] as num?)?.toDouble() ?? 0.0;
-    final dailyChangePercent = _calculatePercentageChange(todaySales, yesterdaySales);
+    final yesterdaySales =
+        (_yesterdaySalesData?['amount'] as num?)?.toDouble() ?? 0.0;
+    final dailyChangePercent = _calculatePercentageChange(
+      todaySales,
+      yesterdaySales,
+    );
 
     return SingleChildScrollView(
       child: Card(
@@ -569,11 +589,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 500),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: dailyChangePercent >= 0
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.red.withOpacity(0.1),
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(
@@ -583,8 +606,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           dailyChangePercent >= 0
                               ? Icons.arrow_upward
                               : Icons.arrow_downward,
-                          color:
-                              dailyChangePercent >= 0 ? Colors.green : Colors.red,
+                          color: dailyChangePercent >= 0
+                              ? Colors.green
+                              : Colors.red,
                           size: 14,
                         ),
                         const SizedBox(width: 4),
@@ -671,90 +695,87 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             side: BorderSide(color: AppColors.altSurface),
           ),
           child: Column(
-        children: _recentTransactions.asMap().entries.map((entry) {
-          final index = entry.key;
-          final transaction = entry.value;
-          final amount = (transaction['total_amount'] as num?)?.toInt() ?? 0;
-          final method = transaction['payment_method'] ?? 'Unknown';
-          final createdAt = transaction['created_at'] != null
-              ? DateTime.parse(transaction['created_at'].toString())
-              : null;
+            children: _recentTransactions.asMap().entries.map((entry) {
+              final index = entry.key;
+              final transaction = entry.value;
+              final amount =
+                  (transaction['total_amount'] as num?)?.toInt() ?? 0;
+              final method = transaction['payment_method'] ?? 'Unknown';
+                final createdAt = transaction['created_at'] != null
+                  ? DateTime.parse(transaction['created_at'].toString()).toUtc()
+                  : null;
 
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.shopping_cart,
-                        color: Colors.blue,
-                        size: 16,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Transaksi #${index + 1}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            createdAt != null
-                                ? _formatTransactionTime(createdAt)
-                                : 'Unknown time',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
                       children: [
-                        Text(
-                          _formatCurrency(amount.toDouble()),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.shopping_cart,
+                            color: Colors.blue,
+                            size: 16,
                           ),
                         ),
-                        Text(
-                          method,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.textSecondary,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Transaksi #${index + 1}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                createdAt != null
+                                    ? _formatTransactionTime(createdAt)
+                                    : 'Unknown time',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              _formatCurrency(amount.toDouble()),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                            Text(
+                              method,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-              if (index < _recentTransactions.length - 1)
-                Divider(
-                  color: AppColors.altSurface,
-                  height: 0,
-                  indent: 52,
-                ),
-            ],
-          );
-        }).toList(),
-      ),
+                  ),
+                  if (index < _recentTransactions.length - 1)
+                    Divider(color: AppColors.altSurface, height: 0, indent: 52),
+                ],
+              );
+            }).toList(),
+          ),
         ),
       ],
     );
@@ -770,8 +791,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         final greeting = hour < 12
             ? '🌅 Pagi'
             : hour < 17
-                ? '☀️ Siang'
-                : '🌙 Malam';
+            ? '☀️ Siang'
+            : '🌙 Malam';
 
         return Container(
           width: double.infinity,
@@ -798,16 +819,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               const SizedBox(height: 8),
               Text(
                 'Selamat datang, $name! 👋',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
               const SizedBox(height: 4),
               Text(
-                DateFormat('EEEE, dd MMMM yyyy', 'id_ID').format(DateTime.now()),
+                DateFormat(
+                  'EEEE, dd MMMM yyyy',
+                  'id_ID',
+                ).format(DateTime.now()),
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.white.withValues(alpha: 0.8),
                   fontSize: 13,
                 ),
               ),
@@ -843,7 +864,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           setState(() {
             _outletStatus = value;
           });
-          
+
           // Save to database
           try {
             final auth = context.read<AuthProvider>();
@@ -854,11 +875,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 status: value,
                 userId: auth.currentUser!.id,
               );
-              
+
               if (success && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Status outlet berhasil diubah menjadi: ${statusLabels[value]}'),
+                    content: Text(
+                      'Status outlet berhasil diubah menjadi: ${statusLabels[value]}',
+                    ),
                     backgroundColor: statusColors[value],
                     duration: const Duration(seconds: 2),
                   ),
@@ -876,26 +899,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             }
           }
         },
-        itemBuilder: (BuildContext context) =>
-            statusOptions
-                .map((String choice) => PopupMenuItem<String>(
-                      value: choice,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: statusColors[choice],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(statusLabels[choice] ?? choice),
-                        ],
+        itemBuilder: (BuildContext context) => statusOptions
+            .map(
+              (String choice) => PopupMenuItem<String>(
+                value: choice,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: statusColors[choice],
                       ),
-                    ))
-                .toList(),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(statusLabels[choice] ?? choice),
+                  ],
+                ),
+              ),
+            )
+            .toList(),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -953,18 +977,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.15),
+            color: color.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: color.withOpacity(0.3),
-              width: 1,
-            ),
+            border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
           ),
-          child: Icon(
-            icon,
-            color: color,
-            size: 22,
-          ),
+          child: Icon(icon, color: color, size: 22),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -997,9 +1014,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _handleProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const ProfileScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const ProfileScreen()));
   }
 
   void _handleMessages() {
@@ -1009,9 +1026,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _handleSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const SettingsScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
   }
 
   void _handleLogout() {
@@ -1103,15 +1120,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         borderRadius: BorderRadius.circular(14),
         child: Container(
           decoration: BoxDecoration(
-            border: Border.all(
-              color: color.withOpacity(0.4),
-              width: 1.5,
-            ),
+            border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
             borderRadius: BorderRadius.circular(14),
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.08),
+                color: color.withValues(alpha: 0.08),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -1124,13 +1138,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: color.withOpacity(0.2),
+                  color: color.withValues(alpha: 0.2),
                 ),
-                child: Icon(
-                  icon,
-                  size: 32,
-                  color: color,
-                ),
+                child: Icon(icon, size: 32, color: color),
               ),
               const SizedBox(height: 10),
               Text(
@@ -1177,20 +1187,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             final product = _lowStockProducts[index];
             final quantity = product['quantity'] as int? ?? 0;
             final isVeryLow = quantity <= 5;
-            
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: isVeryLow ? Colors.red.withOpacity(0.5) : Colors.orange.withOpacity(0.5),
+                    color: isVeryLow
+                        ? Colors.red.withValues(alpha: 0.5)
+                        : Colors.orange.withValues(alpha: 0.5),
                     width: 1.5,
                   ),
                   borderRadius: BorderRadius.circular(8),
-                  color: isVeryLow 
-                    ? Colors.red.withOpacity(0.05)
-                    : Colors.orange.withOpacity(0.05),
+                  color: isVeryLow
+                      ? Colors.red.withValues(alpha: 0.05)
+                      : Colors.orange.withValues(alpha: 0.05),
                 ),
                 child: Row(
                   children: [
@@ -1228,7 +1240,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            isVeryLow ? '⚠️ Stok SANGAT RENDAH!' : '⚡ Stok rendah',
+                            isVeryLow
+                                ? '⚠️ Stok SANGAT RENDAH!'
+                                : '⚡ Stok rendah',
                             style: TextStyle(
                               fontSize: 11,
                               color: isVeryLow ? Colors.red : Colors.orange,
@@ -1239,7 +1253,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.arrow_forward, 
+                      icon: Icon(
+                        Icons.arrow_forward,
                         color: isVeryLow ? Colors.red : Colors.orange,
                         size: 20,
                       ),

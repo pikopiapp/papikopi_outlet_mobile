@@ -47,6 +47,7 @@ dependencies:
   # UUID generator for demo data
   uuid: ^3.0.6
 
+  flutter_native_splash: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -60,7 +61,6 @@ dev_dependencies:
   
   # Icon & Splash Screen Generator
   flutter_launcher_icons: ^0.13.1
-  flutter_native_splash: ^2.4.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -12,7 +12,6 @@ class InvestorProfileScreen extends StatefulWidget {
 }
 
 class _InvestorProfileScreenState extends State<InvestorProfileScreen> {
-
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
@@ -38,7 +37,7 @@ class _InvestorProfileScreenState extends State<InvestorProfileScreen> {
                       width: 100,
                       height: 100,
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.2),
+                        color: AppColors.primary.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(50),
                       ),
                       child: Center(
@@ -60,10 +59,7 @@ class _InvestorProfileScreenState extends State<InvestorProfileScreen> {
                     const SizedBox(height: 4),
                     Text(
                       'Akun Investor',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -72,10 +68,7 @@ class _InvestorProfileScreenState extends State<InvestorProfileScreen> {
               // Profile Information Section
               const Text(
                 'Informasi Akun',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               // Email
@@ -95,10 +88,7 @@ class _InvestorProfileScreenState extends State<InvestorProfileScreen> {
               // Account Status Section
               const Text(
                 'Status Akun',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Container(
@@ -134,10 +124,7 @@ class _InvestorProfileScreenState extends State<InvestorProfileScreen> {
               // Actions Section
               const Text(
                 'Aksi',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -146,7 +133,9 @@ class _InvestorProfileScreenState extends State<InvestorProfileScreen> {
                   onPressed: () {
                     // TODO: Implement edit profile
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Edit profil akan segera tersedia')),
+                      const SnackBar(
+                        content: Text('Edit profil akan segera tersedia'),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.edit),
@@ -165,7 +154,9 @@ class _InvestorProfileScreenState extends State<InvestorProfileScreen> {
                   onPressed: () async {
                     // TODO: Implement logout
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Logout akan segera tersedia')),
+                      const SnackBar(
+                        content: Text('Logout akan segera tersedia'),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.logout),
@@ -207,11 +198,7 @@ class _ProfileField extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: AppColors.primary,
-            size: 20,
-          ),
+          Icon(icon, color: AppColors.primary, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

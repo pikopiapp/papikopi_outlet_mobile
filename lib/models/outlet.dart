@@ -30,9 +30,9 @@ class Outlet {
       phone: json['phone'] as String?,
       whatsapp: json['whatsapp'] as String?,
       isActive: json['is_active'] as bool? ?? true,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at'] as String) 
+        createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
+        updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String).toUtc()
           : null,
     );
   }

@@ -6,9 +6,9 @@ import '../providers/product_provider.dart';
 import '../services/supabase_service.dart';
 import '../theme/thema.dart';
 import '../utils/number_formatter.dart';
+import '../utils/holiday_detector.dart';
 import '../models/sale.dart';
 import '../widgets/screen_skeleton.dart';
-
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -51,10 +51,39 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+    }
+  }
+
+  bool _isEditAllowedByRole(Sale transaction) {
+    try {
+      final auth = context.read<AuthProvider>();
+      final user = auth.currentUser;
+
+      // If no user information, be conservative and disallow
+      if (user == null) return false;
+
+      // Only restrict barista role. Managers/admins can edit/delete.
+      if (user.role != 'barista') return true;
+
+      // Normalize times similarly to UI (app uses +7 display offset)
+      const tzOffset = Duration(hours: 7);
+      final txDate = transaction.createdAt.add(tzOffset);
+      final now = DateTime.now().add(tzOffset);
+
+      final isSameDay = txDate.year == now.year &&
+          txDate.month == now.month &&
+          txDate.day == now.day;
+
+      // Business day check: today should not be a holiday/weekend
+      final todayIsHoliday = isHoliday(DateTime(now.year, now.month, now.day));
+
+      return isSameDay && !todayIsHoliday;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -78,45 +107,69 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
       body: _isLoading
           ? const ScreenSkeleton(lineCount: 8, showTitle: false)
           : _transactions.isEmpty
-              ? Center(
-
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.receipt_long_outlined,
-                        size: 48,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Tidak ada pesanan',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.receipt_long_outlined,
+                    size: 48,
+                    color: Colors.grey[400],
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _transactions.length,
-                  addAutomaticKeepAlives: false, // Disable keep alive to force rebuild
-                  addRepaintBoundaries: false, // Disable repaint boundaries for full rebuild
-                  itemBuilder: (context, index) {
-                    final transaction = _transactions[index];
-                    final itemCountStr = transaction.items.length.toString();
-                    // Special tracking for target transaction
-                      return TransactionCard(
-                        key: ValueKey('${transaction.id}-${transaction.totalAmount}-${itemCountStr}-${transaction.isEdited}'), // Include all data in key
-                        transaction: transaction,
-                        onTap: () => _showTransactionDetail(transaction),
-                        onDelete: () => _confirmDelete(transaction),
-                      );
-                  },
-                ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Tidak ada pesanan',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: _transactions.length,
+              addAutomaticKeepAlives:
+                  false, // Disable keep alive to force rebuild
+              addRepaintBoundaries:
+                  false, // Disable repaint boundaries for full rebuild
+              itemBuilder: (context, index) {
+                final transaction = _transactions[index];
+                final itemCountStr = transaction.items.length.toString();
+                // Special tracking for target transaction
+                return TransactionCard(
+                  key: ValueKey(
+                    '${transaction.id}-${transaction.totalAmount}-$itemCountStr-${transaction.isEdited}',
+                  ), // Include all data in key
+                  transaction: transaction,
+                  onTap: () => _showTransactionDetail(transaction),
+                  onDelete: () => _confirmDelete(transaction),
+                  canEdit: _isEditAllowedByRole(transaction),
+                );
+              },
+            ),
     );
   }
 
   void _showTransactionDetail(Sale transaction) {
+    // Guard: barista can only edit today's business-day transactions
+    if (!_isEditAllowedByRole(transaction)) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Tidak Bisa Edit'),
+          content: const Text(
+            'Barista hanya dapat mengedit transaksi untuk hari bisnis (hari ini). Transaksi sebelumnya tidak dapat diedit di aplikasi ini.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tutup'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => _TransactionEditDialog(
@@ -124,7 +177,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         onSave: (editedTransaction) async {
           // Update transaction in database
           await _updateTransaction(editedTransaction);
-          
+
           // Close dialog only after update is done
           if (mounted && Navigator.canPop(context)) {
             Navigator.pop(context);
@@ -154,8 +207,12 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
       // Update sale items - update each existing item with new values
       for (var item in transaction.items) {
         // Check if this is a new item (id is empty string or doesn't exist in original)
-        final isNewItem = item.id.isEmpty || !_transactions.any((t) =>
-            t.id == transaction.id && t.items.any((i) => i.id == item.id));
+        final isNewItem =
+            item.id.isEmpty ||
+            !_transactions.any(
+              (t) =>
+                  t.id == transaction.id && t.items.any((i) => i.id == item.id),
+            );
 
         if (isNewItem) {
           try {
@@ -167,7 +224,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
               'hpp': item.hpp,
               'created_at': DateTime.now().toIso8601String(),
             });
-          } catch (e) {}
+          } catch (e) {
+            // intentionally left empty - best-effort item insert
+          }
         } else {
           try {
             await _supabase.client
@@ -179,7 +238,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                   'hpp': item.hpp,
                 })
                 .eq('id', item.id);
-          } catch (e) {}
+          } catch (e) {
+            // intentionally left empty - best-effort item update
+          }
         }
       }
 
@@ -188,7 +249,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
 
       // Reload transactions
       await _loadTransactions();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('✅ Pesanan berhasil diperbarui')),
@@ -196,22 +257,50 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   Future<void> _confirmDelete(Sale transaction) async {
+    // Guard delete for barista role
+    if (!_isEditAllowedByRole(transaction)) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Tidak Bisa Hapus'),
+          content: const Text(
+            'Barista hanya dapat menghapus transaksi untuk hari bisnis (hari ini). Transaksi sebelumnya tidak dapat dihapus di aplikasi ini.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tutup'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hapus Pesanan'),
-        content: const Text('Anda yakin ingin menghapus pesanan ini? Tindakan ini tidak dapat dibatalkan.'),
+        content: const Text(
+          'Anda yakin ingin menghapus pesanan ini? Tindakan ini tidak dapat dibatalkan.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
         ],
       ),
     );
@@ -223,12 +312,21 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
 
   Future<void> _deleteTransaction(Sale transaction) async {
     try {
-      await _supabase.client.from('sale_items').delete().eq('sale_id', transaction.id);
+      await _supabase.client
+          .from('sale_items')
+          .delete()
+          .eq('sale_id', transaction.id);
       await _supabase.client.from('sales').delete().eq('id', transaction.id);
       await _loadTransactions();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Pesanan dihapus')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('✅ Pesanan dihapus')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error menghapus: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error menghapus: $e')));
     }
   }
 }
@@ -237,12 +335,14 @@ class TransactionCard extends StatelessWidget {
   final Sale transaction;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
+  final bool canEdit;
 
   const TransactionCard({
     super.key,
     required this.transaction,
     required this.onTap,
     this.onDelete,
+    this.canEdit = true,
   });
 
   @override
@@ -261,18 +361,17 @@ class TransactionCard extends StatelessWidget {
             color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            Icons.receipt_long,
-            color: AppColors.primary,
-          ),
+          child: Icon(Icons.receipt_long, color: AppColors.primary),
         ),
         title: Row(
           children: [
             // Tanggal (kolom 1) - expand to take remaining space so amount sits at right
             Expanded(
               child: Text(
-                DateFormat('dd MMM yyyy', 'id_ID')
-                    .format(transaction.createdAt.add(const Duration(hours: 7))),
+                DateFormat(
+                  'dd MMM yyyy',
+                  'id_ID',
+                ).format(transaction.createdAt.add(const Duration(hours: 7))),
                 style: const TextStyle(fontWeight: FontWeight.bold),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
@@ -287,7 +386,10 @@ class TransactionCard extends StatelessWidget {
                 child: Text(
                   NumberFormatter.formatRupiah(transaction.totalAmount),
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
@@ -302,8 +404,10 @@ class TransactionCard extends StatelessWidget {
             const SizedBox(height: 4),
             // show time under the date heading
             Text(
-              DateFormat('HH:mm', 'id_ID')
-                  .format(transaction.createdAt.add(const Duration(hours: 7))),
+              DateFormat(
+                'HH:mm',
+                'id_ID',
+              ).format(transaction.createdAt.add(const Duration(hours: 7))),
               style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 6),
@@ -319,7 +423,10 @@ class TransactionCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '${it.quantity}x ${it.productName}',
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -329,9 +436,14 @@ class TransactionCard extends StatelessWidget {
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: Text(
-                          NumberFormatter.formatRupiah(it.unitPrice * it.quantity),
+                          NumberFormatter.formatRupiah(
+                            it.unitPrice * it.quantity,
+                          ),
                           textAlign: TextAlign.right,
-                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -340,7 +452,7 @@ class TransactionCard extends StatelessWidget {
                   ],
                 ),
               );
-            }).toList(),
+            }),
             const SizedBox(height: 8),
             // Bottom row: aligned to right with Edit and Delete
             Row(
@@ -351,11 +463,32 @@ class TransactionCard extends StatelessWidget {
                   height: 44,
                   child: IconButton(
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 44,
+                      height: 44,
+                    ),
                     icon: const Icon(Icons.edit, size: 22),
-                    color: AppColors.primary,
-                    onPressed: onTap,
-                    tooltip: 'Edit',
+                    color: canEdit ? AppColors.primary : Colors.grey,
+                    onPressed: canEdit
+                        ? onTap
+                        : () {
+                            showDialog<void>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Tidak Bisa Edit'),
+                                content: const Text(
+                                  'Barista hanya dapat mengedit transaksi untuk hari bisnis (hari ini). Transaksi sebelumnya tidak dapat diedit di aplikasi ini.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Tutup'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                    tooltip: canEdit ? 'Edit' : 'Tidak dapat diedit',
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -364,11 +497,32 @@ class TransactionCard extends StatelessWidget {
                   height: 44,
                   child: IconButton(
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 44,
+                      height: 44,
+                    ),
                     icon: const Icon(Icons.delete_forever, size: 22),
-                    color: Colors.red,
-                    onPressed: onDelete,
-                    tooltip: 'Hapus',
+                    color: canEdit ? Colors.red : Colors.grey,
+                    onPressed: canEdit
+                        ? onDelete
+                        : () {
+                            showDialog<void>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Tidak Bisa Hapus'),
+                                content: const Text(
+                                  'Barista hanya dapat menghapus transaksi untuk hari bisnis (hari ini). Transaksi sebelumnya tidak dapat dihapus di aplikasi ini.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Tutup'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                    tooltip: canEdit ? 'Hapus' : 'Tidak dapat dihapus',
                   ),
                 ),
               ],
@@ -397,15 +551,28 @@ class _TransactionEditDialog extends StatefulWidget {
 
 class _TransactionEditDialogState extends State<_TransactionEditDialog> {
   late String _paymentMethod;
-  late Map<String, int> _itemQuantitiesByProduct; // Track quantity changes by product name
-  late Map<String, String> _itemProductNamesByProduct; // Track product name changes by product name
-  late Map<String, List<String>> _itemIdsByProduct; // Track which item IDs belong to each product
-  late Map<String, double> _itemUnitPriceByProduct; // Track unit prices by product name
+  late Map<String, int>
+  _itemQuantitiesByProduct; // Track quantity changes by product name
+  late Map<String, String>
+  _itemProductNamesByProduct; // Track product name changes by product name
+  late Map<String, List<String>>
+  _itemIdsByProduct; // Track which item IDs belong to each product
+  late Map<String, double>
+  _itemUnitPriceByProduct; // Track unit prices by product name
   late Map<String, double> _itemHppByProduct; // Track HPP by product name
-  
+
   // 🆕 Track newly added items (not from original transaction)
-  late List<({String productId, String productName, int quantity, double unitPrice, double hpp})> _newItems;
-  
+  late List<
+    ({
+      String productId,
+      String productName,
+      int quantity,
+      double unitPrice,
+      double hpp,
+    })
+  >
+  _newItems;
+
   // 🆕 Gratis limit check
   bool _gratisLimitReached = false;
   String _gratisLimitMessage = '';
@@ -418,7 +585,7 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
     _paymentMethod = validMethods.contains(widget.transaction.paymentMethod)
         ? widget.transaction.paymentMethod
         : 'CASH'; // Default to CASH if invalid
-    
+
     // Initialize by product name (aggregated)
     _itemQuantitiesByProduct = {};
     _itemProductNamesByProduct = {};
@@ -426,15 +593,16 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
     _itemUnitPriceByProduct = {};
     _itemHppByProduct = {};
     _newItems = []; // 🆕 Initialize new items list
-    
+
     for (var item in widget.transaction.items) {
       final key = item.productName;
       _itemQuantitiesByProduct.putIfAbsent(key, () => 0);
-      _itemQuantitiesByProduct[key] = _itemQuantitiesByProduct[key]! + item.quantity;
+      _itemQuantitiesByProduct[key] =
+          _itemQuantitiesByProduct[key]! + item.quantity;
       _itemProductNamesByProduct[key] = item.productName;
       _itemUnitPriceByProduct[key] = item.unitPrice;
       _itemHppByProduct[key] = item.hpp;
-      
+
       if (!_itemIdsByProduct.containsKey(key)) {
         _itemIdsByProduct[key] = [];
       }
@@ -443,14 +611,19 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
   }
 
   // 🔧 NEW: Aggregate items by product name
-  List<({String productName, int quantity, double unitPrice})> get aggregatedItems {
+  List<({String productName, int quantity, double unitPrice})>
+  get aggregatedItems {
     // Return aggregated items with updated prices based on current product selection
     final result = <({String productName, int quantity, double unitPrice})>[];
-    _itemProductNamesByProduct.forEach((originalProductName, currentProductName) {
+    _itemProductNamesByProduct.forEach((
+      originalProductName,
+      currentProductName,
+    ) {
       final quantity = _itemQuantitiesByProduct[originalProductName] ?? 1;
       final unitPrice = _itemUnitPriceByProduct[originalProductName] ?? 0.0;
       result.add((
-        productName: currentProductName, // Use current product name (may have changed)
+        productName:
+            currentProductName, // Use current product name (may have changed)
         quantity: quantity,
         unitPrice: unitPrice, // Use stored price
       ));
@@ -466,12 +639,12 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
         final newProduct = productProvider.products.firstWhere(
           (p) => p.name == newProductName,
         );
-        _itemUnitPriceByProduct[originalProductName] = newProduct.price.toDouble();
-        _itemHppByProduct[originalProductName] = (newProduct.hpp ?? 0).toDouble();
-      } catch (e) {
-      }
-    } catch (e) {
-    }
+        _itemUnitPriceByProduct[originalProductName] = newProduct.price
+            .toDouble();
+        _itemHppByProduct[originalProductName] = (newProduct.hpp ?? 0)
+            .toDouble();
+      } catch (e) {}
+    } catch (e) {}
   }
 
   // 🆕 Check monthly gratis limit
@@ -479,21 +652,21 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
     try {
       final authProvider = context.read<AuthProvider>();
       final supabaseService = SupabaseService();
-      
+
       if (authProvider.currentUser == null) return;
 
       // Get current month's transactions
       final now = DateTime.now();
       final monthStart = DateTime(now.year, now.month, 1);
-      
+
       final result = await supabaseService.getMonthlyGratisStats(
         outletId: authProvider.currentUser!.outletId,
         monthStart: monthStart,
       );
-      
+
       final totalTransactions = result['total'] as int;
       final gratisCount = result['gratis_count'] as int;
-      
+
       if (totalTransactions == 0) {
         setState(() {
           _gratisLimitReached = false;
@@ -501,22 +674,23 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
         });
         return;
       }
-      
+
       final gratisPercentage = (gratisCount / totalTransactions) * 100;
-      
+
       if (gratisPercentage >= 3.0) {
         setState(() {
           _gratisLimitReached = true;
-          _gratisLimitMessage = '⚠️ Limit gratis 3% sudah tercapai! (${gratisPercentage.toStringAsFixed(1)}% dari $totalTransactions transaksi)';
+          _gratisLimitMessage =
+              '⚠️ Limit gratis 3% sudah tercapai! (${gratisPercentage.toStringAsFixed(1)}% dari $totalTransactions transaksi)';
         });
       } else {
         setState(() {
           _gratisLimitReached = false;
-          _gratisLimitMessage = 'Gratis: ${gratisPercentage.toStringAsFixed(1)}% dari 3% limit';
+          _gratisLimitMessage =
+              'Gratis: ${gratisPercentage.toStringAsFixed(1)}% dari 3% limit';
         });
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   // 🆕 Add new product to transaction
@@ -587,13 +761,18 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                             decoration: const InputDecoration(
                               border: InputBorder.none,
                             ),
-                            controller: TextEditingController(text: quantity.toString())
-                              ..selection = TextSelection.fromPosition(
-                                TextPosition(offset: quantity.toString().length),
-                              ),
+                            controller:
+                                TextEditingController(text: quantity.toString())
+                                  ..selection = TextSelection.fromPosition(
+                                    TextPosition(
+                                      offset: quantity.toString().length,
+                                    ),
+                                  ),
                             onChanged: (value) {
                               if (value.isNotEmpty) {
-                                setState(() => quantity = int.tryParse(value) ?? 1);
+                                setState(
+                                  () => quantity = int.tryParse(value) ?? 1,
+                                );
                               }
                             },
                           ),
@@ -617,8 +796,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
               ElevatedButton(
                 onPressed: selectedProductId != null
                     ? () {
-                        final product = productProvider.products
-                            .firstWhere((p) => p.id == selectedProductId);
+                        final product = productProvider.products.firstWhere(
+                          (p) => p.id == selectedProductId,
+                        );
                         this.setState(() {
                           _newItems.add((
                             productId: product.id,
@@ -647,7 +827,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
         appBar: AppBar(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          title: Text('Edit Pesanan #${widget.transaction.id.substring(0, 8)}...'),
+          title: Text(
+            'Edit Pesanan #${widget.transaction.id.substring(0, 8)}...',
+          ),
           centerTitle: true,
           elevation: 0,
         ),
@@ -668,11 +850,17 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                   children: [
                     const Text(
                       'Tanggal Pesanan',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     Text(
-                      DateFormat('dd MMM yyyy HH:mm', 'id_ID')
-                          .format(widget.transaction.createdAt.add(const Duration(hours: 7))),
+                      DateFormat('dd MMM yyyy HH:mm', 'id_ID').format(
+                        widget.transaction.createdAt.add(
+                          const Duration(hours: 7),
+                        ),
+                      ),
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -683,9 +871,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
               // Payment Method
               Text(
                 'Metode Pembayaran',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Container(
@@ -708,7 +896,7 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                       // If changing to GRATIS, check limit first
                       if (value == 'GRATIS') {
                         await _checkMonthlyGratisLimit();
-                        
+
                         // If limit reached, show confirmation dialog
                         if (_gratisLimitReached) {
                           if (!mounted) return;
@@ -719,7 +907,8 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                               content: Text(_gratisLimitMessage),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.pop(context, false),
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
                                   child: const Text('Batal'),
                                 ),
                                 TextButton(
@@ -729,11 +918,12 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                               ],
                             ),
                           );
-                          
-                          if (confirmed != true) return; // Don't change payment method
+
+                          if (confirmed != true)
+                            return; // Don't change payment method
                         }
                       }
-                      
+
                       setState(() => _paymentMethod = value);
                     }
                   },
@@ -756,7 +946,10 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                     icon: const Icon(Icons.add, size: 16),
                     label: const Text('Tambah', style: TextStyle(fontSize: 12)),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                     ),
@@ -778,9 +971,12 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                   final index = entry.key;
                   final item = entry.value;
                   // For render, use the original product name as key to lookup quantities
-                  final originalProductName = _itemProductNamesByProduct.keys.elementAt(index);
-                  final quantity = _itemQuantitiesByProduct[originalProductName] ?? item.quantity;
-                  
+                  final originalProductName = _itemProductNamesByProduct.keys
+                      .elementAt(index);
+                  final quantity =
+                      _itemQuantitiesByProduct[originalProductName] ??
+                      item.quantity;
+
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Container(
@@ -796,18 +992,24 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                           Consumer<ProductProvider>(
                             builder: (context, productProvider, _) {
                               final products = productProvider.products;
-                              var currentProductName = _itemProductNamesByProduct[originalProductName] ?? item.productName;
-                              
+                              var currentProductName =
+                                  _itemProductNamesByProduct[originalProductName] ??
+                                  item.productName;
+
                               // 🔧 If current product is invalid, use first product
-                              if (!products.any((p) => p.name == currentProductName) && products.isNotEmpty) {
+                              if (!products.any(
+                                    (p) => p.name == currentProductName,
+                                  ) &&
+                                  products.isNotEmpty) {
                                 currentProductName = products.first.name;
-                                _itemProductNamesByProduct[originalProductName] = currentProductName;
+                                _itemProductNamesByProduct[originalProductName] =
+                                    currentProductName;
                               }
-                              
-                              
+
                               // Create dropdown items from products
-                              final dropdownItems = <DropdownMenuItem<String>>[];
-                              
+                              final dropdownItems =
+                                  <DropdownMenuItem<String>>[];
+
                               // Add all products
                               for (var p in products) {
                                 dropdownItems.add(
@@ -817,7 +1019,7 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                                   ),
                                 );
                               }
-                              
+
                               return Container(
                                 decoration: BoxDecoration(
                                   border: Border.all(color: Colors.grey[300]!),
@@ -827,13 +1029,19 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                                   value: currentProductName,
                                   isExpanded: true,
                                   underline: const SizedBox(),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
                                   items: dropdownItems,
                                   onChanged: (value) {
                                     if (value != null) {
                                       setState(() {
-                                        _itemProductNamesByProduct[originalProductName] = value;
-                                        _updateProductPrice(originalProductName, value); // Update price
+                                        _itemProductNamesByProduct[originalProductName] =
+                                            value;
+                                        _updateProductPrice(
+                                          originalProductName,
+                                          value,
+                                        ); // Update price
                                       });
                                     }
                                   },
@@ -849,7 +1057,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      NumberFormatter.formatRupiah(item.unitPrice),
+                                      NumberFormatter.formatRupiah(
+                                        item.unitPrice,
+                                      ),
                                       style: TextStyle(
                                         fontSize: 12,
                                         color: AppColors.textSecondary,
@@ -880,9 +1090,11 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                                       iconSize: 18,
                                       onPressed: (quantity > 1)
                                           ? () {
-                                              setState(() =>
-                                                  _itemQuantitiesByProduct[originalProductName] =
-                                                      quantity - 1);
+                                              setState(
+                                                () =>
+                                                    _itemQuantitiesByProduct[originalProductName] =
+                                                        quantity - 1,
+                                              );
                                             }
                                           : null,
                                     ),
@@ -899,21 +1111,27 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                                     IconButton(
                                       icon: const Icon(Icons.add),
                                       iconSize: 18,
-                                    onPressed: () {
-                                      setState(() => _itemQuantitiesByProduct[item.productName] =
-                                          _itemQuantitiesByProduct[item.productName]! + 1);
-                                    },
-                                  ),
-                                ],
+                                      onPressed: () {
+                                        setState(
+                                          () =>
+                                              _itemQuantitiesByProduct[item
+                                                      .productName] =
+                                                  _itemQuantitiesByProduct[item
+                                                      .productName]! +
+                                                  1,
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                }),
               // 🆕 Render newly added items
               ..._newItems.asMap().entries.map((entry) {
                 final index = entry.key;
@@ -939,11 +1157,15 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                                 children: [
                                   Text(
                                     newItem.productName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    NumberFormatter.formatRupiah(newItem.unitPrice),
+                                    NumberFormatter.formatRupiah(
+                                      newItem.unitPrice,
+                                    ),
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textSecondary,
@@ -953,7 +1175,11 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                              icon: const Icon(
+                                Icons.delete,
+                                color: Colors.red,
+                                size: 18,
+                              ),
                               onPressed: () {
                                 setState(() => _newItems.removeAt(index));
                               },
@@ -988,7 +1214,8 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                                             setState(() {
                                               _newItems[index] = (
                                                 productId: newItem.productId,
-                                                productName: newItem.productName,
+                                                productName:
+                                                    newItem.productName,
                                                 quantity: newItem.quantity - 1,
                                                 unitPrice: newItem.unitPrice,
                                                 hpp: newItem.hpp,
@@ -1002,7 +1229,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                                     child: Text(
                                       '${newItem.quantity}',
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                   IconButton(
@@ -1027,14 +1256,20 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                         ),
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.orange[200],
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
                             'Item Baru',
-                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
@@ -1063,7 +1298,7 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                     if (_paymentMethod == 'GRATIS') {
                       // Check limit one more time at save
                       await _checkMonthlyGratisLimit();
-                      
+
                       if (_gratisLimitReached) {
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -1075,75 +1310,94 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                         return; // Don't save
                       }
                     }
-                    
+
                     // Get product provider to lookup product IDs
                     final productProvider = context.read<ProductProvider>();
-                    
+
                     // Create updated items with new quantities and product names
                     final updatedItems = <SaleItem>[];
-                    _itemQuantitiesByProduct.forEach((originalProductName, newQuantity) {
-                      final originalItemIds = _itemIdsByProduct[originalProductName] ?? [];
+                    _itemQuantitiesByProduct.forEach((
+                      originalProductName,
+                      newQuantity,
+                    ) {
+                      final originalItemIds =
+                          _itemIdsByProduct[originalProductName] ?? [];
                       if (originalItemIds.isEmpty) {
                         return;
                       }
-                      
+
                       final originalItem = widget.transaction.items.firstWhere(
                         (item) => originalItemIds.contains(item.id),
                         orElse: () => widget.transaction.items.first,
                       );
-                      
+
                       // Get the new product name (might have changed via dropdown)
-                      final newProductName = _itemProductNamesByProduct[originalProductName] ?? originalProductName;
-                      var newUnitPrice = _itemUnitPriceByProduct[originalProductName] ?? originalItem.unitPrice;
-                      var newHpp = _itemHppByProduct[originalProductName] ?? originalItem.hpp;
+                      final newProductName =
+                          _itemProductNamesByProduct[originalProductName] ??
+                          originalProductName;
+                      var newUnitPrice =
+                          _itemUnitPriceByProduct[originalProductName] ??
+                          originalItem.unitPrice;
+                      var newHpp =
+                          _itemHppByProduct[originalProductName] ??
+                          originalItem.hpp;
                       var newProductId = originalItem.productId;
-                      
+
                       if (newProductName != originalItem.productName) {
                         // Product name changed, need to find new product ID
                         try {
-                          final newProduct = productProvider.products.firstWhere(
-                            (p) => p.name == newProductName,
-                          );
+                          final newProduct = productProvider.products
+                              .firstWhere((p) => p.name == newProductName);
                           newProductId = newProduct.id;
-                        } catch (e) {
-                        }
+                        } catch (e) {}
                       }
 
-                      
                       // Create new item with updated quantity and product info
-                      updatedItems.add(SaleItem(
-                        id: originalItem.id,
-                        saleId: originalItem.saleId,
-                        productId: newProductId,
-                        productName: newProductName,
-                        quantity: newQuantity,
-                        unitPrice: newUnitPrice,
-                        hpp: newHpp,
-                        createdAt: originalItem.createdAt,
-                      ));
+                      updatedItems.add(
+                        SaleItem(
+                          id: originalItem.id,
+                          saleId: originalItem.saleId,
+                          productId: newProductId,
+                          productName: newProductName,
+                          quantity: newQuantity,
+                          unitPrice: newUnitPrice,
+                          hpp: newHpp,
+                          createdAt: originalItem.createdAt,
+                        ),
+                      );
                     });
 
                     // 🆕 Add newly added items
                     for (var newItem in _newItems) {
-                      updatedItems.add(SaleItem(
-                        id: '', // New item, will be generated by database
-                        saleId: widget.transaction.id,
-                        productId: newItem.productId,
-                        productName: newItem.productName,
-                        quantity: newItem.quantity,
-                        unitPrice: newItem.unitPrice,
-                        hpp: newItem.hpp,
-                        createdAt: DateTime.now(),
-                      ));
+                      updatedItems.add(
+                        SaleItem(
+                          id: '', // New item, will be generated by database
+                          saleId: widget.transaction.id,
+                          productId: newItem.productId,
+                          productName: newItem.productName,
+                          quantity: newItem.quantity,
+                          unitPrice: newItem.unitPrice,
+                          hpp: newItem.hpp,
+                          createdAt: DateTime.now(),
+                        ),
+                      );
                     }
 
                     // Calculate new totals
-                    final calculatedTotalAmount = updatedItems.fold(0.0, (sum, item) => sum + item.subtotal);
+                    final calculatedTotalAmount = updatedItems.fold(
+                      0.0,
+                      (sum, item) => sum + item.subtotal,
+                    );
                     // If payment method is GRATIS, set total amount to 0
-                    final newTotalAmount = _paymentMethod == 'GRATIS' ? 0.0 : calculatedTotalAmount;
-                    final newTotalHpp = updatedItems.fold(0.0, (sum, item) => sum + item.totalHpp);
+                    final newTotalAmount = _paymentMethod == 'GRATIS'
+                        ? 0.0
+                        : calculatedTotalAmount;
+                    final newTotalHpp = updatedItems.fold(
+                      0.0,
+                      (sum, item) => sum + item.totalHpp,
+                    );
                     final newProfit = newTotalAmount - newTotalHpp;
-                    
+
                     // Create updated sale
                     final updatedSale = Sale(
                       id: widget.transaction.id,
@@ -1171,4 +1425,3 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
     );
   }
 }
-

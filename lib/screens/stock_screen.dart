@@ -8,10 +8,7 @@ import '../theme/thema.dart';
 import '../widgets/header.dart';
 import 'profile_screen.dart';
 
-
 import 'settings_screen.dart';
-
-
 
 // Format currency helper
 String formatCurrency(num value) {
@@ -30,7 +27,8 @@ class StockScreen extends StatefulWidget {
   State<StockScreen> createState() => _StockScreenState();
 }
 
-class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin {
+class _StockScreenState extends State<StockScreen>
+    with TickerProviderStateMixin {
   late TabController _tabController;
   late AnimationController _refreshAnimationController;
   late Future<List<Map<String, dynamic>>> _stockFuture;
@@ -46,23 +44,23 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _selectedDate = DateTime.now();
-    
+
     // Initialize refresh animation controller
     _refreshAnimationController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
     );
-    
+
     // Get outlet ID from authenticated user
     final authService = AuthService();
     final user = authService.getSavedUser();
     _outletId = user?.outletId ?? '';
-    
+
     if (_outletId.isEmpty) {
       // Fallback to default outlet if not logged in
       _outletId = '844a73e9-3673-4eaf-bd8e-2f661624f6b0';
     }
-    
+
     _loadBusinessDayStartHour();
     _loadData();
   }
@@ -70,7 +68,8 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
   Future<void> _loadBusinessDayStartHour() async {
     try {
       final supabaseService = SupabaseService();
-      final businessDayStartHour = await supabaseService.getBusinessDayStartHour(outletId: _outletId);
+      final businessDayStartHour = await supabaseService
+          .getBusinessDayStartHour(outletId: _outletId);
       if (mounted) {
         setState(() {
           _businessDayStartHour = businessDayStartHour;
@@ -83,7 +82,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
 
   void _loadData() {
     final supabaseService = SupabaseService();
-    
+
     setState(() {
       _stockFuture = _getEnrichedProductStock(supabaseService, _selectedDate);
       _transferRefreshCounter++; // Increment counter to trigger FutureBuilder rebuild
@@ -92,11 +91,16 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
 
   /// Get product stock enriched with product details (name, price)
   Future<List<Map<String, dynamic>>> _getEnrichedProductStock(
-      SupabaseService supabaseService, DateTime selectedDate) async {
+    SupabaseService supabaseService,
+    DateTime selectedDate,
+  ) async {
     try {
       // Get stock map from showcase_allocations (filtered by selected date)
-      final stockMap = await supabaseService.getProductStock(_outletId, selectedDate: selectedDate);
-      
+      final stockMap = await supabaseService.getProductStock(
+        _outletId,
+        selectedDate: selectedDate,
+      );
+
       if (stockMap.isEmpty) {
         return [];
       }
@@ -124,19 +128,21 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
 
       // Build enriched stock list with product details
       final enrichedStock = <Map<String, dynamic>>[];
-      
+
       for (final product in products) {
         final quantity = stockMap[product.id] ?? 0;
         final sold = soldMap[product.id] ?? 0;
         final returned = returnedMap[product.id] ?? 0;
-        final transfers = transferStats[product.id] ?? {'dikirim': 0, 'diterima': 0};
-        
+        final transfers =
+            transferStats[product.id] ?? {'dikirim': 0, 'diterima': 0};
+
         // Calculate remaining stock (Sisa)
         // Formula: Stok - Terjual - Kembali - Dikirim + Diterima
         final dikirim = (transfers['dikirim'] ?? 0) as num;
         final diterima = (transfers['diterima'] ?? 0) as num;
-        final sisa = quantity - sold - returned - dikirim.toInt() + diterima.toInt();
-        
+        final sisa =
+            quantity - sold - returned - dikirim.toInt() + diterima.toInt();
+
         // Only include products that have stock in this outlet or all products
         enrichedStock.add({
           'product_id': product.id,
@@ -146,7 +152,8 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
           'hpp': product.hpp,
           'sold': sold, // Sold quantity from sales_items today
           'unsold': sisa, // Remaining stock calculated
-          'dikembalikan': returned, // Returned quantity from product_returns today
+          'dikembalikan':
+              returned, // Returned quantity from product_returns today
           'dikirim': dikirim, // Transferred out today
           'diterima': diterima, // Transferred in today
         });
@@ -169,17 +176,17 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
       );
       return;
     }
-    
+
     setState(() {
       _isRefreshing = true;
     });
-    
+
     // Start animation loop
     _refreshAnimationController.repeat();
-    
+
     try {
       _loadData();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -202,7 +209,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     } finally {
       // Stop animation
       _refreshAnimationController.stop();
-      
+
       if (mounted) {
         setState(() {
           _isRefreshing = false;
@@ -274,8 +281,8 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
               child: DataTable(
                 columnSpacing: 16,
                 horizontalMargin: 12,
-                headingRowColor: MaterialStateProperty.all(AppColors.background),
-                dataRowColor: MaterialStateProperty.all(AppColors.surface),
+                headingRowColor: WidgetStateProperty.all(AppColors.background),
+                dataRowColor: WidgetStateProperty.all(AppColors.surface),
                 headingRowHeight: 50,
                 dataRowHeight: 56,
                 columns: const [
@@ -402,7 +409,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
             child: Container(
               height: 48,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.2),
+                color: AppColors.primary.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
@@ -416,9 +423,7 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
 
   Widget _buildTransferListSkeleton() {
     return SingleChildScrollView(
-      child: Column(
-        children: _buildTransferCardSkeletons(5),
-      ),
+      child: Column(children: _buildTransferCardSkeletons(5)),
     );
   }
 
@@ -586,9 +591,8 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: PapikopiAppBar(
         onLogout: _handleLogout,
@@ -604,18 +608,9 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
             child: TabBar(
               controller: _tabController,
               tabs: const [
-                Tab(
-                  icon: Icon(Icons.inventory_2),
-                  text: 'Stok Produk',
-                ),
-                Tab(
-                  icon: Icon(Icons.send),
-                  text: 'Pindah Stok',
-                ),
-                Tab(
-                  icon: Icon(Icons.undo),
-                  text: 'Pengembalian',
-                ),
+                Tab(icon: Icon(Icons.inventory_2), text: 'Stok Produk'),
+                Tab(icon: Icon(Icons.send), text: 'Pindah Stok'),
+                Tab(icon: Icon(Icons.undo), text: 'Pengembalian'),
               ],
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textSecondary,
@@ -668,15 +663,15 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
   }
 
   void _handleProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const ProfileScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const ProfileScreen()));
   }
 
   void _handleSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const SettingsScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
   }
 
   Future<void> _selectDate() async {
@@ -693,19 +688,25 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
         // For example, if business day starts at 4 AM and it's 14:00:
         // - Using 14:00: business day = May 27 4:00 AM to May 28 4:00 AM
         // - Using 00:00: business day = May 26 4:00 AM to May 27 4:00 AM (CORRECT for May 27 display)
-        _selectedDate = DateTime(picked.year, picked.month, picked.day, 0, 0, 0);
+        _selectedDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          0,
+          0,
+          0,
+        );
         _loadData();
       });
     }
   }
 
   /// Widget untuk menampilkan date picker
-  Widget _buildDateFilterWidget({
-    VoidCallback? onDateSelected,
-  }) {
+  Widget _buildDateFilterWidget({VoidCallback? onDateSelected}) {
     // Calculate business day range for display
     // Use the loaded business day start hour from outlet
-    final businessDayStartHour = _businessDayStartHour; // Default to 4 AM if not loaded
+    final businessDayStartHour =
+        _businessDayStartHour; // Default to 4 AM if not loaded
     final year = _selectedDate.year;
     final month = _selectedDate.month;
     final day = _selectedDate.day;
@@ -719,15 +720,32 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     businessDayStart = DateTime(year, month, day, businessDayStartHour);
     businessDayEnd = DateTime(year, month, day + 1, businessDayStartHour);
 
-    final endHour = (businessDayStartHour - 1 < 0 ? 23 : businessDayStartHour - 1).toString().padLeft(2, '0');
+    final endHour =
+        (businessDayStartHour - 1 < 0 ? 23 : businessDayStartHour - 1)
+            .toString()
+            .padLeft(2, '0');
     final startHourPadded = businessDayStartHour.toString().padLeft(2, '0');
-    
+
     // Format: e.g. "27 Apr 04:00 - 28 Apr 03:59"
-    final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    final monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
     final startMonth = monthNames[businessDayStart.month - 1];
     final endMonth = monthNames[businessDayEnd.month - 1];
-    
-    final businessDayDisplay = '${businessDayStart.day} $startMonth $startHourPadded:00 - ${businessDayEnd.day} $endMonth $endHour:59 WIB';
+
+    final businessDayDisplay =
+        '${businessDayStart.day} $startMonth $startHourPadded:00 - ${businessDayEnd.day} $endMonth $endHour:59 WIB';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -737,7 +755,11 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
         children: [
           Row(
             children: [
-              const Icon(Icons.calendar_today, size: 20, color: AppColors.primary),
+              const Icon(
+                Icons.calendar_today,
+                size: 20,
+                color: AppColors.primary,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -766,7 +788,10 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
                 icon: const Icon(Icons.date_range, size: 18),
                 label: const Text('Pilih'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   backgroundColor: AppColors.primary,
                 ),
               ),
@@ -777,28 +802,26 @@ class _StockScreenState extends State<StockScreen> with TickerProviderStateMixin
     );
   }
 
-Widget _buildStockTab() {
-
+  Widget _buildStockTab() {
     return Column(
       children: [
         _buildDateFilterWidget(),
         // Stock Data
-        Expanded(
-          child: _buildStockContent(),
-        ),
+        Expanded(child: _buildStockContent()),
       ],
     );
   }
 
-Widget _buildStockContent() {
+  Widget _buildStockContent() {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      key: ValueKey<DateTime>(_selectedDate), // ← KEY to force rebuild when date changes
+      key: ValueKey<DateTime>(
+        _selectedDate,
+      ), // ← KEY to force rebuild when date changes
       future: _stockFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildStockProductTabSkeleton();
         }
-
 
         if (snapshot.hasError) {
           return Center(
@@ -820,25 +843,36 @@ Widget _buildStockContent() {
 
         var stocks = snapshot.data ?? [];
         if (stocks.isEmpty) {
-          return const Center(
-            child: Text('Belum ada stok produk'),
-          );
+          return const Center(child: Text('Belum ada stok produk'));
         }
 
         // Sort: products with stock > 0 first, then by stock descending
-        stocks = [...stocks]..sort((a, b) {
-          final stockA = a['quantity'] as int? ?? 0;
-          final stockB = b['quantity'] as int? ?? 0;
-          if (stockA > 0 && stockB <= 0) return -1;
-          if (stockA <= 0 && stockB > 0) return 1;
-          return stockB.compareTo(stockA);
-        });
+        stocks = [...stocks]
+          ..sort((a, b) {
+            final stockA = a['quantity'] as int? ?? 0;
+            final stockB = b['quantity'] as int? ?? 0;
+            if (stockA > 0 && stockB <= 0) return -1;
+            if (stockA <= 0 && stockB > 0) return 1;
+            return stockB.compareTo(stockA);
+          });
 
         // Calculate statistics
-        final totalStock = stocks.fold<int>(0, (sum, item) => sum + (item['quantity'] as int? ?? 0));
+        final totalStock = stocks.fold<int>(
+          0,
+          (sum, item) => sum + (item['quantity'] as int? ?? 0),
+        );
         final totalProducts = stocks.length;
-        final totalSold = stocks.fold<int>(0, (sum, item) => sum + (item['sold'] as int? ?? 0));
-        final lowStockCount = stocks.where((item) => (item['quantity'] as int? ?? 0) < 5 && (item['quantity'] as int? ?? 0) > 0).length;
+        final totalSold = stocks.fold<int>(
+          0,
+          (sum, item) => sum + (item['sold'] as int? ?? 0),
+        );
+        final lowStockCount = stocks
+            .where(
+              (item) =>
+                  (item['quantity'] as int? ?? 0) < 5 &&
+                  (item['quantity'] as int? ?? 0) > 0,
+            )
+            .length;
 
         return Column(
           children: [
@@ -893,86 +927,88 @@ Widget _buildStockContent() {
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
-                            columnSpacing: 16,
-                            horizontalMargin: 12,
-                            headingRowColor: MaterialStateProperty.all(AppColors.background),
-                            dataRowColor: MaterialStateProperty.all(AppColors.surface),
-                            headingRowHeight: 50,
-                            dataRowHeight: 56,
-                            columns: [
-                            DataColumn(
-                              label: Text(
-                                'Produk',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                            DataColumn(
-                              label: Text(
-                                'Harga',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: Text(
-                                'Stok',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: Text(
-                                'Sisa',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: Text(
-                                'Terjual',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green,
-                                ),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: Text(
-                                'Kembali',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.purple,
-                                ),
-                              ),
-                              numeric: true,
-                            ),
-                            DataColumn(
-                              label: Text(
-                                'Transfer',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.orange,
-                                ),
-                              ),
-                              numeric: true,
-                            ),
-                          ],
-                          rows: stocks
-                              .map((stock) {
-                      final productName = stock['product_name'] as String? ?? 'Unknown';
+                    columnSpacing: 16,
+                    horizontalMargin: 12,
+                    headingRowColor: WidgetStateProperty.all(
+                      AppColors.background,
+                    ),
+                    dataRowColor: WidgetStateProperty.all(AppColors.surface),
+                    headingRowHeight: 50,
+                    dataRowHeight: 56,
+                    columns: [
+                      DataColumn(
+                        label: Text(
+                          'Produk',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: Text(
+                          'Harga',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        numeric: true,
+                      ),
+                      DataColumn(
+                        label: Text(
+                          'Stok',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        numeric: true,
+                      ),
+                      DataColumn(
+                        label: Text(
+                          'Sisa',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        numeric: true,
+                      ),
+                      DataColumn(
+                        label: Text(
+                          'Terjual',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                        numeric: true,
+                      ),
+                      DataColumn(
+                        label: Text(
+                          'Kembali',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple,
+                          ),
+                        ),
+                        numeric: true,
+                      ),
+                      DataColumn(
+                        label: Text(
+                          'Transfer',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          ),
+                        ),
+                        numeric: true,
+                      ),
+                    ],
+                    rows: stocks.map((stock) {
+                      final productName =
+                          stock['product_name'] as String? ?? 'Unknown';
                       final price = stock['price'] as num? ?? 0;
                       final quantity = stock['quantity'] as int? ?? 0;
                       final sold = stock['sold'] as int? ?? 0;
@@ -1188,10 +1224,7 @@ Widget _buildStockContent() {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 9,
-              color: AppColors.textSecondary,
-            ),
+            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],
@@ -1199,9 +1232,11 @@ Widget _buildStockContent() {
     );
   }
 
-Widget _buildTransferTab() {
+  Widget _buildTransferTab() {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      key: ValueKey<DateTime>(_selectedDate), // ← KEY to force rebuild when date changes
+      key: ValueKey<DateTime>(
+        _selectedDate,
+      ), // ← KEY to force rebuild when date changes
       future: _getEnrichedProductStock(SupabaseService(), _selectedDate),
       builder: (context, stockSnapshot) {
         if (stockSnapshot.connectionState == ConnectionState.waiting) {
@@ -1211,19 +1246,25 @@ Widget _buildTransferTab() {
         final availableStock = stockSnapshot.data ?? [];
 
         return FutureBuilder<List<Map<String, dynamic>>>(
-          key: ValueKey<String>('${_outletId}_${_selectedDate}_${_showReceivedTransfers}_${_transferRefreshCounter}'), // ← KEY includes refresh counter
-          future: _showReceivedTransfers 
-              ? SupabaseService().getReceivedTransfers(_outletId, selectedDate: _selectedDate)
-              : SupabaseService().getProductTransfers(_outletId, selectedDate: _selectedDate),
+          key: ValueKey<String>(
+            '${_outletId}_${_selectedDate}_${_showReceivedTransfers}_$_transferRefreshCounter',
+          ), // ← KEY includes refresh counter
+          future: _showReceivedTransfers
+              ? SupabaseService().getReceivedTransfers(
+                  _outletId,
+                  selectedDate: _selectedDate,
+                )
+              : SupabaseService().getProductTransfers(
+                  _outletId,
+                  selectedDate: _selectedDate,
+                ),
           builder: (context, transferSnapshot) {
             if (transferSnapshot.connectionState == ConnectionState.waiting) {
               return _buildTransferListSkeleton();
             }
 
             if (transferSnapshot.hasError) {
-              return Center(
-                child: Text('Error: ${transferSnapshot.error}'),
-              );
+              return Center(child: Text('Error: ${transferSnapshot.error}'));
             }
 
             final transfers = transferSnapshot.data ?? [];
@@ -1233,7 +1274,7 @@ Widget _buildTransferTab() {
                 children: [
                   // Date Filter
                   _buildDateFilterWidget(),
-                  
+
                   // Toggle Dikirim / Diterima
                   Padding(
                     padding: const EdgeInsets.all(16),
@@ -1265,12 +1306,13 @@ Widget _buildTransferTab() {
                       ],
                     ),
                   ),
-                  
+
                   if (!_showReceivedTransfers)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: ElevatedButton.icon(
-                        onPressed: () => _showTransferDialog(context, availableStock),
+                        onPressed: () =>
+                            _showTransferDialog(context, availableStock),
                         icon: const Icon(Icons.add),
                         label: const Text('Buat Pindah Stok'),
                         style: ElevatedButton.styleFrom(
@@ -1280,16 +1322,18 @@ Widget _buildTransferTab() {
                         ),
                       ),
                     ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   if (transfers.isEmpty)
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Text(_showReceivedTransfers 
-                            ? 'Belum ada stok yang diterima'
-                            : 'Belum ada pindah stok yang dikirim'),
+                        child: Text(
+                          _showReceivedTransfers
+                              ? 'Belum ada stok yang diterima'
+                              : 'Belum ada pindah stok yang dikirim',
+                        ),
                       ),
                     )
                   else
@@ -1311,7 +1355,10 @@ Widget _buildTransferTab() {
     );
   }
 
-  Widget _buildTransferCard(BuildContext context, Map<String, dynamic> transfer) {
+  Widget _buildTransferCard(
+    BuildContext context,
+    Map<String, dynamic> transfer,
+  ) {
     final fromOutletId = transfer['from_outlet_id'] ?? '';
     final toOutletId = transfer['to_outlet_id'] ?? '';
     final transferId = transfer['id'] ?? '';
@@ -1321,15 +1368,19 @@ Widget _buildTransferTab() {
     final quantity = transfer['quantity'] ?? 0;
     final createdAt = transfer['created_at'];
     final status = transfer['status'] ?? 'completed'; // Default status
-    
+
     // Get stock info based on transfer direction
-    final currentStockSending = transfer['current_stock_at_sending_outlet'] as int? ?? 0;
-    final currentStockReceiving = transfer['current_stock_at_receiving_outlet'] as int? ?? 0;
+    final currentStockSending =
+        transfer['current_stock_at_sending_outlet'] as int? ?? 0;
+    final currentStockReceiving =
+        transfer['current_stock_at_receiving_outlet'] as int? ?? 0;
 
     // Determine if current user is sender or receiver
     final isSender = _outletId == fromOutletId;
     final isReceiver = _outletId == toOutletId;
-    final isPending = status.toLowerCase() == 'requested' || status.toLowerCase() == 'approved';
+    final isPending =
+        status.toLowerCase() == 'requested' ||
+        status.toLowerCase() == 'approved';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1361,18 +1412,18 @@ Widget _buildTransferTab() {
                     const SizedBox(height: 4),
                     Text(
                       'Pindah: $quantity unit',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: _getStatusColor(status).withOpacity(0.2),
+                  color: _getStatusColor(status).withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1399,7 +1450,10 @@ Widget _buildTransferTab() {
               children: [
                 Text(
                   'Tanggal: ${createdAt != null ? createdAt.toString().split(' ')[0] : '-'}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1409,25 +1463,31 @@ Widget _buildTransferTab() {
                 const SizedBox(height: 8),
                 Text(
                   'Dari: $fromOutletName',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Ke: $toOutletName',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 // Stock info
                 if (currentStockSending > 0)
                   _buildDetailRow(
-                    label: 'Stok ${fromOutletName}:',
+                    label: 'Stok $fromOutletName:',
                     value: '$currentStockSending unit',
                     valueColor: Colors.orange,
                   ),
                 if (currentStockReceiving > 0) ...[
                   const SizedBox(height: 4),
                   _buildDetailRow(
-                    label: 'Stok ${toOutletName}:',
+                    label: 'Stok $toOutletName:',
                     value: '$currentStockReceiving unit',
                     valueColor: Colors.green,
                   ),
@@ -1493,10 +1553,7 @@ Widget _buildTransferTab() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: Colors.grey),
-        ),
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
         Text(
           value,
           style: TextStyle(
@@ -1509,15 +1566,16 @@ Widget _buildTransferTab() {
     );
   }
 
-Widget _buildReturnTab() {
+  Widget _buildReturnTab() {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      key: ValueKey<DateTime>(_selectedDate), // ← KEY to force rebuild when date changes
+      key: ValueKey<DateTime>(
+        _selectedDate,
+      ), // ← KEY to force rebuild when date changes
       future: _getEnrichedProductStock(SupabaseService(), _selectedDate),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildReturnListSkeleton();
         }
-
 
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Center(
@@ -1541,7 +1599,7 @@ Widget _buildReturnTab() {
           children: [
             // Date Filter
             _buildDateFilterWidget(),
-            
+
             // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -1570,10 +1628,16 @@ Widget _buildReturnTab() {
             // List return history
             Expanded(
               child: FutureBuilder<List<Map<String, dynamic>>>(
-                key: ValueKey<DateTime>(_selectedDate), // ← KEY to force rebuild when date changes
-                future: SupabaseService().getProductReturns(_outletId, selectedDate: _selectedDate),
+                key: ValueKey<DateTime>(
+                  _selectedDate,
+                ), // ← KEY to force rebuild when date changes
+                future: SupabaseService().getProductReturns(
+                  _outletId,
+                  selectedDate: _selectedDate,
+                ),
                 builder: (context, returnSnapshot) {
-                  if (returnSnapshot.connectionState == ConnectionState.waiting) {
+                  if (returnSnapshot.connectionState ==
+                      ConnectionState.waiting) {
                     return _buildReturnListSkeleton();
                   }
 
@@ -1594,10 +1658,11 @@ Widget _buildReturnTab() {
                   }
 
                   final returns = returnSnapshot.data!;
-                  
+
                   // Create a map of product_id -> unsold for quick lookup
                   final unsoldMap = {
-                    for (final stock in stocks) stock['product_id']: stock['unsold'] as int? ?? 0
+                    for (final stock in stocks)
+                      stock['product_id']: stock['unsold'] as int? ?? 0,
                   };
 
                   return ListView.builder(
@@ -1605,14 +1670,16 @@ Widget _buildReturnTab() {
                     itemCount: returns.length,
                     itemBuilder: (context, index) {
                       final returnItem = returns[index];
-                      final conditionStatus = returnItem['condition_status'] ?? 'pending';
+                      final conditionStatus =
+                          returnItem['condition_status'] ?? 'pending';
                       final productId = returnItem['product_id'] as String?;
-                      final productName = returnItem['product_name'] ?? 'Unknown';
+                      final productName =
+                          returnItem['product_name'] ?? 'Unknown';
                       final returnReason = returnItem['return_reason'] ?? '-';
                       final returnDate = returnItem['return_date'];
                       final conditionNotes = returnItem['condition_notes'];
                       final unsoldQuantity = unsoldMap[productId] ?? 0;
-                      
+
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: Padding(
@@ -1622,11 +1689,13 @@ Widget _buildReturnTab() {
                             children: [
                               // Produk & Status
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           productName,
@@ -1652,7 +1721,9 @@ Widget _buildReturnTab() {
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: _getReturnStatusColor(conditionStatus),
+                                      color: _getReturnStatusColor(
+                                        conditionStatus,
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
@@ -1676,7 +1747,8 @@ Widget _buildReturnTab() {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
                                       'Sisa Stok:',
@@ -1860,7 +1932,9 @@ Widget _buildReturnTab() {
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Terima Transfer?'),
-        content: const Text('Apakah Anda yakin ingin menerima transfer stok ini?'),
+        content: const Text(
+          'Apakah Anda yakin ingin menerima transfer stok ini?',
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -1870,34 +1944,43 @@ Widget _buildReturnTab() {
           ),
           ElevatedButton(
             onPressed: () async {
-              final success = await SupabaseService().updateTransferStatus(transferId, 'received');
-              
+              // Capture scaffold before awaiting to avoid using BuildContext across async gap
+              final rootScaffold = ScaffoldMessenger.of(context);
+
+              final success = await SupabaseService().updateTransferStatus(
+                transferId,
+                'received',
+              );
+
               // Close dialog first
               if (mounted && dialogContext.mounted) {
                 Navigator.pop(dialogContext);
               }
-              
-              // Then show message
+
+              // Then show message using captured scaffold
               if (mounted) {
                 Future.delayed(const Duration(milliseconds: 100), () {
                   if (success) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    rootScaffold.showSnackBar(
                       const SnackBar(content: Text('Transfer diterima!')),
                     );
-                    setState(() {
-                      _transferRefreshCounter++; // Force refresh FutureBuilder
-                    });
+                    if (mounted) {
+                      setState(() {
+                        _transferRefreshCounter++; // Force refresh FutureBuilder
+                      });
+                    }
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Gagal menerima transfer'), backgroundColor: Colors.red),
+                    rootScaffold.showSnackBar(
+                      const SnackBar(
+                        content: Text('Gagal menerima transfer'),
+                        backgroundColor: Colors.red,
+                      ),
                     );
                   }
                 });
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             child: const Text('Terima'),
           ),
         ],
@@ -1912,7 +1995,9 @@ Widget _buildReturnTab() {
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Tolak Transfer?'),
-        content: const Text('Apakah Anda yakin ingin menolak transfer stok ini? Stok akan dikembalikan ke pengirim.'),
+        content: const Text(
+          'Apakah Anda yakin ingin menolak transfer stok ini? Stok akan dikembalikan ke pengirim.',
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -1922,34 +2007,43 @@ Widget _buildReturnTab() {
           ),
           ElevatedButton(
             onPressed: () async {
-              final success = await SupabaseService().updateTransferStatus(transferId, 'rejected');
-              
+              // Capture scaffold before awaiting to avoid using BuildContext across async gap
+              final rootScaffold = ScaffoldMessenger.of(context);
+
+              final success = await SupabaseService().updateTransferStatus(
+                transferId,
+                'rejected',
+              );
+
               // Close dialog first
               if (mounted && dialogContext.mounted) {
                 Navigator.pop(dialogContext);
               }
-              
-              // Then show message
+
+              // Then show message using captured scaffold
               if (mounted) {
                 Future.delayed(const Duration(milliseconds: 100), () {
                   if (success) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    rootScaffold.showSnackBar(
                       const SnackBar(content: Text('Transfer ditolak!')),
                     );
-                    setState(() {
-                      _transferRefreshCounter++; // Force refresh FutureBuilder
-                    });
+                    if (mounted) {
+                      setState(() {
+                        _transferRefreshCounter++; // Force refresh FutureBuilder
+                      });
+                    }
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Gagal menolak transfer'), backgroundColor: Colors.red),
+                    rootScaffold.showSnackBar(
+                      const SnackBar(
+                        content: Text('Gagal menolak transfer'),
+                        backgroundColor: Colors.red,
+                      ),
                     );
                   }
                 });
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Tolak'),
           ),
         ],
@@ -1963,8 +2057,13 @@ Widget _buildReturnTab() {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Batalkan Transfer?', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Apakah Anda yakin ingin membatalkan transfer stok ini? Stok akan dikembalikan ke outlet Anda.'),
+        title: const Text(
+          'Batalkan Transfer?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Apakah Anda yakin ingin membatalkan transfer stok ini? Stok akan dikembalikan ke outlet Anda.',
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         actionsPadding: const EdgeInsets.all(16),
         actions: [
@@ -1976,34 +2075,48 @@ Widget _buildReturnTab() {
                   Navigator.pop(dialogContext);
                 },
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                 ),
                 child: const Text('Tidak', style: TextStyle(fontSize: 16)),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: () async {
+                  // Capture scaffold before awaiting to avoid using BuildContext across async gap
+                  final rootScaffold = ScaffoldMessenger.of(context);
+
                   // Update status without awaiting (fire and forget)
-                  final success = await SupabaseService().updateTransferStatus(transferId, 'cancelled');
-                  
+                  final success = await SupabaseService().updateTransferStatus(
+                    transferId,
+                    'cancelled',
+                  );
+
                   // Close dialog first
                   if (mounted && dialogContext.mounted) {
                     Navigator.pop(dialogContext);
                   }
-                  
-                  // Then show message
+
+                  // Then show message using captured scaffold
                   if (mounted) {
                     Future.delayed(const Duration(milliseconds: 100), () {
                       if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        rootScaffold.showSnackBar(
                           const SnackBar(content: Text('Transfer dibatalkan!')),
                         );
-                        setState(() {
-                          _transferRefreshCounter++; // Force refresh FutureBuilder
-                        });
+                        if (mounted) {
+                          setState(() {
+                            _transferRefreshCounter++; // Force refresh FutureBuilder
+                          });
+                        }
                       } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Gagal membatalkan transfer'), backgroundColor: Colors.red),
+                        rootScaffold.showSnackBar(
+                          const SnackBar(
+                            content: Text('Gagal membatalkan transfer'),
+                            backgroundColor: Colors.red,
+                          ),
                         );
                       }
                     });
@@ -2011,10 +2124,18 @@ Widget _buildReturnTab() {
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: const Text('Batalkan', style: TextStyle(fontSize: 16, color: Colors.white)),
+                child: const Text(
+                  'Batalkan',
+                  style: TextStyle(fontSize: 16, color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -2023,15 +2144,18 @@ Widget _buildReturnTab() {
     );
   }
 
-  void _showTransferDialog(BuildContext context, List<Map<String, dynamic>> availableStock) {
+  void _showTransferDialog(
+    BuildContext context,
+    List<Map<String, dynamic>> availableStock,
+  ) {
     String? selectedProductId;
     int transferQuantity = 1;
     String? targetOutletId;
-    
+
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+        builder: (dialogInnerContext, setState) => AlertDialog(
           title: const Text('Pindah Stok Produk'),
           contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
           content: SizedBox(
@@ -2052,16 +2176,24 @@ Widget _buildReturnTab() {
                     hint: const Text('-- Pilih Produk --'),
                     value: selectedProductId,
                     items: availableStock
-                        .where((stock) => (stock['unsold'] as int? ?? 0) > 0)  // ← Filter: only products with unsold > 0
+                        .where(
+                          (stock) => (stock['unsold'] as int? ?? 0) > 0,
+                        ) // ← Filter: only products with unsold > 0
                         .map((stock) {
                           final productId = stock['product_id'] as String;
-                          final productName = stock['product_name'] as String? ?? 'Unknown';
-                          final unsold = stock['unsold'] as int? ?? 0;  // ← Use 'unsold' instead of 'quantity'
+                          final productName =
+                              stock['product_name'] as String? ?? 'Unknown';
+                          final unsold =
+                              stock['unsold'] as int? ??
+                              0; // ← Use 'unsold' instead of 'quantity'
                           return DropdownMenuItem(
                             value: productId,
-                            child: Text('$productName (Sisa: $unsold)'),  // ← Display 'Sisa' (remaining)
+                            child: Text(
+                              '$productName (Sisa: $unsold)',
+                            ), // ← Display 'Sisa' (remaining)
                           );
-                        }).toList(),
+                        })
+                        .toList(),
                     onChanged: (value) {
                       setState(() {
                         selectedProductId = value;
@@ -2070,7 +2202,7 @@ Widget _buildReturnTab() {
                     },
                   ),
                   const SizedBox(height: 20),
-                  
+
                   if (selectedProductId != null) ...[
                     Text(
                       'Jumlah Dipindahkan',
@@ -2093,9 +2225,13 @@ Widget _buildReturnTab() {
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                              ),
                             ),
-                            controller: TextEditingController(text: '$transferQuantity'),
+                            controller: TextEditingController(
+                              text: '$transferQuantity',
+                            ),
                             onChanged: (value) {
                               setState(() {
                                 transferQuantity = int.tryParse(value) ?? 1;
@@ -2110,7 +2246,7 @@ Widget _buildReturnTab() {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    
+
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -2123,11 +2259,14 @@ Widget _buildReturnTab() {
                       ),
                       child: Text(
                         'Sisa tersedia: ${availableStock.firstWhere((s) => s['product_id'] == selectedProductId)['unsold'] ?? 0}',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
-                    
+
                     Text(
                       'Outlet Tujuan',
                       style: Theme.of(context).textTheme.labelMedium,
@@ -2136,32 +2275,34 @@ Widget _buildReturnTab() {
                     FutureBuilder<List<Map<String, dynamic>>>(
                       future: SupabaseService().getOutlets(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const SizedBox(
                             height: 40,
                             child: Center(child: CircularProgressIndicator()),
                           );
                         }
-                        
+
                         if (!snapshot.hasData || snapshot.data!.isEmpty) {
                           return const Text('Tidak ada outlet lain');
                         }
-                        
+
                         final outletList = snapshot.data!
                             .where((outlet) => outlet['id'] != _outletId)
                             .toList();
-                        
+
                         if (outletList.isEmpty) {
                           return const Text('Tidak ada outlet tujuan');
                         }
-                        
+
                         return DropdownButton<String>(
                           isExpanded: true,
                           hint: const Text('-- Pilih Outlet Tujuan --'),
                           value: targetOutletId,
                           items: outletList.map((outlet) {
                             final outletId = outlet['id'] as String;
-                            final outletName = outlet['name'] as String? ?? 'Unknown';
+                            final outletName =
+                                outlet['name'] as String? ?? 'Unknown';
                             return DropdownMenuItem(
                               value: outletId,
                               child: Text(outletName),
@@ -2176,7 +2317,7 @@ Widget _buildReturnTab() {
                       },
                     ),
                     const SizedBox(height: 20),
-                    
+
                     // Show selected outlet confirmation
                     if (targetOutletId != null)
                       Container(
@@ -2199,7 +2340,11 @@ Widget _buildReturnTab() {
                               );
                               return Text(
                                 '✅ Tujuan: ${selectedOutlet['name']}',
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.blue),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue,
+                                ),
                               );
                             }
                             return const SizedBox.shrink();
@@ -2222,79 +2367,121 @@ Widget _buildReturnTab() {
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
-                  onPressed: selectedProductId != null && 
-                            transferQuantity > 0 &&
-                            targetOutletId != null
+                  onPressed:
+                      selectedProductId != null &&
+                          transferQuantity > 0 &&
+                          targetOutletId != null
                       ? () async {
                           final supabaseService = SupabaseService();
-                          
+
+                          // Capture UI/manager objects before awaiting
+                          final outerNavigator = Navigator.of(context);
+
+                          // Capture product name early (selectedProductId is stable inside this closure)
+                          final productName =
+                              availableStock.firstWhere(
+                                (s) => s['product_id'] == selectedProductId,
+                              )['product_name'] ??
+                              'Produk';
+
                           // Get outlet names for debugging and display
                           final outlets = await supabaseService.getOutlets();
                           final selectedOutlet = outlets.firstWhere(
                             (o) => o['id'] == targetOutletId,
-                            orElse: () => {'id': targetOutletId, 'name': 'Unknown'},
+                            orElse: () => {
+                              'id': targetOutletId,
+                              'name': 'Unknown',
+                            },
                           );
-                          final selectedOutletName = selectedOutlet['name'] ?? 'Unknown';
-                          
-                          final success = await supabaseService.createProductTransfer(
-                            fromOutletId: _outletId,
-                            toOutletId: targetOutletId!,
-                            productId: selectedProductId!,
-                            quantity: transferQuantity,
-                            selectedDate: _selectedDate,
-                          );
+                          final selectedOutletName =
+                              selectedOutlet['name'] ?? 'Unknown';
+
+                          final success = await supabaseService
+                              .createProductTransfer(
+                                fromOutletId: _outletId,
+                                toOutletId: targetOutletId!,
+                                productId: selectedProductId!,
+                                quantity: transferQuantity,
+                                selectedDate: _selectedDate,
+                              );
 
                           if (mounted) {
-                            Navigator.pop(dialogContext);
+                            if (dialogContext.mounted)
+                              Navigator.pop(dialogContext);
 
                             if (success) {
-                              // Get product name for display
-                              final productName = availableStock
-                                  .firstWhere((s) => s['product_id'] == selectedProductId)['product_name'] ?? 'Produk';
-
-                              // Show success dialog
+                              // Show success dialog using captured navigator/context
                               showDialog(
-                                context: context,
-                                builder: (dialogContext) => AlertDialog(
+                                context: outerNavigator.context,
+                                builder: (d) => AlertDialog(
                                   title: const Row(
                                     children: [
-                                      Icon(Icons.check_circle, color: Colors.green, size: 28),
+                                      Icon(
+                                        Icons.check_circle,
+                                        color: Colors.green,
+                                        size: 28,
+                                      ),
                                       SizedBox(width: 12),
                                       Text('Pindah Stok Berhasil'),
                                     ],
                                   ),
                                   content: Column(
                                     mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const SizedBox(height: 16),
                                       Text(
                                         'Stok berhasil dipindahkan!',
-                                        style: Theme.of(context).textTheme.bodyLarge,
+                                        style: Theme.of(d).textTheme.bodyLarge,
                                       ),
                                       const SizedBox(height: 20),
                                       Container(
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: Colors.green.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: Colors.green.withOpacity(0.3)),
+                                          color: Colors.green.withValues(
+                                            alpha: 0.1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.green.withValues(
+                                              alpha: 0.3,
+                                            ),
+                                          ),
                                         ),
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               'Detail Pindah:',
-                                              style: Theme.of(context).textTheme.labelLarge,
+                                              style: Theme.of(
+                                                d,
+                                              ).textTheme.labelLarge,
                                             ),
                                             const SizedBox(height: 12),
-                                            _buildDetailRow(label: 'Produk', value: productName),
+                                            _buildDetailRow(
+                                              label: 'Produk',
+                                              value: productName,
+                                            ),
                                             const SizedBox(height: 8),
-                                            _buildDetailRow(label: 'Jumlah', value: '$transferQuantity unit'),
+                                            _buildDetailRow(
+                                              label: 'Jumlah',
+                                              value: '$transferQuantity unit',
+                                            ),
                                             const SizedBox(height: 8),
-                                            _buildDetailRow(label: 'Tujuan', value: selectedOutletName),
+                                            _buildDetailRow(
+                                              label: 'Tujuan',
+                                              value: selectedOutletName,
+                                            ),
                                             const SizedBox(height: 8),
-                                            _buildDetailRow(label: 'Status', value: '✅ Selesai', valueColor: Colors.green),
+                                            _buildDetailRow(
+                                              label: 'Status',
+                                              value: '✅ Selesai',
+                                              valueColor: Colors.green,
+                                            ),
                                           ],
                                         ),
                                       ),
@@ -2303,7 +2490,7 @@ Widget _buildReturnTab() {
                                   actions: [
                                     ElevatedButton.icon(
                                       onPressed: () {
-                                        Navigator.pop(dialogContext);
+                                        Navigator.pop(d);
                                         _loadData(); // Refresh data
                                       },
                                       icon: const Icon(Icons.done),
@@ -2311,40 +2498,56 @@ Widget _buildReturnTab() {
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.green,
                                         foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                          vertical: 12,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               );
                             } else {
-                              // Show error dialog
+                              // Show error dialog using captured navigator/context
                               showDialog(
-                                context: context,
-                                builder: (dialogContext) => AlertDialog(
+                                context: outerNavigator.context,
+                                builder: (d) => AlertDialog(
                                   title: const Row(
                                     children: [
-                                      Icon(Icons.error_outline, color: Colors.red, size: 28),
+                                      Icon(
+                                        Icons.error_outline,
+                                        color: Colors.red,
+                                        size: 28,
+                                      ),
                                       SizedBox(width: 12),
                                       Text('Pindah Stok Gagal'),
                                     ],
                                   ),
                                   content: Column(
                                     mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const SizedBox(height: 16),
                                       Text(
                                         'Gagal memindahkan stok produk. Silakan coba lagi.',
-                                        style: Theme.of(context).textTheme.bodyLarge,
+                                        style: Theme.of(d).textTheme.bodyLarge,
                                       ),
                                       const SizedBox(height: 16),
                                       Container(
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: Colors.red.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                                          color: Colors.red.withValues(
+                                            alpha: 0.1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.red.withValues(
+                                              alpha: 0.3,
+                                            ),
+                                          ),
                                         ),
                                         child: const Text(
                                           'Kemungkinan penyebab:\n• Stok tidak cukup\n• Outlet tujuan tidak valid\n• Koneksi internet putus',
@@ -2355,7 +2558,7 @@ Widget _buildReturnTab() {
                                   ),
                                   actions: [
                                     TextButton(
-                                      onPressed: () => Navigator.pop(dialogContext),
+                                      onPressed: () => Navigator.pop(d),
                                       child: const Text('Tutup'),
                                     ),
                                   ],
@@ -2367,7 +2570,10 @@ Widget _buildReturnTab() {
                       : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                   ),
                   child: const Text('Pindahkan'),
                 ),
@@ -2379,17 +2585,26 @@ Widget _buildReturnTab() {
     );
   }
 
-  void _showReturnDialog(BuildContext context, List<Map<String, dynamic>> stocks) {
+  void _showReturnDialog(
+    BuildContext context,
+    List<Map<String, dynamic>> stocks,
+  ) {
     String? selectedProductId;
     int returnQuantity = 1;
     String? selectedReason;
-    final reasonsList = ['Outlet Tutup', 'Tidak Terjual', 'Expired/Kadaluarsa', 'Rusak', 'Lainnya'];
+    final reasonsList = [
+      'Outlet Tutup',
+      'Tidak Terjual',
+      'Expired/Kadaluarsa',
+      'Rusak',
+      'Lainnya',
+    ];
     final notesController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+        builder: (dialogInnerContext, setState) => AlertDialog(
           title: const Text('Buat Pengembalian Stok'),
           contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
           content: SizedBox(
@@ -2411,7 +2626,8 @@ Widget _buildReturnTab() {
                     value: selectedProductId,
                     items: stocks.map((stock) {
                       final productId = stock['product_id'] as String;
-                      final productName = stock['product_name'] as String? ?? 'Unknown';
+                      final productName =
+                          stock['product_name'] as String? ?? 'Unknown';
                       final unsold = stock['unsold'] as int? ?? 0;
                       return DropdownMenuItem(
                         value: productId,
@@ -2450,9 +2666,13 @@ Widget _buildReturnTab() {
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                              ),
                             ),
-                            controller: TextEditingController(text: '$returnQuantity'),
+                            controller: TextEditingController(
+                              text: '$returnQuantity',
+                            ),
                             onChanged: (value) {
                               setState(() {
                                 returnQuantity = int.tryParse(value) ?? 1;
@@ -2472,7 +2692,7 @@ Widget _buildReturnTab() {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         border: Border.all(color: AppColors.primary, width: 1),
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -2487,10 +2707,7 @@ Widget _buildReturnTab() {
                                 style: Theme.of(context).textTheme.labelSmall,
                               ),
                               Text(
-                                stocks.firstWhere(
-                                  (s) => s['product_id'] == selectedProductId,
-                                  orElse: () => {'unsold': 0},
-                                )['unsold'].toString() + ' unit',
+                                '${stocks.firstWhere((s) => s['product_id'] == selectedProductId, orElse: () => {'unsold': 0})['unsold']} unit',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
@@ -2565,44 +2782,63 @@ Widget _buildReturnTab() {
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
-                  onPressed: selectedProductId != null &&
-                            returnQuantity > 0 &&
-                            selectedReason != null
+                  onPressed:
+                      selectedProductId != null &&
+                          returnQuantity > 0 &&
+                          selectedReason != null
                       ? () async {
                           final supabaseService = SupabaseService();
-                          
+
+                          // Capture objects before awaiting
+                          final rootScaffold = ScaffoldMessenger.of(context);
+                          ProductProvider? productProvider;
+                          try {
+                            productProvider = context.read<ProductProvider>();
+                          } catch (e) {
+                            productProvider = null;
+                          }
+
                           // Save product return to database
-                          final success = await supabaseService.createProductReturn(
-                            outletId: _outletId,
-                            productId: selectedProductId!,
-                            quantity: returnQuantity,
-                            returnReason: selectedReason!,
-                            conditionNotes: notesController.text.isNotEmpty ? notesController.text : null,
-                          );
+                          final success = await supabaseService
+                              .createProductReturn(
+                                outletId: _outletId,
+                                productId: selectedProductId!,
+                                quantity: returnQuantity,
+                                returnReason: selectedReason!,
+                                conditionNotes: notesController.text.isNotEmpty
+                                    ? notesController.text
+                                    : null,
+                              );
 
                           if (mounted) {
-                            Navigator.pop(dialogContext);
+                            if (dialogContext.mounted)
+                              Navigator.pop(dialogContext);
                             notesController.dispose();
 
                             if (success) {
-                              // 🔧 FIX #7: Refresh product stock and cart after return
+                              // 🔧 REFRESH: use captured provider if available
                               try {
-                                final productProvider = context.read<ProductProvider>();
-                                await productProvider.loadProductsWithStock(_outletId);
+                                if (productProvider != null) {
+                                  await productProvider.loadProductsWithStock(
+                                    _outletId,
+                                  );
+                                }
                               } catch (e) {
                                 // Error refreshing product stock silently
                               }
-                              
-                              ScaffoldMessenger.of(context).showSnackBar(
+
+                              rootScaffold.showSnackBar(
                                 const SnackBar(
-                                  content: Text('✅ Pengembalian berhasil dibuat'),
+                                  content: Text(
+                                    '✅ Pengembalian berhasil dibuat',
+                                  ),
                                   backgroundColor: Colors.green,
                                   duration: Duration(seconds: 2),
                                 ),
                               );
                               _loadData(); // Refresh data
                             } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              rootScaffold.showSnackBar(
                                 const SnackBar(
                                   content: Text('❌ Gagal membuat pengembalian'),
                                   backgroundColor: Colors.red,
@@ -2615,7 +2851,10 @@ Widget _buildReturnTab() {
                       : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                   ),
                   child: const Text('Buat Pengembalian'),
                 ),
@@ -2626,5 +2865,4 @@ Widget _buildReturnTab() {
       ),
     );
   }
-
 }

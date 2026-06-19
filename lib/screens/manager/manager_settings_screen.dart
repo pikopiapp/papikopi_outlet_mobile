@@ -31,16 +31,16 @@ class ManagerSettingsScreen extends StatelessWidget {
               Text(
                 'Settings Manager',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: 12),
               Text(
                 'Ini halaman Settings khusus untuk manager. Nanti bisa diisi: pengaturan outlet, pengaturan role, dsb.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  color: AppColors.textSecondary,
+                ),
               ),
             ],
           ),

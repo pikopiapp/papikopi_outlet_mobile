@@ -7,10 +7,7 @@ import '../models/product.dart';
 class ProductQRDialog extends StatelessWidget {
   final Product product;
 
-  const ProductQRDialog({
-    Key? key,
-    required this.product,
-  }) : super(key: key);
+  const ProductQRDialog({super.key, required this.product});
 
   @override
   Widget build(BuildContext context) {
@@ -113,10 +110,7 @@ class ProductQRDialog extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Scan QR code dengan kamera mobile POS untuk menambahkan produk ke keranjang',
-                      style: TextStyle(
-                        color: Colors.blue[700],
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: Colors.blue[700], fontSize: 12),
                     ),
                   ),
                 ],
@@ -174,10 +168,7 @@ class _InfoRow extends StatelessWidget {
         ),
         Text(
           value,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
         ),
       ],
     );

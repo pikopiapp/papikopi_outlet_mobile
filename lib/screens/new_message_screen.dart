@@ -6,7 +6,7 @@ import '../services/supabase_service.dart';
 import 'private_messages_detail_screen.dart';
 
 class NewMessageScreen extends StatefulWidget {
-  const NewMessageScreen({Key? key}) : super(key: key);
+  const NewMessageScreen({super.key});
 
   @override
   State<NewMessageScreen> createState() => _NewMessageScreenState();
@@ -53,9 +53,9 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -66,13 +66,11 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
       if (query.isEmpty) {
         filteredUsers = users;
       } else {
-        filteredUsers = users
-            .where((user) {
-              final name = (user['name'] as String?)?.toLowerCase() ?? '';
-              final email = (user['email'] as String?)?.toLowerCase() ?? '';
-              return name.contains(query) || email.contains(query);
-            })
-            .toList();
+        filteredUsers = users.where((user) {
+          final name = (user['name'] as String?)?.toLowerCase() ?? '';
+          final email = (user['email'] as String?)?.toLowerCase() ?? '';
+          return name.contains(query) || email.contains(query);
+        }).toList();
       }
     });
   }
@@ -102,10 +100,7 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primary,
-        title: const Text(
-          'Pesan Baru',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Pesan Baru', style: TextStyle(color: Colors.white)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
@@ -134,46 +129,49 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : filteredUsers.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.person_off,
-                                  size: 64, color: AppColors.textSecondary),
-                              const SizedBox(height: 16),
-                              Text(
-                                searchController.text.isEmpty
-                                    ? 'Tidak ada pengguna'
-                                    : 'Pengguna tidak ditemukan',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.person_off,
+                            size: 64,
+                            color: AppColors.textSecondary,
                           ),
-                        )
-                      : ListView.builder(
-                          itemCount: filteredUsers.length,
-                          itemBuilder: (context, index) {
-                            final user = filteredUsers[index];
-                            final userName = user['name'] ?? 'Unknown';
-                            final userEmail = user['email'] ?? '';
+                          const SizedBox(height: 16),
+                          Text(
+                            searchController.text.isEmpty
+                                ? 'Tidak ada pengguna'
+                                : 'Pengguna tidak ditemukan',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filteredUsers.length,
+                      itemBuilder: (context, index) {
+                        final user = filteredUsers[index];
+                        final userName = user['name'] ?? 'Unknown';
+                        final userEmail = user['email'] ?? '';
 
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: AppColors.primary,
-                                child: Text(
-                                  userName.substring(0, 1).toUpperCase(),
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              ),
-                              title: Text(userName),
-                              subtitle: Text(userEmail),
-                              onTap: () => _startConversation(user),
-                            );
-                          },
-                        ),
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: AppColors.primary,
+                            child: Text(
+                              userName.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                          title: Text(userName),
+                          subtitle: Text(userEmail),
+                          onTap: () => _startConversation(user),
+                        );
+                      },
+                    ),
             ),
           ],
         ),

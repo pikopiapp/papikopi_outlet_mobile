@@ -28,19 +28,26 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
 
   void _updateDateRange() {
     final now = DateTime.now();
+    final baseNow = (now.hour < 4)
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(now.year, now.month, now.day);
     switch (_period) {
       case 'daily':
-        _startDate = DateTime(now.year, now.month, now.day - 1);
-        _endDate = DateTime(now.year, now.month, now.day);
+        _startDate = DateTime(baseNow.year, baseNow.month, baseNow.day - 1);
+        _endDate = DateTime(baseNow.year, baseNow.month, baseNow.day);
         break;
       case 'weekly':
-        _startDate = now.subtract(const Duration(days: 7));
-        _endDate = now;
+        _startDate = baseNow.subtract(const Duration(days: 7));
+        _endDate = baseNow;
         break;
       case 'monthly':
       default:
-        _startDate = DateTime(now.year, now.month, 1);
-        _endDate = now;
+        _startDate = DateTime(baseNow.year, baseNow.month, 1);
+        _endDate = baseNow;
         break;
     }
   }
@@ -74,7 +81,8 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
   }
 
   String _formatCurrency(double amount) {
-    return amount.toStringAsFixed(0)
+    return amount
+        .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
           (match) => '${match.group(1)}.',
@@ -83,6 +91,14 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final baseNow = (now.hour < 4)
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(now.year, now.month, now.day);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -99,10 +115,7 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Pilih periode:',
-                    style: TextStyle(fontSize: 13),
-                  ),
+                  const Text('Pilih periode:', style: TextStyle(fontSize: 13)),
                   Row(
                     spacing: 8,
                     children: [
@@ -140,7 +153,10 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                 children: [
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         border: Border.all(color: AppColors.altSurface),
                         borderRadius: BorderRadius.circular(8),
@@ -180,7 +196,11 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                                 ),
                               ],
                             ),
-                            const Icon(Icons.edit, size: 18, color: AppColors.primary),
+                            const Icon(
+                              Icons.edit,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
                           ],
                         ),
                       ),
@@ -189,7 +209,10 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         border: Border.all(color: AppColors.altSurface),
                         borderRadius: BorderRadius.circular(8),
@@ -200,7 +223,7 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                             context: context,
                             initialDate: _endDate,
                             firstDate: _startDate,
-                            lastDate: DateTime.now(),
+                            lastDate: baseNow,
                           );
                           if (picked != null) {
                             setState(() => _endDate = picked);
@@ -229,7 +252,11 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                                 ),
                               ],
                             ),
-                            const Icon(Icons.edit, size: 18, color: AppColors.primary),
+                            const Icon(
+                              Icons.edit,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
                           ],
                         ),
                       ),
@@ -250,7 +277,8 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                   if (outletsSnap.hasError) {
                     return _InfoBox(
                       title: 'Error',
-                      value: 'Gagal memuat outlets investor: ${outletsSnap.error}',
+                      value:
+                          'Gagal memuat outlets investor: ${outletsSnap.error}',
                     );
                   }
 
@@ -268,15 +296,12 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                         final outletId = outlet['outlet_id'] as String? ?? '';
                         final revenue = await _fetchRevenueForOutlet(outletId);
                         final hpp = await _fetchHppForOutlet(outletId);
-                        return {
-                          ...outlet,
-                          'revenue': revenue,
-                          'hpp': hpp,
-                        };
+                        return {...outlet, 'revenue': revenue, 'hpp': hpp};
                       }),
                     ),
                     builder: (context, revenueSnap) {
-                      if (revenueSnap.connectionState == ConnectionState.waiting) {
+                      if (revenueSnap.connectionState ==
+                          ConnectionState.waiting) {
                         return const SizedBox(
                           height: 140,
                           child: Center(child: CircularProgressIndicator()),
@@ -309,22 +334,23 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                             (periodData['count'] as num?)?.toInt() ?? 0;
                         final margin =
                             (item['margin_percentage'] as num?)?.toDouble() ??
-                                0.0;
+                            0.0;
                         final cash =
                             (periodData['cash'] as num?)?.toDouble() ?? 0.0;
                         final qris =
                             (periodData['qris'] as num?)?.toDouble() ?? 0.0;
 
                         totalRevenue += amount;
-                        totalInvestorShare +=
-                            (amount * margin / 100).toDouble();
+                        totalInvestorShare += (amount * margin / 100)
+                            .toDouble();
                         totalTransactions += count;
                         totalCash += cash;
                         totalQris += qris;
                       }
 
-                      final avgTransactionValue =
-                          totalTransactions > 0 ? totalRevenue / totalTransactions : 0.0;
+                      final avgTransactionValue = totalTransactions > 0
+                          ? totalRevenue / totalTransactions
+                          : 0.0;
 
                       return Column(
                         children: [
@@ -613,21 +639,21 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                                   (item['outlet_name'] as String?) ?? '-';
                               final revenue =
                                   (item['revenue'] as Map<String, dynamic>?) ??
-                                      {};
+                                  {};
                               final periodData =
                                   (revenue[_period] as Map<String, dynamic>?) ??
-                                      {};
+                                  {};
                               final amount =
                                   (periodData['amount'] as num?)?.toDouble() ??
-                                      0.0;
+                                  0.0;
                               final count =
                                   (periodData['count'] as num?)?.toInt() ?? 0;
                               final margin =
                                   (item['margin_percentage'] as num?)
                                       ?.toDouble() ??
-                                      0.0;
-                              final investorShare =
-                                  (amount * margin / 100).toDouble();
+                                  0.0;
+                              final investorShare = (amount * margin / 100)
+                                  .toDouble();
 
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
@@ -774,25 +800,26 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> {
                                         Builder(
                                           builder: (context) {
                                             final hpp =
-                                                (item['hpp'] as Map<String, dynamic>?)
-                                                    ?? {};
+                                                (item['hpp']
+                                                    as Map<String, dynamic>?) ??
+                                                {};
                                             final actualHpp =
                                                 (hpp['totalHpp'] as num?)
-                                                        ?.toDouble() ??
-                                                    0.0;
+                                                    ?.toDouble() ??
+                                                0.0;
                                             final actualSales =
                                                 (hpp['totalSales'] as num?)
-                                                        ?.toDouble() ??
-                                                    amount;
+                                                    ?.toDouble() ??
+                                                amount;
                                             return ProfitBreakdownCard(
-                                              result: ProfitMarginCalculator
-                                                  .calculateFromAggregatedData(
-                                                totalSales: actualSales,
-                                                totalHpp: actualHpp,
-                                                totalOmset: actualSales,
-                                                investorPercentage: margin,
-                                                isHoliday: false,
-                                              ),
+                                              result:
+                                                  ProfitMarginCalculator.calculateFromAggregatedData(
+                                                    totalSales: actualSales,
+                                                    totalHpp: actualHpp,
+                                                    totalOmset: actualSales,
+                                                    investorPercentage: margin,
+                                                    isHoliday: false,
+                                                  ),
                                               outletName: outletName,
                                             );
                                           },
@@ -837,10 +864,14 @@ class _PillButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? AppColors.primary.withOpacity(0.14) : AppColors.surface,
+          color: active
+              ? AppColors.primary.withValues(alpha: 0.14)
+              : AppColors.surface,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: active ? AppColors.primary.withOpacity(0.55) : AppColors.altSurface,
+            color: active
+                ? AppColors.primary.withValues(alpha: 0.55)
+                : AppColors.altSurface,
           ),
         ),
         child: Text(
@@ -876,9 +907,9 @@ class _InfoBox extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Text(value),

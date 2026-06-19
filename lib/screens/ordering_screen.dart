@@ -38,7 +38,9 @@ class _OrderingScreenState extends State<OrderingScreen> {
       final authProvider = context.read<AuthProvider>();
       productProvider.loadCategories();
       if (authProvider.currentUser != null) {
-        productProvider.loadProductsWithStock(authProvider.currentUser!.outletId);
+        productProvider.loadProductsWithStock(
+          authProvider.currentUser!.outletId,
+        );
       } else {
         productProvider.loadProducts();
       }
@@ -61,8 +63,9 @@ class _OrderingScreenState extends State<OrderingScreen> {
         product: product,
         onQuantitySelected: (quantity) {
           setState(() {
-            final existingIndex =
-                _orderItems.indexWhere((item) => item['product_id'] == product.id);
+            final existingIndex = _orderItems.indexWhere(
+              (item) => item['product_id'] == product.id,
+            );
             if (existingIndex != -1) {
               _orderItems[existingIndex]['quantity'] += quantity;
             } else {
@@ -118,7 +121,8 @@ class _OrderingScreenState extends State<OrderingScreen> {
         final itemTotal =
             (item['unit_price'] as num).toDouble() * (item['quantity'] as int);
         final itemHpp =
-            ((item['hpp'] as num?)?.toDouble() ?? 0.0) * (item['quantity'] as int);
+            ((item['hpp'] as num?)?.toDouble() ?? 0.0) *
+            (item['quantity'] as int);
         totalAmount += itemTotal;
         totalHpp += itemHpp;
       }
@@ -229,14 +233,19 @@ class _OrderingScreenState extends State<OrderingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Informasi Pelanggan', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Informasi Pelanggan',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: _customerNameController,
               decoration: InputDecoration(
                 labelText: 'Nama Pelanggan *',
                 hintText: 'Masukkan nama pelanggan',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 prefixIcon: const Icon(Icons.person),
               ),
             ),
@@ -246,7 +255,9 @@ class _OrderingScreenState extends State<OrderingScreen> {
               decoration: InputDecoration(
                 labelText: 'No. Telepon',
                 hintText: '+62...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 prefixIcon: const Icon(Icons.phone),
               ),
               keyboardType: TextInputType.phone,
@@ -257,7 +268,9 @@ class _OrderingScreenState extends State<OrderingScreen> {
               decoration: InputDecoration(
                 labelText: 'Email',
                 hintText: 'email@example.com',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 prefixIcon: const Icon(Icons.email),
               ),
               keyboardType: TextInputType.emailAddress,
@@ -364,13 +377,17 @@ class _OrderingScreenState extends State<OrderingScreen> {
                           height: 100,
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
+                            color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(8),
                               topRight: Radius.circular(8),
                             ),
                           ),
-                          child: Icon(Icons.local_cafe, color: AppColors.primary, size: 40),
+                          child: Icon(
+                            Icons.local_cafe,
+                            color: AppColors.primary,
+                            size: 40,
+                          ),
                         ),
                         Padding(
                           padding: const EdgeInsets.all(8),
@@ -399,7 +416,9 @@ class _OrderingScreenState extends State<OrderingScreen> {
                               Text(
                                 'Stok: ${product.stock}',
                                 style: TextStyle(
-                                  color: product.stock > 0 ? Colors.green : Colors.red,
+                                  color: product.stock > 0
+                                      ? Colors.green
+                                      : Colors.red,
                                   fontSize: 10,
                                 ),
                               ),
@@ -427,13 +446,17 @@ class _OrderingScreenState extends State<OrderingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Ringkasan Pesanan', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Ringkasan Pesanan',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 12),
             ..._orderItems.asMap().entries.map((entry) {
               final index = entry.key;
               final item = entry.value;
               final subtotal =
-                  (item['unit_price'] as num).toDouble() * (item['quantity'] as int);
+                  (item['unit_price'] as num).toDouble() *
+                  (item['quantity'] as int);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
@@ -449,7 +472,10 @@ class _OrderingScreenState extends State<OrderingScreen> {
                           ),
                           Text(
                             '${item['quantity']}x @ ${formatCurrencyRp(item['unit_price'])}',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -471,7 +497,10 @@ class _OrderingScreenState extends State<OrderingScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Total:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                const Text(
+                  'Total:',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
                 Text(
                   formatCurrencyRp(
                     _orderItems.fold<double>(
@@ -505,39 +534,51 @@ class _OrderingScreenState extends State<OrderingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Metode Pembayaran', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Metode Pembayaran',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 12),
-            RadioListTile<String>(
+            // Payment method selector implemented without deprecated Radio API
+            ListTile(
+              leading: Icon(
+                _paymentMethod == 'CASH'
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: AppColors.primary,
+              ),
               title: const Text('Tunai'),
-              value: 'CASH',
-              groupValue: _paymentMethod,
-              onChanged: (value) {
-                if (value != null) setState(() => _paymentMethod = value);
-              },
+              onTap: () => setState(() => _paymentMethod = 'CASH'),
             ),
-            RadioListTile<String>(
+            ListTile(
+              leading: Icon(
+                _paymentMethod == 'QRIS'
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: AppColors.primary,
+              ),
               title: const Text('QRIS'),
-              value: 'QRIS',
-              groupValue: _paymentMethod,
-              onChanged: (value) {
-                if (value != null) setState(() => _paymentMethod = value);
-              },
+              onTap: () => setState(() => _paymentMethod = 'QRIS'),
             ),
-            RadioListTile<String>(
+            ListTile(
+              leading: Icon(
+                _paymentMethod == 'CARD'
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: AppColors.primary,
+              ),
               title: const Text('Kartu Kredit'),
-              value: 'CARD',
-              groupValue: _paymentMethod,
-              onChanged: (value) {
-                if (value != null) setState(() => _paymentMethod = value);
-              },
+              onTap: () => setState(() => _paymentMethod = 'CARD'),
             ),
-            RadioListTile<String>(
+            ListTile(
+              leading: Icon(
+                _paymentMethod == 'TRANSFER'
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: AppColors.primary,
+              ),
               title: const Text('Transfer Bank'),
-              value: 'TRANSFER',
-              groupValue: _paymentMethod,
-              onChanged: (value) {
-                if (value != null) setState(() => _paymentMethod = value);
-              },
+              onTap: () => setState(() => _paymentMethod = 'TRANSFER'),
             ),
           ],
         ),
@@ -554,14 +595,19 @@ class _OrderingScreenState extends State<OrderingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Catatan (Opsional)', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Catatan (Opsional)',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _notesController,
               maxLines: 3,
               decoration: InputDecoration(
                 hintText: 'Tambahkan catatan khusus untuk pesanan...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ],
@@ -591,7 +637,10 @@ class _OrderingScreenState extends State<OrderingScreen> {
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
-            : const Text('Buat Pesanan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            : const Text(
+                'Buat Pesanan',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
       ),
     );
   }
@@ -642,7 +691,9 @@ class _QuantityDialogState extends State<_QuantityDialog> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                onPressed: _quantity > 1
+                    ? () => setState(() => _quantity--)
+                    : null,
                 icon: const Icon(Icons.remove),
               ),
               SizedBox(
@@ -651,7 +702,9 @@ class _QuantityDialogState extends State<_QuantityDialog> {
                   textAlign: TextAlign.center,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                   controller: _quantityController,
                   onChanged: (value) {

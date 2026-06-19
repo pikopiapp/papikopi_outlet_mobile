@@ -8,7 +8,8 @@ class ExpenseManagementScreen extends StatefulWidget {
   const ExpenseManagementScreen({super.key});
 
   @override
-  State<ExpenseManagementScreen> createState() => _ExpenseManagementScreenState();
+  State<ExpenseManagementScreen> createState() =>
+      _ExpenseManagementScreenState();
 }
 
 class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
@@ -46,7 +47,14 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
   @override
   void initState() {
     super.initState();
-    selectedDate = DateTime.now();
+    final now = DateTime.now();
+    selectedDate = (now.hour < 4)
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(now.year, now.month, now.day);
     supabaseService = SupabaseService();
     _loadExpenses();
   }
@@ -54,7 +62,11 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
   Future<void> _loadExpenses() async {
     setState(() => isLoading = true);
     try {
-      final startOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      final startOfDay = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+      );
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
       final response = await supabaseService.client
@@ -77,9 +89,9 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -118,9 +130,14 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
           child: Wrap(
             children: [
               ListTile(
-                leading: const Icon(Icons.receipt_long_outlined, color: Colors.orange),
+                leading: const Icon(
+                  Icons.receipt_long_outlined,
+                  color: Colors.orange,
+                ),
                 title: const Text('Pencatatan General Expense'),
-                subtitle: const Text('Pengeluaran umum: listrik, supplies, dll'),
+                subtitle: const Text(
+                  'Pengeluaran umum: listrik, supplies, dll',
+                ),
                 onTap: () {
                   Navigator.pop(context);
                   showModalBottomSheet(
@@ -136,7 +153,10 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.shopping_cart_outlined, color: Colors.blue),
+                leading: const Icon(
+                  Icons.shopping_cart_outlined,
+                  color: Colors.blue,
+                ),
                 title: const Text('Pencatatan Inventory Purchasing'),
                 subtitle: const Text('Belanja bahan baku, stok, dll (via web)'),
                 onTap: () {
@@ -145,7 +165,9 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                     context: this.context,
                     builder: (ctx) => AlertDialog(
                       title: const Text('Arahkan ke Web'),
-                      content: const Text('Pencatatan pembelian bahan baku & stok dilakukan di dashboard web (menu Inventory).'),
+                      content: const Text(
+                        'Pencatatan pembelian bahan baku & stok dilakukan di dashboard web (menu Inventory).',
+                      ),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
@@ -181,7 +203,9 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hapus Pengeluaran?'),
-        content: const Text('Apakah Anda yakin ingin menghapus pengeluaran ini?'),
+        content: const Text(
+          'Apakah Anda yakin ingin menghapus pengeluaran ini?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -198,14 +222,16 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                 _loadExpenses();
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Pengeluaran berhasil dihapus')),
+                    const SnackBar(
+                      content: Text('Pengeluaran berhasil dihapus'),
+                    ),
                   );
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
                 }
               }
             },
@@ -227,7 +253,8 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
     );
     final dateFormat = DateFormat('dd MMMM yyyy', 'id_ID');
     final dayFormat = DateFormat('EEEE, dd MMMM yyyy', 'id_ID');
-    final isToday = DateTime.now().day == selectedDate.day &&
+    final isToday =
+        DateTime.now().day == selectedDate.day &&
         DateTime.now().month == selectedDate.month &&
         DateTime.now().year == selectedDate.year;
 
@@ -278,7 +305,9 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  isToday ? 'Hari Ini' : dayFormat.format(selectedDate),
+                                  isToday
+                                      ? 'Hari Ini'
+                                      : dayFormat.format(selectedDate),
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
@@ -315,15 +344,12 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [
-                            Colors.red.shade600,
-                            Colors.red.shade400,
-                          ],
+                          colors: [Colors.red.shade600, Colors.red.shade400],
                         ),
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.red.withOpacity(0.3),
+                            color: Colors.red.withValues(alpha: 0.3),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -336,7 +362,9 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                isToday ? 'Total Pengeluaran Hari Ini' : 'Total Pengeluaran ${dateFormat.format(selectedDate)}',
+                                isToday
+                                    ? 'Total Pengeluaran Hari Ini'
+                                    : 'Total Pengeluaran ${dateFormat.format(selectedDate)}',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
@@ -346,7 +374,7 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.white.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Icon(
@@ -370,7 +398,7 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                           Text(
                             '${expenses.length} item pengeluaran',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withValues(alpha: 0.8),
                               fontSize: 12,
                             ),
                           ),
@@ -398,7 +426,9 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    isToday ? 'Belum ada pengeluaran hari ini' : 'Belum ada pengeluaran pada tanggal tersebut',
+                                    isToday
+                                        ? 'Belum ada pengeluaran hari ini'
+                                        : 'Belum ada pengeluaran pada tanggal tersebut',
                                     style: TextStyle(
                                       color: AppColors.textSecondary,
                                       fontSize: 14,
@@ -413,9 +443,15 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                             children: List.generate(expenses.length, (index) {
                               final expense = expenses[index];
                               final category = expense['category'];
-                              final amount = (expense['amount'] as num?)?.toDouble() ?? 0;
-                              final timestamp = DateTime.parse(expense['created_at']);
-                              final timeString = DateFormat('HH:mm', 'id_ID').format(timestamp);
+                              final amount =
+                                  (expense['amount'] as num?)?.toDouble() ?? 0;
+                              final timestamp = DateTime.parse(
+                                expense['created_at'],
+                              );
+                              final timeString = DateFormat(
+                                'HH:mm',
+                                'id_ID',
+                              ).format(timestamp);
 
                               return Padding(
                                 padding: EdgeInsets.only(
@@ -426,10 +462,14 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Color(0xFFE8E8E8)),
+                                    border: Border.all(
+                                      color: Color(0xFFE8E8E8),
+                                    ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.08),
+                                        color: Colors.black.withValues(
+                                          alpha: 0.08,
+                                        ),
                                         blurRadius: 8,
                                         offset: const Offset(0, 2),
                                       ),
@@ -441,20 +481,28 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                                         width: 44,
                                         height: 44,
                                         decoration: BoxDecoration(
-                                          color: (categoryColors[category] ?? AppColors.primary)
-                                              .withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(10),
+                                          color:
+                                              (categoryColors[category] ??
+                                                      AppColors.primary)
+                                                  .withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                         ),
                                         child: Icon(
-                                          categoryIcons[category] ?? Icons.receipt,
-                                          color: categoryColors[category] ?? AppColors.primary,
+                                          categoryIcons[category] ??
+                                              Icons.receipt,
+                                          color:
+                                              categoryColors[category] ??
+                                              AppColors.primary,
                                           size: 22,
                                         ),
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               category,
@@ -488,7 +536,8 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                                         ),
                                       ),
                                       Column(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
                                         children: [
                                           Text(
                                             '- ${currencyFormat.format(amount)}',
@@ -504,18 +553,28 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                                               PopupMenuItem(
                                                 child: const Text('Edit'),
                                                 onTap: () => Future.delayed(
-                                                  const Duration(milliseconds: 200),
-                                                  () => _showEditExpenseDialog(expense),
+                                                  const Duration(
+                                                    milliseconds: 200,
+                                                  ),
+                                                  () => _showEditExpenseDialog(
+                                                    expense,
+                                                  ),
                                                 ),
                                               ),
                                               PopupMenuItem(
                                                 child: const Text(
                                                   'Hapus',
-                                                  style: TextStyle(color: Colors.red),
+                                                  style: TextStyle(
+                                                    color: Colors.red,
+                                                  ),
                                                 ),
                                                 onTap: () => Future.delayed(
-                                                  const Duration(milliseconds: 200),
-                                                  () => _deleteExpense(expense['id']),
+                                                  const Duration(
+                                                    milliseconds: 200,
+                                                  ),
+                                                  () => _deleteExpense(
+                                                    expense['id'],
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -611,9 +670,9 @@ class _AddExpenseBottomSheetState extends State<_AddExpenseBottomSheet> {
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -633,16 +692,16 @@ class _AddExpenseBottomSheetState extends State<_AddExpenseBottomSheet> {
         children: [
           Text(
             'Tambah Pengeluaran',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
           Text(
             'Kategori',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Container(
@@ -656,10 +715,7 @@ class _AddExpenseBottomSheetState extends State<_AddExpenseBottomSheet> {
               value: selectedCategory,
               underline: const SizedBox(),
               items: widget.categories.map((category) {
-                return DropdownMenuItem(
-                  value: category,
-                  child: Text(category),
-                );
+                return DropdownMenuItem(value: category, child: Text(category));
               }).toList(),
               onChanged: (value) {
                 if (value != null) {
@@ -671,9 +727,9 @@ class _AddExpenseBottomSheetState extends State<_AddExpenseBottomSheet> {
           const SizedBox(height: 16),
           Text(
             'Deskripsi',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -689,9 +745,9 @@ class _AddExpenseBottomSheetState extends State<_AddExpenseBottomSheet> {
           const SizedBox(height: 16),
           Text(
             'Jumlah (Rp)',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -761,7 +817,8 @@ class _EditExpenseBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<_EditExpenseBottomSheet> createState() => _EditExpenseBottomSheetState();
+  State<_EditExpenseBottomSheet> createState() =>
+      _EditExpenseBottomSheetState();
 }
 
 class _EditExpenseBottomSheetState extends State<_EditExpenseBottomSheet> {
@@ -774,8 +831,12 @@ class _EditExpenseBottomSheetState extends State<_EditExpenseBottomSheet> {
   void initState() {
     super.initState();
     selectedCategory = widget.expense['category'];
-    descriptionController = TextEditingController(text: widget.expense['description'] ?? '');
-    amountController = TextEditingController(text: widget.expense['amount'].toString());
+    descriptionController = TextEditingController(
+      text: widget.expense['description'] ?? '',
+    );
+    amountController = TextEditingController(
+      text: widget.expense['amount'].toString(),
+    );
   }
 
   @override
@@ -814,9 +875,9 @@ class _EditExpenseBottomSheetState extends State<_EditExpenseBottomSheet> {
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -836,16 +897,16 @@ class _EditExpenseBottomSheetState extends State<_EditExpenseBottomSheet> {
         children: [
           Text(
             'Edit Pengeluaran',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
           Text(
             'Kategori',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Container(
@@ -859,10 +920,7 @@ class _EditExpenseBottomSheetState extends State<_EditExpenseBottomSheet> {
               value: selectedCategory,
               underline: const SizedBox(),
               items: widget.categories.map((category) {
-                return DropdownMenuItem(
-                  value: category,
-                  child: Text(category),
-                );
+                return DropdownMenuItem(value: category, child: Text(category));
               }).toList(),
               onChanged: (value) {
                 if (value != null) {
@@ -874,9 +932,9 @@ class _EditExpenseBottomSheetState extends State<_EditExpenseBottomSheet> {
           const SizedBox(height: 16),
           Text(
             'Deskripsi',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -892,9 +950,9 @@ class _EditExpenseBottomSheetState extends State<_EditExpenseBottomSheet> {
           const SizedBox(height: 16),
           Text(
             'Jumlah (Rp)',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           TextField(

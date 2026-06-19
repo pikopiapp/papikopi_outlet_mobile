@@ -22,13 +22,16 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
   List<Map<String, dynamic>> _assignments = [];
 
   String? _selectedOutletId;
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
   int _businessDayStartHour = 21;
 
   bool _isLoading = true;
   bool _isSubmitting = false;
-  String? _error;
-  String? _successMessage;
+  // Field used to store error state; assignments exist but value isn't read
+  // in the current UI flows. Keep the field for future use and silence
+  // the analyzer warning.
+  String? _error; // ignore: unused_field
+  String? _successMessage; // ignore: unused_field
   int _currentTabIndex = 0;
 
   // Temporary buffer for scanned allocations (before batch submit)
@@ -44,16 +47,24 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
   void initState() {
     super.initState();
     _quantityControllers = {};
+    final now = DateTime.now();
+    _selectedDate = (now.hour < 4)
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(now.year, now.month, now.day);
     _initialize();
   }
 
   Future<void> _initialize() async {
     // Load temp data first
     await _loadTempAllocations();
-    
+
     await _fetchSettings();
     await _fetchOutlets();
-    
+
     // Load saved outlet selection
     await _loadSelectedOutlet();
   }
@@ -62,15 +73,20 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedOutletId = prefs.getString(_selectedOutletStorageKey);
-      
-      if (savedOutletId != null && _outlets.any((o) => o['id'] == savedOutletId)) {
+
+      if (savedOutletId != null &&
+          _outlets.any((o) => o['id'] == savedOutletId)) {
         setState(() {
           _selectedOutletId = savedOutletId;
         });
-        print('[ShowcaseAllocationScreen] Loaded selected outlet: $savedOutletId');
+        debugPrint(
+          '[ShowcaseAllocationScreen] Loaded selected outlet: $savedOutletId',
+        );
       }
     } catch (e) {
-      print('[ShowcaseAllocationScreen] Error loading selected outlet: $e');
+      debugPrint(
+        '[ShowcaseAllocationScreen] Error loading selected outlet: $e',
+      );
     }
   }
 
@@ -79,10 +95,12 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       final prefs = await SharedPreferences.getInstance();
       if (outletId != null) {
         await prefs.setString(_selectedOutletStorageKey, outletId);
-        print('[ShowcaseAllocationScreen] Saved selected outlet: $outletId');
+        debugPrint(
+          '[ShowcaseAllocationScreen] Saved selected outlet: $outletId',
+        );
       }
     } catch (e) {
-      print('[ShowcaseAllocationScreen] Error saving selected outlet: $e');
+      debugPrint('[ShowcaseAllocationScreen] Error saving selected outlet: $e');
     }
   }
 
@@ -90,30 +108,34 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonString = prefs.getString(_tempDataStorageKey);
-      
+
       if (jsonString != null) {
         final data = jsonDecode(jsonString) as Map<String, dynamic>;
         final savedTime = DateTime.parse(data['timestamp'] as String);
         final hoursDiff = DateTime.now().difference(savedTime).inHours;
-        
+
         // Auto-clear if older than threshold
         if (hoursDiff > _clearAfterHours) {
-          print('[ShowcaseAllocationScreen] Temp data expired, clearing...');
+          debugPrint(
+            '[ShowcaseAllocationScreen] Temp data expired, clearing...',
+          );
           await prefs.remove(_tempDataStorageKey);
           return;
         }
-        
+
         setState(() {
           _tempAllocations = List<Map<String, dynamic>>.from(
             data['allocations'] as List? ?? [],
           );
           _tempAllocationsTimestamp = savedTime;
         });
-        
-        print('[ShowcaseAllocationScreen] Loaded ${_tempAllocations.length} temp allocations from storage');
+
+        debugPrint(
+          '[ShowcaseAllocationScreen] Loaded ${_tempAllocations.length} temp allocations from storage',
+        );
       }
     } catch (e) {
-      print('[ShowcaseAllocationScreen] Error loading temp data: $e');
+      debugPrint('[ShowcaseAllocationScreen] Error loading temp data: $e');
     }
   }
 
@@ -124,22 +146,24 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         await prefs.remove(_tempDataStorageKey);
         return;
       }
-      
+
       final prefs = await SharedPreferences.getInstance();
       final timestamp = DateTime.now();
       final data = {
         'allocations': _tempAllocations,
         'timestamp': timestamp.toIso8601String(),
       };
-      
+
       await prefs.setString(_tempDataStorageKey, jsonEncode(data));
       setState(() {
         _tempAllocationsTimestamp = timestamp;
       });
-      
-      print('[ShowcaseAllocationScreen] Saved temp allocations to storage');
+
+      debugPrint(
+        '[ShowcaseAllocationScreen] Saved temp allocations to storage',
+      );
     } catch (e) {
-      print('[ShowcaseAllocationScreen] Error saving temp data: $e');
+      debugPrint('[ShowcaseAllocationScreen] Error saving temp data: $e');
     }
   }
 
@@ -164,17 +188,21 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       });
 
       final outletsData = await _supabaseService.fetchOutlets();
-      print('[ShowcaseAllocationScreen] Fetched ${outletsData.length} outlets');
+      debugPrint(
+        '[ShowcaseAllocationScreen] Fetched ${outletsData.length} outlets',
+      );
       for (final outlet in outletsData) {
-        print('  - ${outlet['name']} (id: ${outlet['id']}, business_day_start_hour: ${outlet['business_day_start_hour']})');
+        debugPrint(
+          '  - ${outlet['name']} (id: ${outlet['id']}, business_day_start_hour: ${outlet['business_day_start_hour']})',
+        );
       }
-      
+
       setState(() {
         _outlets = outletsData;
         _isLoading = false;
       });
     } catch (e) {
-      print('[ShowcaseAllocationScreen] Error fetching outlets: $e');
+      debugPrint('[ShowcaseAllocationScreen] Error fetching outlets: $e');
       setState(() {
         _error = 'Error fetching outlets: $e';
         _isLoading = false;
@@ -201,23 +229,35 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       final productsData = await _supabaseService.fetchShowcaseProducts();
 
       // Fetch assignments with business day filter
-      print('[ShowcaseAllocationScreen] Current date: $_selectedDate');
-      print('[ShowcaseAllocationScreen] Business day start hour: $_businessDayStartHour');
-      
+      debugPrint('[ShowcaseAllocationScreen] Current date: $_selectedDate');
+      debugPrint(
+        '[ShowcaseAllocationScreen] Business day start hour: $_businessDayStartHour',
+      );
+
       final range = _getBusinessDayRange(_selectedDate, _businessDayStartHour);
-      print('[ShowcaseAllocationScreen] Business day range:');
-      print('  Start (UTC): ${(range['start'] as DateTime).toIso8601String()}');
-      print('  Start (local): ${(range['start'] as DateTime).toLocal().toIso8601String()}');
-      print('  End (UTC): ${(range['end'] as DateTime).toIso8601String()}');
-      print('  End (local): ${(range['end'] as DateTime).toLocal().toIso8601String()}');
-      
+      debugPrint('[ShowcaseAllocationScreen] Business day range:');
+      debugPrint(
+        '  Start (UTC): ${(range['start'] as DateTime).toIso8601String()}',
+      );
+      debugPrint(
+        '  Start (local): ${(range['start'] as DateTime).toLocal().toIso8601String()}',
+      );
+      debugPrint(
+        '  End (UTC): ${(range['end'] as DateTime).toIso8601String()}',
+      );
+      debugPrint(
+        '  End (local): ${(range['end'] as DateTime).toLocal().toIso8601String()}',
+      );
+
       final assignments = await _supabaseService.fetchAssignmentsForOutlet(
         outletId: _selectedOutletId!,
         startDate: range['start'] as DateTime,
         endDate: range['end'] as DateTime,
       );
 
-      print('[ShowcaseAllocationScreen] Fetched ${assignments.length} assignments');
+      debugPrint(
+        '[ShowcaseAllocationScreen] Fetched ${assignments.length} assignments',
+      );
 
       setState(() {
         _showcaseProducts = productsData;
@@ -255,17 +295,16 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
     }
 
     // Subtract 1 millisecond from end to exclude the exact end time
-    businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
+    businessDayEndLocal = businessDayEndLocal.subtract(
+      const Duration(milliseconds: 1),
+    );
 
     // Convert to UTC for database query
     // This matches supabase_service.dart's getProductStockAtDate() logic
     final businessDayStartUtc = businessDayStartLocal.toUtc();
     final businessDayEndUtc = businessDayEndLocal.toUtc();
 
-    return {
-      'start': businessDayStartUtc,
-      'end': businessDayEndUtc,
-    };
+    return {'start': businessDayStartUtc, 'end': businessDayEndUtc};
   }
 
   Future<void> _allocateProduct(String showcaseProductId) async {
@@ -300,27 +339,31 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         _successMessage = null;
       });
 
-      print('[ShowcaseAllocationScreen] Allocating product: $showcaseProductId, qty: $quantity');
-      
+      debugPrint(
+        '[ShowcaseAllocationScreen] Allocating product: $showcaseProductId, qty: $quantity',
+      );
+
       final result = await _supabaseService.allocateShowcaseProduct(
         showcaseProductId: showcaseProductId,
         outletId: _selectedOutletId!,
         quantity: quantity,
       );
 
-      print('[ShowcaseAllocationScreen] Allocation result: $result');
+      debugPrint('[ShowcaseAllocationScreen] Allocation result: $result');
 
       if (result['success'] == true) {
-        print('[ShowcaseAllocationScreen] Allocation successful, refreshing data...');
+        debugPrint(
+          '[ShowcaseAllocationScreen] Allocation successful, refreshing data...',
+        );
         _quantityControllers[showcaseProductId]?.clear();
         setState(() {
           _successMessage = result['message'] ?? 'Alokasi berhasil';
           _isSubmitting = false;
         });
-        
+
         // Refresh immediately
         await _fetchProductsAndAssignments();
-        
+
         Future.delayed(const Duration(seconds: 3), () {
           if (mounted) {
             setState(() {
@@ -371,7 +414,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         _error = null;
       });
 
-      final result = await _supabaseService.deleteShowcaseAllocation(allocationId);
+      final result = await _supabaseService.deleteShowcaseAllocation(
+        allocationId,
+      );
 
       if (result['success'] == true) {
         setState(() {
@@ -426,15 +471,15 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
 
   Future<void> _addProductByQRCode(String code) async {
     try {
-      print('[ShowcaseAllocationScreen] Scanned QR: $code');
-      
+      debugPrint('[ShowcaseAllocationScreen] Scanned QR: $code');
+
       String? searchId;
       String? productName;
-      
+
       // Try to parse JSON from QR code first
       try {
         final jsonData = jsonDecode(code) as Map<String, dynamic>;
-        
+
         // Try to get product_id from JSON (warehouse QR format)
         if (jsonData.containsKey('product_id')) {
           searchId = jsonData['product_id'] as String;
@@ -443,53 +488,67 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         else if (jsonData.containsKey('id')) {
           searchId = jsonData['id'] as String;
         }
-        
+
         // Get product name for matching - try multiple field names
-        productName = jsonData['product'] as String? ?? 
-                      jsonData['product_name'] as String? ?? 
-                      jsonData['name'] as String?;
+        productName =
+            jsonData['product'] as String? ??
+            jsonData['product_name'] as String? ??
+            jsonData['name'] as String?;
       } catch (e) {
         // Not JSON, treat as plain code - assume it's a product ID
         searchId = code;
-        print('[ShowcaseAllocationScreen] JSON parse failed, using code as product ID: $searchId');
+        debugPrint(
+          '[ShowcaseAllocationScreen] JSON parse failed, using code as product ID: $searchId',
+        );
       }
 
-      print('[ShowcaseAllocationScreen] Available products: ${_showcaseProducts.length}');
+      debugPrint(
+        '[ShowcaseAllocationScreen] Available products: ${_showcaseProducts.length}',
+      );
       for (final p in _showcaseProducts) {
-        print('  - ${p['product_name']} (id: ${p['id']}, product_id: ${p['product_id']})');
+        debugPrint(
+          '  - ${p['product_name']} (id: ${p['id']}, product_id: ${p['product_id']})',
+        );
       }
-      print('[ShowcaseAllocationScreen] Looking for product - ID: $searchId, Name: $productName');
+      print(
+        '[ShowcaseAllocationScreen] Looking for product - ID: $searchId, Name: $productName',
+      );
 
       // Find product in showcase products
       Map<String, dynamic>? product;
-      
+
       // Try exact ID match first (check both 'id' and 'product_id' fields)
       if (searchId != null && searchId.isNotEmpty) {
         for (final p in _showcaseProducts) {
           if (p['id'] == searchId || p['product_id'] == searchId) {
             product = p;
-            print('[ShowcaseAllocationScreen] Found by exact ID match');
+            debugPrint('[ShowcaseAllocationScreen] Found by exact ID match');
             break;
           }
         }
       }
-      
+
       // If not found by ID, try product name match
       if (product == null && productName != null && productName.isNotEmpty) {
         for (final p in _showcaseProducts) {
-          if ((p['product_name'] as String? ?? '').toLowerCase() == productName.toLowerCase()) {
+          if ((p['product_name'] as String? ?? '').toLowerCase() ==
+              productName.toLowerCase()) {
             product = p;
-            print('[ShowcaseAllocationScreen] Found by name match');
+            debugPrint('[ShowcaseAllocationScreen] Found by name match');
             break;
           }
         }
       }
-      
+
       // Last resort: partial matching
       if (product == null && searchId != null) {
         for (final p in _showcaseProducts) {
-          if ((p['id'] as String? ?? '').toLowerCase().contains(searchId.toLowerCase()) ||
-              (p['product_name'] as String? ?? '').toLowerCase().contains(searchId.toLowerCase())) {
+          if ((p['id'] as String? ?? '').toLowerCase().contains(
+                searchId.toLowerCase(),
+              ) ||
+              (p['product_name'] as String? ?? '').toLowerCase().contains(
+                searchId.toLowerCase(),
+              )) {
             product = p;
             break;
           }
@@ -501,7 +560,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           String errorMsg = '❌ Produk tidak ditemukan';
           if (searchId != null) errorMsg += ': $searchId';
           if (productName != null) errorMsg += ' ($productName)';
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(errorMsg),
@@ -541,11 +600,11 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           final existingIndex = _tempAllocations.indexWhere(
             (a) => a['showcase_product_id'] == productId,
           );
-          
+
           if (existingIndex >= 0) {
             // Product already in buffer, increment quantity
-            _tempAllocations[existingIndex]['quantity'] = 
-              (_tempAllocations[existingIndex]['quantity'] as int) + 1;
+            _tempAllocations[existingIndex]['quantity'] =
+                (_tempAllocations[existingIndex]['quantity'] as int) + 1;
           } else {
             // Add new product to buffer
             _tempAllocations.add({
@@ -561,7 +620,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✓ $allocProductName ditambahkan (Queue: ${_tempAllocations.length})'),
+            content: Text(
+              '✓ $allocProductName ditambahkan (Queue: ${_tempAllocations.length})',
+            ),
             backgroundColor: Colors.blue,
             duration: const Duration(seconds: 1),
           ),
@@ -570,10 +631,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -598,7 +656,11 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        for (int index = 0; index < _tempAllocations.length; index++)
+                        for (
+                          int index = 0;
+                          index < _tempAllocations.length;
+                          index++
+                        )
                           _buildAllocationListItem(index, setDialogState),
                         const SizedBox(height: 16),
                         SizedBox(
@@ -648,7 +710,10 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                 Expanded(
                   child: Text(
                     allocation['product_name'] as String,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
                 SizedBox(
@@ -677,7 +742,8 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                     icon: const Icon(Icons.remove, size: 16),
                     onPressed: () {
                       setDialogState(() {
-                        final currentQty = _tempAllocations[index]['quantity'] as int;
+                        final currentQty =
+                            _tempAllocations[index]['quantity'] as int;
                         if (currentQty > 1) {
                           _tempAllocations[index]['quantity'] = currentQty - 1;
                         }
@@ -688,7 +754,10 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                 ),
                 Text(
                   'Qty: ${_tempAllocations[index]['quantity']}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
                 SizedBox(
                   width: 32,
@@ -721,7 +790,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       });
 
       // Make a copy of the buffer to avoid modification issues
-      final allocationsToProcess = List<Map<String, dynamic>>.from(_tempAllocations);
+      final allocationsToProcess = List<Map<String, dynamic>>.from(
+        _tempAllocations,
+      );
       int successCount = 0;
       int failCount = 0;
 
@@ -731,7 +802,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           final showcaseProductId = allocation['showcase_product_id'] as String;
           final quantity = allocation['quantity'] as int;
 
-          print('[ShowcaseAllocationScreen] Batch allocating: $showcaseProductId, qty: $quantity');
+          debugPrint(
+            '[ShowcaseAllocationScreen] Batch allocating: $showcaseProductId, qty: $quantity',
+          );
 
           final result = await _supabaseService.allocateShowcaseProduct(
             showcaseProductId: showcaseProductId,
@@ -743,11 +816,13 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
             successCount++;
           } else {
             failCount++;
-            print('[ShowcaseAllocationScreen] Allocation failed: ${result['message']}');
+            debugPrint(
+              '[ShowcaseAllocationScreen] Allocation failed: ${result['message']}',
+            );
           }
         } catch (e) {
           failCount++;
-          print('[ShowcaseAllocationScreen] Error allocating item: $e');
+          debugPrint('[ShowcaseAllocationScreen] Error allocating item: $e');
         }
       }
 
@@ -756,14 +831,14 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         setState(() {
           _tempAllocations.clear();
           _isSubmitting = false;
-          
+
           if (failCount == 0) {
             _successMessage = '✓ $successCount alokasi berhasil diproses';
           } else {
             _successMessage = '✓ $successCount berhasil, $failCount gagal';
           }
         });
-        
+
         // Clear persistent storage
         await _saveTempAllocations();
       }
@@ -773,7 +848,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         try {
           await _fetchProductsAndAssignments();
         } catch (e) {
-          print('[ShowcaseAllocationScreen] Error refreshing data: $e');
+          debugPrint('[ShowcaseAllocationScreen] Error refreshing data: $e');
         }
       });
 
@@ -835,9 +910,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         children: [
           Text(
             productName,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -846,22 +921,28 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Total:', style: Theme.of(context).textTheme.bodySmall),
-              Text(totalQuantity.toString(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      )),
+              Text(
+                totalQuantity.toString(),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Dialokasikan:',
-                  style: Theme.of(context).textTheme.bodySmall),
-              Text(allocated.toString(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      )),
+              Text(
+                'Dialokasikan:',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              Text(
+                allocated.toString(),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -869,10 +950,13 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Sisa:', style: Theme.of(context).textTheme.bodySmall),
-              Text(remaining.toString(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: canAllocate ? Colors.green : Colors.red)),
+              Text(
+                remaining.toString(),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: canAllocate ? Colors.green : Colors.red,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -897,7 +981,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _isSubmitting ? null : () => _allocateProduct(productId),
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => _allocateProduct(productId),
                   child: const Text('Alokasi'),
                 ),
               ],
@@ -911,9 +997,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
               ),
               child: Text(
                 'Produk sudah habis',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.red,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.red),
               ),
             ),
         ],
@@ -938,9 +1024,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                       children: [
                         Text(
                           'Alokasi Produk Showcase',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
+                          style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
@@ -949,12 +1033,8 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                         const SizedBox(height: 4),
                         Text(
                           'Kelola alokasi produk dari showcase ke outlet',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppColors.textSecondary),
                         ),
                       ],
                     ),
@@ -977,13 +1057,14 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                                 vertical: 8,
                               ),
                             ),
-                            value: _selectedOutletId,
+                            initialValue: _selectedOutletId,
                             hint: const Text('Pilih outlet...'),
                             items: _outlets.map((outlet) {
                               return DropdownMenuItem<String>(
                                 value: outlet['id'] as String,
-                                child:
-                                    Text(outlet['name'] as String? ?? 'Unknown'),
+                                child: Text(
+                                  outlet['name'] as String? ?? 'Unknown',
+                                ),
                               );
                             }).toList(),
                             onChanged: (value) {
@@ -992,26 +1073,32 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                                 _successMessage = null;
                                 _error = null;
                               });
-                              
+
                               // Save outlet selection
                               if (value != null) {
                                 _saveSelectedOutlet(value);
                               }
-                              
+
                               // Load business day start hour from selected outlet
                               if (value != null) {
                                 final selectedOutlet = _outlets.firstWhere(
                                   (outlet) => outlet['id'] == value,
                                   orElse: () => {},
                                 );
-                                if (selectedOutlet.containsKey('business_day_start_hour')) {
+                                if (selectedOutlet.containsKey(
+                                  'business_day_start_hour',
+                                )) {
                                   setState(() {
-                                    _businessDayStartHour = selectedOutlet['business_day_start_hour'] as int;
+                                    _businessDayStartHour =
+                                        selectedOutlet['business_day_start_hour']
+                                            as int;
                                   });
-                                  print('[ShowcaseAllocationScreen] Loaded business day start hour: $_businessDayStartHour from outlet');
+                                  debugPrint(
+                                    '[ShowcaseAllocationScreen] Loaded business day start hour: $_businessDayStartHour from outlet',
+                                  );
                                 }
                               }
-                              
+
                               _fetchProductsAndAssignments();
                             },
                           )
@@ -1024,12 +1111,8 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                             ),
                             child: Text(
                               'Tidak ada outlet tersedia',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: AppColors.textSecondary,
-                                  ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: AppColors.textSecondary),
                             ),
                           ),
                       ],
@@ -1085,7 +1168,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                                   _saveTempAllocations();
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('Pending allocations dihapus'),
+                                      content: Text(
+                                        'Pending allocations dihapus',
+                                      ),
                                       duration: Duration(seconds: 1),
                                     ),
                                   );
@@ -1142,17 +1227,17 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                             ),
                             Expanded(
                               child: TabBarView(
-                                physics:
-                                    const NeverScrollableScrollPhysics(),
+                                physics: const NeverScrollableScrollPhysics(),
                                 children: [
                                   SingleChildScrollView(
                                     padding: EdgeInsets.only(
                                       left: 16,
                                       right: 16,
                                       top: 16,
-                                      bottom: MediaQuery.of(context)
-                                              .padding
-                                              .bottom +
+                                      bottom:
+                                          MediaQuery.of(
+                                            context,
+                                          ).padding.bottom +
                                           16,
                                     ),
                                     child: _buildAllocationCard(),
@@ -1162,13 +1247,13 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                                       left: 16,
                                       right: 16,
                                       top: 16,
-                                      bottom: MediaQuery.of(context)
-                                              .padding
-                                              .bottom +
+                                      bottom:
+                                          MediaQuery.of(
+                                            context,
+                                          ).padding.bottom +
                                           16,
                                     ),
-                                    child:
-                                        _buildAllocationListCard(),
+                                    child: _buildAllocationListCard(),
                                   ),
                                 ],
                               ),
@@ -1185,12 +1270,8 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                           child: Text(
                             'Pilih outlet di atas untuk memulai alokasi produk',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(color: AppColors.textSecondary),
                           ),
                         ),
                       ),
@@ -1202,7 +1283,11 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           ? FloatingActionButton(
               onPressed: _handleQRScan,
               backgroundColor: AppColors.primary,
-              child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
+              child: const Icon(
+                Icons.qr_code_scanner,
+                color: Colors.white,
+                size: 28,
+              ),
             )
           : null,
     );
@@ -1218,10 +1303,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           children: [
             Text(
               'Alokasi Produk',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             // Date Picker
@@ -1241,7 +1325,10 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.altSurface,
                   borderRadius: BorderRadius.circular(8),
@@ -1253,11 +1340,13 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        DateFormat('EEEE, dd MMM yyyy', 'id_ID')
-                            .format(_selectedDate),
+                        DateFormat(
+                          'EEEE, dd MMM yyyy',
+                          'id_ID',
+                        ).format(_selectedDate),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                     const Icon(Icons.expand_more, size: 18),
@@ -1272,7 +1361,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                   for (final product in _showcaseProducts) ...[
                     _buildProductCard(context, product),
                     const SizedBox(height: 12),
-                  ]
+                  ],
                 ],
               )
             else
@@ -1285,10 +1374,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                 child: Center(
                   child: Text(
                     'Tidak ada produk tersedia',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppColors.textSecondary),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -1308,10 +1396,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           children: [
             Text(
               'Daftar Alokasi',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             // Date Picker
@@ -1331,7 +1418,10 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.altSurface,
                   borderRadius: BorderRadius.circular(8),
@@ -1343,11 +1433,13 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        DateFormat('EEEE, dd MMM yyyy', 'id_ID')
-                            .format(_selectedDate),
+                        DateFormat(
+                          'EEEE, dd MMM yyyy',
+                          'id_ID',
+                        ).format(_selectedDate),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                     const Icon(Icons.expand_more, size: 18),
@@ -1374,7 +1466,8 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                   Expanded(
                     child: _buildAllocationStatCard(
                       label: 'Sisa Tersedia',
-                      value: '${_showcaseProducts.length - _assignments.length}',
+                      value:
+                          '${_showcaseProducts.length - _assignments.length}',
                       icon: Icons.coffee,
                       color: Colors.green,
                     ),
@@ -1394,9 +1487,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
             const SizedBox(height: 16),
             Text(
               '${_assignments.length} produk dialokasikan',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
             if (_assignments.isNotEmpty)
@@ -1416,10 +1509,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                 child: Center(
                   child: Text(
                     'Belum ada alokasi',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppColors.textSecondary),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -1430,38 +1522,41 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
   }
 
   Widget _buildAssignmentItem(
-      BuildContext context, Map<String, dynamic> assignment) {
+    BuildContext context,
+    Map<String, dynamic> assignment,
+  ) {
     final productName = assignment['product_name'] as String? ?? 'Unknown';
     final quantity = assignment['quantity'] as int? ?? 0;
     final id = assignment['id'] as String? ?? '';
     final createdAtStr = assignment['created_at'] as String? ?? '';
-    
+
     // Parse and format the created_at timestamp
     String formattedTime = '';
     if (createdAtStr.isNotEmpty) {
       try {
         var dateTime = DateTime.parse(createdAtStr);
-        
+
         // If string doesn't have timezone info, treat it as UTC
         // (Supabase stores it as UTC even without Z suffix)
-        if (!createdAtStr.contains('Z') && 
-            !createdAtStr.contains('+') && 
+        if (!createdAtStr.contains('Z') &&
+            !createdAtStr.contains('+') &&
             !createdAtStr.contains(RegExp(r'-\d{2}:\d{2}$'))) {
           // Reconstruct as UTC datetime
           dateTime = DateTime.utc(
-            dateTime.year, 
-            dateTime.month, 
-            dateTime.day, 
-            dateTime.hour, 
-            dateTime.minute, 
-            dateTime.second, 
+            dateTime.year,
+            dateTime.month,
+            dateTime.day,
+            dateTime.hour,
+            dateTime.minute,
+            dateTime.second,
             dateTime.millisecond,
             dateTime.microsecond,
           );
         }
-        
+
         final localDateTime = dateTime.toLocal();
-        formattedTime = '${localDateTime.hour.toString().padLeft(2, '0')}:${localDateTime.minute.toString().padLeft(2, '0')}:${localDateTime.second.toString().padLeft(2, '0')}';
+        formattedTime =
+            '${localDateTime.hour.toString().padLeft(2, '0')}:${localDateTime.minute.toString().padLeft(2, '0')}:${localDateTime.second.toString().padLeft(2, '0')}';
       } catch (e) {
         formattedTime = createdAtStr;
       }
@@ -1482,10 +1577,9 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
               children: [
                 Text(
                   productName,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Container(
@@ -1500,18 +1594,18 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                   child: Text(
                     'Qty: $quantity',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Waktu: $formattedTime',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                      ),
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -1565,10 +1659,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 9,
-              color: AppColors.textSecondary,
-            ),
+            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],

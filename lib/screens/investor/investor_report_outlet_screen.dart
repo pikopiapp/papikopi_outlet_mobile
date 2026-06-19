@@ -40,25 +40,31 @@ class _InvestorReportOutletScreenState
       );
 
       // Extract monthly revenue from aggregated data
-      final monthlyAmount = (revenueData['monthly']?['amount'] as num?)?.toDouble() ?? 0.0;
+      final monthlyAmount =
+          (revenueData['monthly']?['amount'] as num?)?.toDouble() ?? 0.0;
       return monthlyAmount;
     } catch (e) {
       return 0.0;
     }
   }
 
-  double _calculateAnnualROI(double investmentAmount, double marginPercentage, double actualMonthlyRevenue) {
+  double _calculateAnnualROI(
+    double investmentAmount,
+    double marginPercentage,
+    double actualMonthlyRevenue,
+  ) {
     // Use actual monthly revenue if available, otherwise fallback to estimation
-    final monthlyRevenue = actualMonthlyRevenue > 0 
-      ? actualMonthlyRevenue 
-      : investmentAmount * 1.5;
+    final monthlyRevenue = actualMonthlyRevenue > 0
+        ? actualMonthlyRevenue
+        : investmentAmount * 1.5;
     final monthlyProfit = monthlyRevenue * (marginPercentage / 100);
     final annualProfit = monthlyProfit * 12;
     return (annualProfit / investmentAmount) * 100;
   }
 
   String _formatCurrency(double amount) {
-    return amount.toStringAsFixed(0)
+    return amount
+        .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
           (match) => '${match.group(1)}.',
@@ -79,9 +85,7 @@ class _InvestorReportOutletScreenState
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Ringkasan outlet yang diinvestasikan.',
-              ),
+              const Text('Ringkasan outlet yang diinvestasikan.'),
               const SizedBox(height: 16),
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: _resolveInvestorOutlets(),
@@ -142,8 +146,7 @@ class _InvestorReportOutletScreenState
                                   ),
                                 ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'Total Outlet',
@@ -186,8 +189,7 @@ class _InvestorReportOutletScreenState
                                   ),
                                 ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'Outlet Aktif',
@@ -230,8 +232,7 @@ class _InvestorReportOutletScreenState
                                   ),
                                 ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'Total Investasi',
@@ -270,12 +271,13 @@ class _InvestorReportOutletScreenState
                           final outletType =
                               (outlet['outlet_type'] as String?) ?? 'unknown';
                           final investmentAmount =
-                              (outlet['investment_amount'] as num?)?.toDouble() ??
-                                  0.0;
+                              (outlet['investment_amount'] as num?)
+                                  ?.toDouble() ??
+                              0.0;
                           final marginPercentage =
                               (outlet['margin_percentage'] as num?)
                                   ?.toDouble() ??
-                                  0.0;
+                              0.0;
                           final status =
                               (outlet['status'] as String?) ?? 'unknown';
 
@@ -300,8 +302,7 @@ class _InvestorReportOutletScreenState
                                 ),
                                 padding: const EdgeInsets.all(12),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // Header: Outlet Name + Status Badge
                                     Row(
@@ -340,8 +341,9 @@ class _InvestorReportOutletScreenState
                                             color: status == 'active'
                                                 ? Colors.green.shade100
                                                 : Colors.orange.shade100,
-                                            borderRadius:
-                                                BorderRadius.circular(4),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
                                           ),
                                           child: Text(
                                             status.toUpperCase(),
@@ -420,7 +422,8 @@ class _InvestorReportOutletScreenState
                                     // ROI Estimate - Fetch Real Revenue
                                     FutureBuilder<double>(
                                       future: _fetchActualMonthlyRevenue(
-                                          outlet['outlet_id'] as String? ?? ''),
+                                        outlet['outlet_id'] as String? ?? '',
+                                      ),
                                       builder: (context, revenuSnapshot) {
                                         final actualMonthlyRevenue =
                                             revenuSnapshot.data ?? 0.0;
@@ -434,10 +437,12 @@ class _InvestorReportOutletScreenState
                                           padding: const EdgeInsets.all(10),
                                           decoration: BoxDecoration(
                                             color: Colors.blue.shade50,
-                                            borderRadius:
-                                                BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                             border: Border.all(
-                                                color: Colors.blue.shade200),
+                                              color: Colors.blue.shade200,
+                                            ),
                                           ),
                                           child: Column(
                                             crossAxisAlignment:
@@ -452,7 +457,8 @@ class _InvestorReportOutletScreenState
                                                 ),
                                               ),
                                               const SizedBox(height: 4),
-                                              if (revenuSnapshot.connectionState ==
+                                              if (revenuSnapshot
+                                                      .connectionState ==
                                                   ConnectionState.waiting)
                                                 const SizedBox(
                                                   height: 16,
@@ -462,8 +468,8 @@ class _InvestorReportOutletScreenState
                                                       height: 14,
                                                       child:
                                                           CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
+                                                            strokeWidth: 2,
+                                                          ),
                                                     ),
                                                   ),
                                                 )
@@ -480,7 +486,8 @@ class _InvestorReportOutletScreenState
                                                 Padding(
                                                   padding:
                                                       const EdgeInsets.only(
-                                                          top: 4),
+                                                        top: 4,
+                                                      ),
                                                   child: Text(
                                                     'Revenue: Rp ${_formatCurrency(actualMonthlyRevenue)}',
                                                     style: TextStyle(
@@ -534,9 +541,9 @@ class _InfoBox extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Text(value),

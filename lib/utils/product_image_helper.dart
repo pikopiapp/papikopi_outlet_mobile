@@ -1,5 +1,6 @@
 /// Helper to get product image path based on product name
 /// Uses the product images from assets/products folder
+library;
 
 class ProductImageHelper {
   // Map product names to their image filenames

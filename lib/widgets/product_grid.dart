@@ -22,9 +22,7 @@ class ProductGrid extends StatelessWidget {
     }
 
     if (products.isEmpty) {
-      return const Center(
-        child: Text('Tidak ada produk'),
-      );
+      return const Center(child: Text('Tidak ada produk'));
     }
 
     return GridView.builder(
@@ -47,10 +45,7 @@ class ProductGrid extends StatelessWidget {
 class ProductCard extends StatelessWidget {
   final Product product;
 
-  const ProductCard({
-    super.key,
-    required this.product,
-  });
+  const ProductCard({super.key, required this.product});
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +66,7 @@ class ProductCard extends StatelessWidget {
           border: Border.all(color: AppColors.altSurface, width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -93,11 +88,7 @@ class ProductCard extends StatelessWidget {
                     topRight: Radius.circular(12),
                   ),
                 ),
-                child: Icon(
-                  Icons.coffee,
-                  color: AppColors.primary,
-                  size: 32,
-                ),
+                child: Icon(Icons.coffee, color: AppColors.primary, size: 32),
               ),
             ),
             // Product Info

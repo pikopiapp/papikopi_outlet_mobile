@@ -33,7 +33,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
     super.initState();
     // Extra guard: pastikan Supabase sudah siap sebelum screen mulai query
     _supabaseInitFuture = _supabaseService.initialize();
-    
+
     // Initialize screens with navigation callback
     _screens = [
       InvestorHomeScreen(onNavigate: _onItemTapped),
@@ -118,10 +118,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
         type: BottomNavigationBarType.fixed,
         elevation: 8,
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
             icon: Icon(Icons.trending_up),
             label: 'Revenue',
@@ -130,10 +127,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
             icon: Icon(Icons.receipt_long),
             label: 'Report Outlet',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.wallet),
-            label: 'Penarikan',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.wallet), label: 'Penarikan'),
         ],
       ),
     );
@@ -161,9 +155,9 @@ class _ErrorBox extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Text(value),
@@ -177,10 +171,12 @@ class _InvestorProfilePlaceholder extends StatefulWidget {
   const _InvestorProfilePlaceholder();
 
   @override
-  State<_InvestorProfilePlaceholder> createState() => _InvestorProfilePlaceholderState();
+  State<_InvestorProfilePlaceholder> createState() =>
+      _InvestorProfilePlaceholderState();
 }
 
-class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder> {
+class _InvestorProfilePlaceholderState
+    extends State<_InvestorProfilePlaceholder> {
   final _supabaseService = SupabaseService();
 
   Future<List<Map<String, dynamic>>> _resolveInvestorOutlets() async {
@@ -198,9 +194,9 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
     final authProvider = context.read<AuthProvider>();
     final user = authProvider.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not found')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User not found')));
       return;
     }
 
@@ -212,9 +208,9 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
       // Refresh the UI
       setState(() {});
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -232,367 +228,377 @@ class _InvestorProfilePlaceholderState extends State<_InvestorProfilePlaceholder
             children: [
               Text(
                 'Selamat Datang, ${user?.name ?? "Investor"}! 👋',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            const SizedBox(height: 8),
-            Text(
-              'Kelola investasi Anda dan pantau performa outlet',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
+              const SizedBox(height: 8),
+              Text(
+                'Kelola investasi Anda dan pantau performa outlet',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
               ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Outlet yang diinvestasikan',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: _resolveInvestorOutlets(),
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(
-                    height: 56,
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-
-                if (snap.hasError) {
-                  return _InfoBox(
-                    title: "Error",
-                    value: "Gagal memuat outlet investor: ${snap.error}",
-                  );
-                }
-
-                final rows = snap.data ?? [];
-                if (rows.isNotEmpty) {
-                }
-                
-                if (rows.isEmpty) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _InfoBox(
-                        title: "Outlet investor",
-                        value: "Belum ada outlet yang diinvestasikan untuk user.id=${user?.id ?? '-'}",
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton.icon(
-                        onPressed: _seedTestData,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Seed Test Data (Dev)'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-
-                // Calculate summary
-                double totalInvestment = 0;
-                double avgMargin = 0;
-                for (final r in rows) {
-                  final amount = (r['investment_amount'] as num?)?.toDouble() ?? 0.0;
-                  final margin = (r['margin_percentage'] as num?)?.toDouble() ?? 0.0;
-                  totalInvestment += amount;
-                  avgMargin += margin;
-                }
-                avgMargin = rows.isNotEmpty ? avgMargin / rows.length : 0;
-
-                final formattedTotal = totalInvestment.toStringAsFixed(0)
-                    .replaceAllMapped(
-                      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-                      (match) => '${match.group(1)}.',
+              const SizedBox(height: 24),
+              const Text(
+                'Outlet yang diinvestasikan',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _resolveInvestorOutlets(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      height: 56,
+                      child: Center(child: CircularProgressIndicator()),
                     );
+                  }
 
-                return Column(
-                  children: [
-                    // Summary Table
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.blue[300]!),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        children: [
-                          // Row 1: Total Investasi
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Total Investasi',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Text(
-                                  'Rp $formattedTotal',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.orange,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Divider(
-                            height: 1,
-                            color: Colors.blue[200],
-                          ),
-                          // Row 2: Rata-rata Profit
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Rata-rata Profit',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Text(
-                                  '${avgMargin.toStringAsFixed(1)}%',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Divider(
-                            height: 1,
-                            color: Colors.blue[200],
-                          ),
-                          // Row 3: Jumlah Outlet
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Jumlah Outlet',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Text(
-                                  '${rows.length}',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    // Outlet List
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: rows.length,
-                      itemBuilder: (context, index) {
-                        final r = rows[index];
-                        final outletName = (r['outlet_name'] as String?) ?? '-';
-                        final outletType = (r['outlet_type'] as String?) ?? 'unknown';
-                        final investmentAmount =
-                            (r['investment_amount'] as num?)?.toDouble() ?? 0.0;
-                        final marginPercentage =
-                            (r['margin_percentage'] as num?)?.toDouble() ?? 0.0;
-                        final status = (r['status'] as String?) ?? 'unknown';
+                  if (snap.hasError) {
+                    return _InfoBox(
+                      title: "Error",
+                      value: "Gagal memuat outlet investor: ${snap.error}",
+                    );
+                  }
 
-                        // Format currency
-                        final formattedAmount = investmentAmount.toStringAsFixed(0)
-                            .replaceAllMapped(
-                              RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-                              (match) => '${match.group(1)}.',
-                            );
+                  final rows = snap.data ?? [];
+                  if (rows.isNotEmpty) {}
 
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Card(
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Colors.blue.shade50,
-                                    Colors.blue.shade100,
-                                  ],
-                                ),
+                  if (rows.isEmpty) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _InfoBox(
+                          title: "Outlet investor",
+                          value:
+                              "Belum ada outlet yang diinvestasikan untuk user.id=${user?.id ?? '-'}",
+                        ),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          onPressed: _seedTestData,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Seed Test Data (Dev)'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  // Calculate summary
+                  double totalInvestment = 0;
+                  double avgMargin = 0;
+                  for (final r in rows) {
+                    final amount =
+                        (r['investment_amount'] as num?)?.toDouble() ?? 0.0;
+                    final margin =
+                        (r['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+                    totalInvestment += amount;
+                    avgMargin += margin;
+                  }
+                  avgMargin = rows.isNotEmpty ? avgMargin / rows.length : 0;
+
+                  final formattedTotal = totalInvestment
+                      .toStringAsFixed(0)
+                      .replaceAllMapped(
+                        RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+                        (match) => '${match.group(1)}.',
+                      );
+
+                  return Column(
+                    children: [
+                      // Summary Table
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.blue[300]!),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          children: [
+                            // Row 1: Total Investasi
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
                               ),
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  // Header: Outlet Name + Status Badge
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              outletName,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
-                                                color: Color(0xFF1F4E5F),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              outletType
-                                                  .replaceAll('_', ' ')
-                                                  .toUpperCase(),
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.blue[600],
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: status == 'active'
-                                              ? Colors.green[100]
-                                              : Colors.orange[100],
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(
-                                            color: status == 'active'
-                                                ? Colors.green[400]!
-                                                : Colors.orange[400]!,
-                                            width: 1,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          status.toUpperCase(),
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: status == 'active'
-                                                ? Colors.green[800]
-                                                : Colors.orange[800],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                  const Text(
+                                    'Total Investasi',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    height: 1,
-                                    color: Colors.blue[200],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  // Investment Details
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'Modal Investasi',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.blue[600],
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              'Rp $formattedAmount',
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xFF1F4E5F),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              'Bagian Profit',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.green[600],
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              '${marginPercentage.toStringAsFixed(1)}%',
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.green,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    'Rp $formattedTotal',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
+                            Divider(height: 1, color: Colors.blue[200]),
+                            // Row 2: Rata-rata Profit
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Rata-rata Profit',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${avgMargin.toStringAsFixed(1)}%',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Divider(height: 1, color: Colors.blue[200]),
+                            // Row 3: Jumlah Outlet
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Jumlah Outlet',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${rows.length}',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      // Outlet List
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: rows.length,
+                        itemBuilder: (context, index) {
+                          final r = rows[index];
+                          final outletName =
+                              (r['outlet_name'] as String?) ?? '-';
+                          final outletType =
+                              (r['outlet_type'] as String?) ?? 'unknown';
+                          final investmentAmount =
+                              (r['investment_amount'] as num?)?.toDouble() ??
+                              0.0;
+                          final marginPercentage =
+                              (r['margin_percentage'] as num?)?.toDouble() ??
+                              0.0;
+                          final status = (r['status'] as String?) ?? 'unknown';
+
+                          // Format currency
+                          final formattedAmount = investmentAmount
+                              .toStringAsFixed(0)
+                              .replaceAllMapped(
+                                RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+                                (match) => '${match.group(1)}.',
+                              );
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.blue.shade50,
+                                      Colors.blue.shade100,
+                                    ],
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Header: Outlet Name + Status Badge
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                outletName,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                  color: Color(0xFF1F4E5F),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                outletType
+                                                    .replaceAll('_', ' ')
+                                                    .toUpperCase(),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.blue[600],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: status == 'active'
+                                                ? Colors.green[100]
+                                                : Colors.orange[100],
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                            border: Border.all(
+                                              color: status == 'active'
+                                                  ? Colors.green[400]!
+                                                  : Colors.orange[400]!,
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            status.toUpperCase(),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: status == 'active'
+                                                  ? Colors.green[800]
+                                                  : Colors.orange[800],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      height: 1,
+                                      color: Colors.blue[200],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // Investment Details
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Modal Investasi',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.blue[600],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                'Rp $formattedAmount',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Color(0xFF1F4E5F),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                'Bagian Profit',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.green[600],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                '${marginPercentage.toStringAsFixed(1)}%',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.green,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -603,10 +609,12 @@ class _InvestorRevenuePlaceholder extends StatefulWidget {
   const _InvestorRevenuePlaceholder();
 
   @override
-  State<_InvestorRevenuePlaceholder> createState() => _InvestorRevenuePlaceholderState();
+  State<_InvestorRevenuePlaceholder> createState() =>
+      _InvestorRevenuePlaceholderState();
 }
 
-class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder> {
+class _InvestorRevenuePlaceholderState
+    extends State<_InvestorRevenuePlaceholder> {
   final _supabaseService = SupabaseService();
   String _period = 'daily';
 
@@ -630,7 +638,8 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
   }
 
   String _formatCurrency(double amount) {
-    return amount.toStringAsFixed(0)
+    return amount
+        .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
           (match) => '${match.group(1)}.',
@@ -687,7 +696,8 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
                   if (outletsSnap.hasError) {
                     return _InfoBox(
                       title: 'Error',
-                      value: 'Gagal memuat outlets investor: ${outletsSnap.error}',
+                      value:
+                          'Gagal memuat outlets investor: ${outletsSnap.error}',
                     );
                   }
 
@@ -710,14 +720,12 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
                         final revenue = await _fetchRevenueForOutlet(
                           outlet['outlet_id'] as String? ?? '',
                         );
-                        return {
-                          ...outlet,
-                          'revenue': revenue,
-                        };
+                        return {...outlet, 'revenue': revenue};
                       }),
                     ),
                     builder: (context, revenueSnap) {
-                      if (revenueSnap.connectionState == ConnectionState.waiting) {
+                      if (revenueSnap.connectionState ==
+                          ConnectionState.waiting) {
                         return const SizedBox(
                           height: 140,
                           child: Center(child: CircularProgressIndicator()),
@@ -748,11 +756,11 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
                             (periodData['count'] as num?)?.toInt() ?? 0;
                         final margin =
                             (item['margin_percentage'] as num?)?.toDouble() ??
-                                0.0;
+                            0.0;
 
                         totalRevenue += amount;
-                        totalInvestorShare +=
-                            (amount * margin / 100).toDouble();
+                        totalInvestorShare += (amount * margin / 100)
+                            .toDouble();
                         totalTransactions += count;
                       }
 
@@ -906,25 +914,27 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
                                   (item['outlet_name'] as String?) ?? '-';
                               final revenue =
                                   (item['revenue'] as Map<String, dynamic>?) ??
-                                      {};
+                                  {};
                               final periodData =
                                   (revenue[_period] as Map<String, dynamic>?) ??
-                                      {};
+                                  {};
                               final amount =
                                   (periodData['amount'] as num?)?.toDouble() ??
-                                      0.0;
+                                  0.0;
                               final count =
                                   (periodData['count'] as num?)?.toInt() ?? 0;
                               final cash =
-                                  (periodData['cash'] as num?)?.toDouble() ?? 0.0;
+                                  (periodData['cash'] as num?)?.toDouble() ??
+                                  0.0;
                               final qris =
-                                  (periodData['qris'] as num?)?.toDouble() ?? 0.0;
+                                  (periodData['qris'] as num?)?.toDouble() ??
+                                  0.0;
                               final margin =
                                   (item['margin_percentage'] as num?)
                                       ?.toDouble() ??
-                                      0.0;
-                              final investorShare =
-                                  (amount * margin / 100).toDouble();
+                                  0.0;
+                              final investorShare = (amount * margin / 100)
+                                  .toDouble();
 
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
@@ -980,7 +990,8 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
                                                     style: TextStyle(
                                                       fontSize: 11,
                                                       color: Colors.cyan[600],
-                                                      fontWeight: FontWeight.w500,
+                                                      fontWeight:
+                                                          FontWeight.w500,
                                                     ),
                                                   ),
                                                   const SizedBox(height: 4),
@@ -1007,7 +1018,8 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
                                                     style: TextStyle(
                                                       fontSize: 11,
                                                       color: Colors.green[600],
-                                                      fontWeight: FontWeight.w500,
+                                                      fontWeight:
+                                                          FontWeight.w500,
                                                     ),
                                                   ),
                                                   const SizedBox(height: 4),
@@ -1041,7 +1053,8 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
                                                     style: TextStyle(
                                                       fontSize: 11,
                                                       color: Colors.cyan[600],
-                                                      fontWeight: FontWeight.w500,
+                                                      fontWeight:
+                                                          FontWeight.w500,
                                                     ),
                                                   ),
                                                   const SizedBox(height: 4),
@@ -1068,7 +1081,8 @@ class _InvestorRevenuePlaceholderState extends State<_InvestorRevenuePlaceholder
                                                     style: TextStyle(
                                                       fontSize: 10,
                                                       color: Colors.cyan[600],
-                                                      fontWeight: FontWeight.w500,
+                                                      fontWeight:
+                                                          FontWeight.w500,
                                                     ),
                                                   ),
                                                   const SizedBox(height: 4),
@@ -1132,7 +1146,8 @@ class _InvestorReportOutletPlaceholderState
   }
 
   String _formatCurrency(double amount) {
-    return amount.toStringAsFixed(0)
+    return amount
+        .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
           (match) => '${match.group(1)}.',
@@ -1153,9 +1168,7 @@ class _InvestorReportOutletPlaceholderState
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Ringkasan outlet yang diinvestasikan.',
-              ),
+              const Text('Ringkasan outlet yang diinvestasikan.'),
               const SizedBox(height: 24),
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: _resolveInvestorOutlets(),
@@ -1216,8 +1229,7 @@ class _InvestorReportOutletPlaceholderState
                                   ),
                                 ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'Total Outlet',
@@ -1260,8 +1272,7 @@ class _InvestorReportOutletPlaceholderState
                                   ),
                                 ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'Outlet Aktif',
@@ -1304,8 +1315,7 @@ class _InvestorReportOutletPlaceholderState
                                   ),
                                 ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'Total Investasi',
@@ -1344,12 +1354,13 @@ class _InvestorReportOutletPlaceholderState
                           final outletType =
                               (outlet['outlet_type'] as String?) ?? 'unknown';
                           final investmentAmount =
-                              (outlet['investment_amount'] as num?)?.toDouble() ??
-                                  0.0;
+                              (outlet['investment_amount'] as num?)
+                                  ?.toDouble() ??
+                              0.0;
                           final marginPercentage =
                               (outlet['margin_percentage'] as num?)
                                   ?.toDouble() ??
-                                  0.0;
+                              0.0;
                           final status =
                               (outlet['status'] as String?) ?? 'unknown';
 
@@ -1374,8 +1385,7 @@ class _InvestorReportOutletPlaceholderState
                                 ),
                                 padding: const EdgeInsets.all(14),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // Header: Outlet Name + Status Badge
                                     Row(
@@ -1418,8 +1428,9 @@ class _InvestorReportOutletPlaceholderState
                                             color: status == 'active'
                                                 ? Colors.green[100]
                                                 : Colors.orange[100],
-                                            borderRadius:
-                                                BorderRadius.circular(6),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
                                             border: Border.all(
                                               color: status == 'active'
                                                   ? Colors.green[400]!
@@ -1549,10 +1560,7 @@ class _InvestorNotificationPlaceholderState
   }
 
   Future<List<Map<String, dynamic>>> _fetchNotifications(String outletId) {
-    return _supabaseService.getRecentTransactions(
-      outletId: outletId,
-      limit: 5,
-    );
+    return _supabaseService.getRecentTransactions(outletId: outletId, limit: 5);
   }
 
   void _showAnnouncementDetail(Map<String, dynamic> announcement) {
@@ -1600,24 +1608,12 @@ class _InvestorNotificationPlaceholderState
               const SizedBox(height: 8),
               Text(
                 createdAt,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 16),
-              Container(
-                height: 1,
-                color: Colors.grey[300],
-              ),
+              Container(height: 1, color: Colors.grey[300]),
               const SizedBox(height: 16),
-              Text(
-                content,
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1.6,
-                ),
-              ),
+              Text(content, style: const TextStyle(fontSize: 14, height: 1.6)),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -1660,13 +1656,15 @@ class _InvestorNotificationPlaceholderState
                     _PillButton(
                       active: _selectedTab == 'transactions',
                       label: '💳 Transaksi',
-                      onTap: () => setState(() => _selectedTab = 'transactions'),
+                      onTap: () =>
+                          setState(() => _selectedTab = 'transactions'),
                     ),
                     const SizedBox(width: 8),
                     _PillButton(
                       active: _selectedTab == 'announcements',
                       label: '📢 Pengumuman',
-                      onTap: () => setState(() => _selectedTab = 'announcements'),
+                      onTap: () =>
+                          setState(() => _selectedTab = 'announcements'),
                     ),
                     const SizedBox(width: 8),
                     _PillButton(
@@ -1716,8 +1714,9 @@ class _InvestorNotificationPlaceholderState
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const SizedBox(
-                  height: 160,
-                  child: Center(child: CircularProgressIndicator()));
+                height: 160,
+                child: Center(child: CircularProgressIndicator()),
+              );
             }
             if (snapshot.hasError) {
               return _InfoBox(
@@ -1746,8 +1745,7 @@ class _InvestorNotificationPlaceholderState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: items.map((t) {
                   final id = t['id']?.toString() ?? '';
-                  final total =
-                      (t['total_amount'] as num?)?.toDouble() ?? 0.0;
+                  final total = (t['total_amount'] as num?)?.toDouble() ?? 0.0;
                   final payment = t['payment_method']?.toString() ?? '';
                   final createdAt = t['created_at']?.toString() ?? '';
 
@@ -1859,9 +1857,8 @@ class _InvestorNotificationPlaceholderState
                           Expanded(
                             child: Text(
                               createdAt,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.grey,
-                              ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: Colors.grey),
                             ),
                           ),
                           TextButton.icon(
@@ -1949,7 +1946,8 @@ class _InvestorNotificationPlaceholderState
               final index = entry.key;
               final message = entry.value;
 
-              final senderName = message['sender_name']?.toString() ?? 'Unknown';
+              final senderName =
+                  message['sender_name']?.toString() ?? 'Unknown';
               final content = message['message']?.toString() ?? '';
               final createdAt = message['created_at']?.toString() ?? '';
 
@@ -1968,24 +1966,18 @@ class _InvestorNotificationPlaceholderState
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      content,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    Text(content, style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 4),
                     Text(
                       createdAt,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                     ),
                     if (index < messages.length - 1)
                       Padding(
                         padding: const EdgeInsets.only(top: 12),
-                        child: Divider(
-                          height: 1,
-                          color: AppColors.altSurface,
-                        ),
+                        child: Divider(height: 1, color: AppColors.altSurface),
                       ),
                   ],
                 ),
@@ -2017,10 +2009,14 @@ class _PillButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? AppColors.primary.withOpacity(0.14) : AppColors.surface,
+          color: active
+              ? AppColors.primary.withValues(alpha: 0.14)
+              : AppColors.surface,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: active ? AppColors.primary.withOpacity(0.55) : AppColors.altSurface,
+            color: active
+                ? AppColors.primary.withValues(alpha: 0.55)
+                : AppColors.altSurface,
           ),
         ),
         child: Text(
@@ -2056,9 +2052,9 @@ class _InfoBox extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Text(value),

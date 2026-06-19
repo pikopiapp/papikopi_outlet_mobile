@@ -7,17 +7,19 @@ import '../models/outlet.dart';
 import '../models/sale.dart';
 import '../models/stock.dart';
 import '../utils/bonus_calculator.dart';
+
+// ignore_for_file: avoid_print, empty_catches, unused_catch_stack
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
   static late final SupabaseClient _client;
   static bool _isInitialized = false;
   static Future<void>? _initializationFuture;
-  
+
   // Cache for current user to avoid depending on userMetadata
   static user_model.User? _cachedUser;
-  
+
   // Local cache for recent transfers (since stock_transfers table has RLS issues)
-  static final List<Map<String, dynamic>> _recentTransfers = [];
+  // kept removed because it was unused by the codebase
   // Cache for custom holidays from 'custom_holidays' table: date -> description
   static final Map<String, String> _customHolidaysCache = {};
 
@@ -25,24 +27,24 @@ class SupabaseService {
   static Future<void> _loadCustomHolidays() async {
     if (!_isInitialized) return;
     try {
-      final res = await _client.from('custom_holidays').select('date,description');
-      if (res is List) {
-        _customHolidaysCache.clear();
-        for (final row in res.cast<Map<String, dynamic>>()) {
-          final rawDate = row['date'];
-          String? dateIso;
-          if (rawDate is String) {
-            dateIso = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
-          } else if (rawDate is DateTime) {
-            dateIso = rawDate.toIso8601String().substring(0, 10);
-          } else if (rawDate != null) {
-            final s = rawDate.toString();
-            dateIso = s.length >= 10 ? s.substring(0, 10) : s;
-          }
-
-          final desc = row['description'] as String? ?? '';
-          if (dateIso != null) _customHolidaysCache[dateIso] = desc;
+      final res = await _client
+          .from('custom_holidays')
+          .select('date,description');
+      _customHolidaysCache.clear();
+      for (final row in res.cast<Map<String, dynamic>>()) {
+        final rawDate = row['date'];
+        String? dateIso;
+        if (rawDate is String) {
+          dateIso = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
+        } else if (rawDate is DateTime) {
+          dateIso = rawDate.toIso8601String().substring(0, 10);
+        } else if (rawDate != null) {
+          final s = rawDate.toString();
+          dateIso = s.length >= 10 ? s.substring(0, 10) : s;
         }
+
+        final desc = row['description'] as String? ?? '';
+        if (dateIso != null) _customHolidaysCache[dateIso] = desc;
       }
     } catch (e) {
       // ignore errors; cache remains as-is
@@ -60,7 +62,8 @@ class SupabaseService {
   bool isHolidaySync(DateTime date) {
     final iso = date.toIso8601String().substring(0, 10);
     // Treat weekends as holidays as well
-    final isWeekend = date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+    final isWeekend =
+        date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
     return isWeekend || _customHolidaysCache.containsKey(iso);
   }
 
@@ -69,6 +72,35 @@ class SupabaseService {
   String? getCustomHolidayDescriptionSync(DateTime date) {
     final iso = date.toIso8601String().substring(0, 10);
     return _customHolidaysCache[iso];
+  }
+
+  // Determine the calendar base date to use when calculating business-day ranges.
+  // If `selectedDate` is a pure calendar date (time components are zero) it is
+  // returned unchanged (this is the date-picker case). If `selectedDate` has
+  // time components (typically DateTime.now()), we use the current local time
+  // to decide whether the business day should be treated as today or the
+  // previous day (if current time is before `businessDayStartHour`).
+  DateTime _baseDateForBusinessDay(
+    DateTime selectedDate,
+    int businessDayStartHour,
+  ) {
+    final isDateOnly =
+        selectedDate.hour == 0 &&
+        selectedDate.minute == 0 &&
+        selectedDate.second == 0 &&
+        selectedDate.millisecond == 0 &&
+        selectedDate.microsecond == 0;
+
+    if (isDateOnly) return selectedDate;
+
+    final now = DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
+
+    if (now.hour < businessDayStartHour) {
+      return todayDate.subtract(const Duration(days: 1));
+    }
+
+    return todayDate;
   }
 
   SupabaseService._internal();
@@ -80,7 +112,8 @@ class SupabaseService {
   // TODO: Replace with your actual Supabase credentials
   // Get these from https://supabase.com/dashboard/project/_/settings/api
   static const String supabaseUrl = 'https://hmihxkmrsmztuyvtykrj.supabase.co';
-  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtaWh4a21yc216dHV5dnR5a3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0ODcxMTgsImV4cCI6MjA5MzA2MzExOH0.dnp4hNTeoy3xTJ20LEgQKNydTra48_Sw27hwQJk68A4';
+  static const String supabaseAnonKey =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtaWh4a21yc216dHV5dnR5a3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0ODcxMTgsImV4cCI6MjA5MzA2MzExOH0.dnp4hNTeoy3xTJ20LEgQKNydTra48_Sw27hwQJk68A4';
 
   SupabaseClient get client => _client;
   bool get isInitialized => _isInitialized;
@@ -88,7 +121,7 @@ class SupabaseService {
   Future<void> initialize() async {
     // Prevent multiple initialization attempts
     if (_isInitialized) return;
-    
+
     _initializationFuture ??= _performInitialization();
     await _initializationFuture;
   }
@@ -96,7 +129,8 @@ class SupabaseService {
   static Future<void> _performInitialization() async {
     try {
       // Check if credentials are configured
-      if (supabaseUrl.startsWith('YOUR_') || supabaseAnonKey.startsWith('YOUR_')) {
+      if (supabaseUrl.startsWith('YOUR_') ||
+          supabaseAnonKey.startsWith('YOUR_')) {
         _isInitialized = false;
         return;
       }
@@ -105,10 +139,8 @@ class SupabaseService {
         await Supabase.initialize(
           url: supabaseUrl,
           anonKey: supabaseAnonKey,
-        ).timeout(
-          const Duration(seconds: 10),
-        );
-        
+        ).timeout(const Duration(seconds: 10));
+
         _client = Supabase.instance.client;
         _isInitialized = true;
         // Attempt to load custom holidays cache (best-effort)
@@ -136,7 +168,9 @@ class SupabaseService {
   // Helper method to test Supabase connectivity
   static Future<bool> isSupabaseReachable() async {
     try {
-      final result = await InternetAddress.lookup('hmihxkmrsmztuyvtykrj.supabase.co');
+      final result = await InternetAddress.lookup(
+        'hmihxkmrsmztuyvtykrj.supabase.co',
+      );
       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
     } catch (e) {
       return false;
@@ -152,7 +186,7 @@ class SupabaseService {
     if (!_isInitialized) {
       throw Exception('SupabaseService not initialized');
     }
-    
+
     final response = await _client.auth.signUp(
       email: email,
       password: password,
@@ -177,29 +211,30 @@ class SupabaseService {
     required String password,
   }) async {
     if (!_isInitialized) {
-      throw Exception('Koneksi ke server gagal. Supabase belum terinisialisasi. Pastikan kredensial Supabase sudah dikonfigurasi.');
+      throw Exception(
+        'Koneksi ke server gagal. Supabase belum terinisialisasi. Pastikan kredensial Supabase sudah dikonfigurasi.',
+      );
     }
-    
+
     // Check network connectivity first
     final isNetworkUp = await isNetworkAvailable();
     if (!isNetworkUp) {
       throw Exception('Tidak ada koneksi internet. Periksa WiFi/data Anda');
     }
-    
+
     // Check Supabase connectivity
     final isSupabaseUp = await isSupabaseReachable();
-    if (!isSupabaseUp) {
-    }
-    
+    if (!isSupabaseUp) {}
+
     // 1) Pastikan session Supabase Auth terbentuk (karena RLS SELECT untuk authenticated).
     try {
-      final res = await _client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw Exception('Timeout: Koneksi server terlalu lama'),
-      );
+      final res = await _client.auth
+          .signInWithPassword(email: email, password: password)
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () =>
+                throw Exception('Timeout: Koneksi server terlalu lama'),
+          );
 
       final sessionUser = res.user;
       final session = _client.auth.currentSession;
@@ -222,9 +257,8 @@ class SupabaseService {
         final dynamicInvestorId = profile['investor_id'];
         final investorIdFromProfile =
             (dynamicInvestorId is String && dynamicInvestorId.isNotEmpty)
-                ? dynamicInvestorId
-                : null;
-
+            ? dynamicInvestorId
+            : null;
 
         if (profileRole == 'investor' && investorIdFromProfile != null) {
           _cachedUser = user_model.User(
@@ -245,22 +279,21 @@ class SupabaseService {
     } catch (e) {
       // 2) Fallback ke RPC verifikasi (legacy) jika auth sign-in gagal.
 
-      final response = await _client.rpc(
-        'verify_user_password',
-        params: {
-          'user_email': email,
-          'user_password': password,
-        },
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw Exception('Timeout: Koneksi server terlalu lama'),
-      );
+      final response = await _client
+          .rpc(
+            'verify_user_password',
+            params: {'user_email': email, 'user_password': password},
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () =>
+                throw Exception('Timeout: Koneksi server terlalu lama'),
+          );
 
       if (response != null && response is Map<String, dynamic>) {
         final success = response['success'] as bool? ?? false;
 
         if (success) {
-
           final userData = response['user'] as Map<String, dynamic>;
           final user = user_model.User.fromJson(userData);
 
@@ -278,9 +311,8 @@ class SupabaseService {
 
             final investorIdFromProfile =
                 (dynamicInvestorId is String && dynamicInvestorId.isNotEmpty)
-                    ? dynamicInvestorId
-                    : null;
-
+                ? dynamicInvestorId
+                : null;
 
             if (profileRole == 'investor' && investorIdFromProfile != null) {
               _cachedUser = user_model.User(
@@ -294,13 +326,14 @@ class SupabaseService {
               );
               return _cachedUser!;
             }
-          } catch (e) {
-          }
+          } catch (e) {}
 
           _cachedUser = user;
           return user;
         } else {
-          final message = response['message'] as String? ?? 'Login gagal - alasan tidak diketahui';
+          final message =
+              response['message'] as String? ??
+              'Login gagal - alasan tidak diketahui';
           throw Exception(message);
         }
       }
@@ -315,7 +348,7 @@ class SupabaseService {
     if (!_isInitialized) {
       throw Exception('SupabaseService not initialized');
     }
-    
+
     _cachedUser = null; // Clear cached user
     await _client.auth.signOut();
   }
@@ -325,7 +358,7 @@ class SupabaseService {
     if (_cachedUser != null) {
       return _cachedUser;
     }
-    
+
     final session = _client.auth.currentSession;
     if (session == null) return null;
     // Debug: print current session user id to help identify logged-in user
@@ -343,7 +376,7 @@ class SupabaseService {
       outletId: session.user.userMetadata?['outlet_id'] ?? '',
       createdAt: DateTime.parse(session.user.createdAt),
     );
-    
+
     return user;
   }
 
@@ -373,7 +406,6 @@ class SupabaseService {
       createdAt: DateTime.parse(session.user.createdAt),
     );
 
-
     try {
       final profile = await _client
           .from('users')
@@ -389,9 +421,8 @@ class SupabaseService {
       final dynamicInvestorId = profile['investor_id'];
       final investorIdFromProfile =
           (dynamicInvestorId is String && dynamicInvestorId.isNotEmpty)
-              ? dynamicInvestorId
-              : null;
-
+          ? dynamicInvestorId
+          : null;
 
       if (profileRole == 'investor' && investorIdFromProfile != null) {
         _cachedUser = user_model.User(
@@ -413,7 +444,7 @@ class SupabaseService {
       return baseline;
     }
   }
-  
+
   void setCurrentUser(user_model.User user) {
     _cachedUser = user;
   }
@@ -463,8 +494,7 @@ class SupabaseService {
     required List<Map<String, dynamic>> items,
   }) async {
     try {
-      
-      final response = await _client.from('sales').insert({
+      await _client.from('sales').insert({
         'outlet_id': outletId,
         'barista_id': baristaId,
         'payment_method': paymentMethod.toUpperCase(),
@@ -492,8 +522,7 @@ class SupabaseService {
       for (final item in items) {
         final price = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
         final hpp = (item['hpp'] as num?)?.toDouble() ?? 0.0;
-        
-        
+
         await _client.from('sale_items').insert({
           'sale_id': saleId,
           'product_id': item['product_id'],
@@ -504,15 +533,17 @@ class SupabaseService {
       }
 
       return saleId;
-    } catch (e, stackTrace) {
+    } catch (e) {
       rethrow;
     }
   }
 
   Future<List<Sale>> getSales({String? outletId, String? baristaId}) async {
-    var query = _client.from('sales').select(
-      'id, outlet_id, barista_id, payment_method, total_amount, hpp_total, bonus_amount, profit, created_at, is_edited, edited_at, sale_items(id, sale_id, product_id, quantity, price, hpp, created_at, products(name))',
-    );
+    var query = _client
+        .from('sales')
+        .select(
+          'id, outlet_id, barista_id, payment_method, total_amount, hpp_total, bonus_amount, profit, created_at, is_edited, edited_at, sale_items(id, sale_id, product_id, quantity, price, hpp, created_at, products(name))',
+        );
 
     if (outletId != null) {
       query = query.eq('outlet_id', outletId);
@@ -525,7 +556,7 @@ class SupabaseService {
     final response = await query.order('created_at', ascending: false);
 
     if ((response as List<dynamic>).isNotEmpty) {
-      final firstRecord = response[0];
+      // firstRecord intentionally not used
     }
 
     return (response as List<dynamic>)
@@ -540,7 +571,7 @@ class SupabaseService {
   }) async {
     try {
       final monthEnd = DateTime(monthStart.year, monthStart.month + 1, 0);
-      
+
       // Get all sales for this month
       final response = await _client
           .from('sales')
@@ -548,16 +579,16 @@ class SupabaseService {
           .eq('outlet_id', outletId)
           .gte('created_at', monthStart.toIso8601String())
           .lte('created_at', monthEnd.toIso8601String());
-      
+
       final salesList = response as List<dynamic>;
       final gratisCount = salesList
-          .where((sale) => (sale['payment_method'] as String?)?.toUpperCase() == 'GRATIS')
+          .where(
+            (sale) =>
+                (sale['payment_method'] as String?)?.toUpperCase() == 'GRATIS',
+          )
           .length;
-      
-      return {
-        'total': salesList.length,
-        'gratis_count': gratisCount,
-      };
+
+      return {'total': salesList.length, 'gratis_count': gratisCount};
     } catch (e) {
       return {'total': 0, 'gratis_count': 0};
     }
@@ -617,7 +648,6 @@ class SupabaseService {
     }
   }
 
-
   // Leaderboard
   Future<List<Map<String, dynamic>>> getLeaderboard({
     required String outletId,
@@ -627,13 +657,16 @@ class SupabaseService {
     if (!_isInitialized) {
       return [];
     }
-    
+
     try {
-      final response = await _client.rpc('get_barista_leaderboard', params: {
-        'outlet_id': outletId,
-        'start_date': startDate.toIso8601String(),
-        'end_date': endDate.toIso8601String(),
-      });
+      final response = await _client.rpc(
+        'get_barista_leaderboard',
+        params: {
+          'outlet_id': outletId,
+          'start_date': startDate.toIso8601String(),
+          'end_date': endDate.toIso8601String(),
+        },
+      );
 
       return (response as List<dynamic>)
           .map((item) => item as Map<String, dynamic>)
@@ -643,7 +676,7 @@ class SupabaseService {
     }
   }
 
-// Global Leaderboard dari semua outlet
+  // Global Leaderboard dari semua outlet
   Future<List<Map<String, dynamic>>> getGlobalLeaderboard({
     required String outletId,
     required DateTime selectedDate,
@@ -651,7 +684,7 @@ class SupabaseService {
     if (!_isInitialized) {
       return [];
     }
-    
+
     try {
       // Get outlet's business_day_start_hour
       final outletData = await _client
@@ -659,54 +692,78 @@ class SupabaseService {
           .select('business_day_start_hour')
           .eq('id', outletId)
           .maybeSingle();
-      
+
       if (outletData == null) {
         return [];
       }
-      
-      final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
-      
+
+      final businessDayStartHour =
+          (outletData['business_day_start_hour'] as int?) ?? 4;
+
       // Calculate business day date range in LOCAL time first, then convert to UTC
       // selectedDate comes as LOCAL time from DateTime.now() on device
-      final year = selectedDate.year;
-      final month = selectedDate.month;
-      final day = selectedDate.day;
-      
+      // Determine base calendar date for business-day calculations. If
+      // selectedDate is a pure date the picker case is preserved. If it's
+      // a DateTime with time components (e.g. DateTime.now()), we use the
+      // current local time to decide whether the business day belongs to
+      // today or the previous day (before `businessDayStartHour`).
+      final baseDate = _baseDateForBusinessDay(
+        selectedDate,
+        businessDayStartHour,
+      );
+      final year = baseDate.year;
+      final month = baseDate.month;
+      final day = baseDate.day;
+
       DateTime startDateLocal;
       DateTime endDateLocal;
-      
+
       if (businessDayStartHour >= 12) {
         // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-        startDateLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        startDateLocal = DateTime(
+          year,
+          month,
+          day - 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
         endDateLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
       } else {
         // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
         startDateLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-        endDateLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        endDateLocal = DateTime(
+          year,
+          month,
+          day + 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
-      
+
       endDateLocal = endDateLocal.subtract(const Duration(milliseconds: 1));
-      
+
       // Convert to UTC for database query
       final startDate = startDateLocal.toUtc();
       final endDate = endDateLocal.toUtc();
-      
-      
+
       final params = {
         'start_date': startDate.toIso8601String(),
         'end_date': endDate.toIso8601String(),
       };
-      
-      final response = await _client.rpc('get_global_leaderboard', params: params);
-      
+
+      final response = await _client.rpc(
+        'get_global_leaderboard',
+        params: params,
+      );
+
       // Handle case where RPC returns a List
       if (response is List) {
         if (response.isNotEmpty) {
           // Response is a List
         }
-        return response
-            .map((item) => item as Map<String, dynamic>)
-            .toList();
+        return response.map((item) => item as Map<String, dynamic>).toList();
       } else if (response is Map) {
         // Single item returned, wrap in list
         return [response as Map<String, dynamic>];
@@ -718,31 +775,28 @@ class SupabaseService {
     }
   }
 
-// Get product stock from product_batches table (like POS page)
+  // Get product stock from product_batches table (like POS page)
   // Returns product stock with names - for displaying in stock screen
-  Future<List<Map<String, dynamic>>> getProductBatchStock(String outletId) async {
+  Future<List<Map<String, dynamic>>> getProductBatchStock(
+    String outletId,
+  ) async {
     if (!_isInitialized) {
       return [];
     }
-    
+
     try {
-      
       // Get product batches - first without join to see if we have data
       final batchesResponse = await _client
           .from('product_batches')
           .select()
           .eq('outlet_id', outletId);
 
-
       if (batchesResponse.isEmpty) {
         return [];
       }
 
       // Get products separately to ensure we get all product data
-      final productsResponse = await _client
-          .from('products')
-          .select();
-
+      final productsResponse = await _client.from('products').select();
 
       // Build product map for quick lookup
       final productMap = <String, Map<String, dynamic>>{};
@@ -758,7 +812,6 @@ class SupabaseService {
           .from('sale_items')
           .select('product_id, quantity');
 
-
       // Build a map of sold quantities by product
       final soldMap = <String, int>{};
       for (final item in salesResponse) {
@@ -768,7 +821,6 @@ class SupabaseService {
         soldMap[productId] = (soldMap[productId] ?? 0) + quantity;
       }
 
-
       // Get batch damages (cacat & dikembalikan) - map by batch_id
       final damagesMap = <String, Map<String, int>>{};
       try {
@@ -776,7 +828,6 @@ class SupabaseService {
             .from('batch_damages')
             .select()
             .eq('outlet_id', outletId);
-
 
         // Build damage maps by batch_id
         for (final damage in damagesResponse) {
@@ -792,14 +843,13 @@ class SupabaseService {
         // If table doesn't exist, just use empty damages map
       }
 
-
       // Aggregate by product - include all statuses except expired
       final stockMap = <String, Map<String, dynamic>>{};
       for (final row in batchesResponse) {
         final status = row['status'] as String? ?? 'ready';
         final productId = row['product_id'] as String?;
         final batchId = row['id'] as String?;
-        
+
         if (productId == null) {
           continue;
         }
@@ -811,28 +861,30 @@ class SupabaseService {
         final hpp = product?['hpp'] as num? ?? 0;
 
         final quantity = row['quantity'] as int? ?? 0;
-        final batchCode = row['batch_code'] as String? ?? '';
+        // final batchCode = row['batch_code'] as String? ?? '';
 
         // Get damages for this batch
         final batchDamages = damagesMap[batchId];
         final cacatQty = batchDamages?['cacat'] ?? 0;
         final dikembalikanQty = batchDamages?['dikembalikan'] ?? 0;
 
-
         // Skip only expired batches
         if (status == 'expired') {
           continue;
         }
-        
+
         if (stockMap.containsKey(productId)) {
           // Update existing product
           final currentQty = stockMap[productId]!['quantity'] as int;
           final currentCacat = stockMap[productId]!['cacat'] as int;
-          final currentDikembalikan = stockMap[productId]!['dikembalikan'] as int;
+          final currentDikembalikan =
+              stockMap[productId]!['dikembalikan'] as int;
           stockMap[productId]!['quantity'] = currentQty + quantity;
-          stockMap[productId]!['unsold'] = (stockMap[productId]!['unsold'] as int) + quantity;
+          stockMap[productId]!['unsold'] =
+              (stockMap[productId]!['unsold'] as int) + quantity;
           stockMap[productId]!['cacat'] = currentCacat + cacatQty;
-          stockMap[productId]!['dikembalikan'] = currentDikembalikan + dikembalikanQty;
+          stockMap[productId]!['dikembalikan'] =
+              currentDikembalikan + dikembalikanQty;
         } else {
           // Add new product
           stockMap[productId] = {
@@ -849,9 +901,8 @@ class SupabaseService {
         }
       }
 
-      for (final entry in stockMap.entries) {
-      }
-      
+      // iterate entries only if needed — currently no-op
+
       return stockMap.values.toList();
     } catch (e) {
       return [];
@@ -860,11 +911,14 @@ class SupabaseService {
 
   // Get product stock (legacy method - returns Map for backward compatibility)
   // Calculate product stock at a specific date (historical stock)
-  Future<Map<String, int>> getProductStockAtDate(String outletId, DateTime selectedDate) async {
+  Future<Map<String, int>> getProductStockAtDate(
+    String outletId,
+    DateTime selectedDate,
+  ) async {
     if (!_isInitialized) {
       return {};
     }
-    
+
     try {
       // Get outlet's business_day_start_hour
       final outletData = await _client
@@ -872,45 +926,79 @@ class SupabaseService {
           .select('business_day_start_hour')
           .eq('id', outletId)
           .maybeSingle();
-      
+
       if (outletData == null) {
         return {};
       }
-      
-      final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+
+      final businessDayStartHour =
+          (outletData['business_day_start_hour'] as int?) ?? 4;
 
       // IMPORTANT: When a date is selected from the date picker, we want to show
       // that calendar day's business day, regardless of what time selectedDate has.
       // For example, if user selects May 27, we show May 27's business day
       // (from May 27 at 4 AM to May 28 at 4 AM), not May 26's.
-      
-      final year = selectedDate.year;
-      final month = selectedDate.month;
-      final day = selectedDate.day;
-      
+
+      final baseDate = _baseDateForBusinessDay(
+        selectedDate,
+        businessDayStartHour,
+      );
+      final year = baseDate.year;
+      final month = baseDate.month;
+      final day = baseDate.day;
+
       // For a selected date, always treat it as the START of that calendar day's business day
       // This matches the logic in getRevenueData()
       DateTime businessDayStartLocal;
       DateTime businessDayEndLocal;
-      
+
       if (businessDayStartHour >= 12) {
         // Afternoon start (e.g., 21:00): business day is from YESTERDAY@startHour to TODAY@startHour
-        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayStartLocal = DateTime(
+          year,
+          month,
+          day - 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
       } else {
         // Morning start (e.g., 4 AM): business day is from TODAY@startHour to TOMORROW@startHour
-        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        businessDayStartLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day + 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
-      
+
       // Subtract 1 millisecond from end to exclude the exact end time
-      businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
+      businessDayEndLocal = businessDayEndLocal.subtract(
+        const Duration(milliseconds: 1),
+      );
 
       // Convert to UTC for database query
       // This is where the magic happens - .toUtc() assumes the DateTime is in device local timezone
       final businessDayStartUtc = businessDayStartLocal.toUtc();
       final businessDayEndUtc = businessDayEndLocal.toUtc();
-
 
       // Query: Get allocations created within the business day range (UTC)
       final currentResponse = await _client
@@ -920,12 +1008,10 @@ class SupabaseService {
           .gte('created_at', businessDayStartUtc.toIso8601String())
           .lte('created_at', businessDayEndUtc.toIso8601String());
 
-      
       if ((currentResponse as List).isNotEmpty) {
         for (int i = 0; i < currentResponse.length && i < 5; i++) {
           final row = currentResponse[i];
-          final allocTime = DateTime.parse(row['created_at'] as String);
-          final allocTimeLocal = allocTime.toLocal();
+          DateTime.parse(row['created_at'] as String);
         }
       }
 
@@ -933,7 +1019,7 @@ class SupabaseService {
       final showcaseProducts = await _client
           .from('showcase_products')
           .select('id, product_id');
-      
+
       final showcaseProductMap = <String, String>{};
       for (final sp in showcaseProducts) {
         final id = sp['id'] as String?;
@@ -948,35 +1034,39 @@ class SupabaseService {
       for (final row in currentResponse) {
         final quantity = row['quantity'] as int? ?? 0;
         final showcaseProductId = row['showcase_product_id'] as String?;
-        
-        if (showcaseProductId != null && showcaseProductMap.containsKey(showcaseProductId)) {
+
+        if (showcaseProductId != null &&
+            showcaseProductMap.containsKey(showcaseProductId)) {
           final productId = showcaseProductMap[showcaseProductId]!;
           stockMap[productId] = (stockMap[productId] ?? 0) + quantity;
         }
       }
-      
+
       if (stockMap.isEmpty) {
         return {};
       }
 
-      for (final entry in stockMap.entries) {
-      }
+      // Empty iteration removed — it served no purpose and triggered
+      // an unused_local_variable warning.
       return stockMap;
     } catch (e) {
       return {};
     }
   }
 
-  Future<Map<String, int>> getProductStock(String outletId, {DateTime? selectedDate}) async {
+  Future<Map<String, int>> getProductStock(
+    String outletId, {
+    DateTime? selectedDate,
+  }) async {
     if (!_isInitialized) {
       return {};
     }
-    
+
     // If selectedDate is provided, use historical stock calculation
     if (selectedDate != null) {
       return getProductStockAtDate(outletId, selectedDate);
     }
-    
+
     try {
       // Query current stock from showcase_allocations with showcase_product mapping
       final response = await _client
@@ -988,7 +1078,7 @@ class SupabaseService {
       final showcaseProducts = await _client
           .from('showcase_products')
           .select('id, product_id');
-      
+
       final showcaseProductMap = <String, String>{};
       for (final sp in showcaseProducts) {
         final id = sp['id'] as String?;
@@ -1003,13 +1093,14 @@ class SupabaseService {
       for (final row in response) {
         final quantity = row['quantity'] as int? ?? 0;
         final showcaseProductId = row['showcase_product_id'] as String?;
-        
-        if (showcaseProductId != null && showcaseProductMap.containsKey(showcaseProductId)) {
+
+        if (showcaseProductId != null &&
+            showcaseProductMap.containsKey(showcaseProductId)) {
           final productId = showcaseProductMap[showcaseProductId]!;
           stockMap[productId] = (stockMap[productId] ?? 0) + quantity;
         }
       }
-      
+
       return stockMap;
     } catch (e) {
       return {};
@@ -1033,9 +1124,7 @@ class SupabaseService {
           .select('id, quantity')
           .eq('outlet_id', outletId)
           .match({
-            'showcase_products': {
-              'product_id': productId
-            }
+            'showcase_products': {'product_id': productId},
           });
 
       // If no direct match, try a simpler query using showcase_products join
@@ -1064,23 +1153,21 @@ class SupabaseService {
         if (allocation != null) {
           final currentQty = allocation['quantity'] as int? ?? 0;
           final newQty = (currentQty - quantitySold).clamp(0, currentQty);
-          
+
           await _client
               .from('showcase_allocations')
               .update({'quantity': newQty})
               .eq('id', allocation['id']);
-          
         }
       } else if (response.isNotEmpty) {
         final allocation = response.first;
         final currentQty = allocation['quantity'] as int? ?? 0;
         final newQty = (currentQty - quantitySold).clamp(0, currentQty);
-        
+
         await _client
             .from('showcase_allocations')
             .update({'quantity': newQty})
             .eq('id', allocation['id']);
-        
       }
     } catch (e) {
       // Don't fail checkout if this fails
@@ -1108,33 +1195,67 @@ class SupabaseService {
         return {};
       }
 
-      final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+      final businessDayStartHour =
+          (outletData['business_day_start_hour'] as int?) ?? 4;
 
       // selectedDate comes as LOCAL time from DateTime.now() on device
       // Calculate business day in LOCAL time first, then convert to UTC for query
-      final year = selectedDate.year;
-      final month = selectedDate.month;
-      final day = selectedDate.day;
-      
+      final baseDate = _baseDateForBusinessDay(
+        selectedDate,
+        businessDayStartHour,
+      );
+      final year = baseDate.year;
+      final month = baseDate.month;
+      final day = baseDate.day;
+
       DateTime businessDayStartLocal;
       DateTime businessDayEndLocal;
-      
+
       if (businessDayStartHour >= 12) {
         // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayStartLocal = DateTime(
+          year,
+          month,
+          day - 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
       } else {
         // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
-        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        businessDayStartLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day + 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
-      
-      businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
+
+      businessDayEndLocal = businessDayEndLocal.subtract(
+        const Duration(milliseconds: 1),
+      );
 
       // Convert to UTC for database query
       final dailyStart = businessDayStartLocal.toUtc();
       final dailyEnd = businessDayEndLocal.toUtc();
-
 
       // Query sales for this outlet on this business day
       final salesResponse = await _client
@@ -1149,7 +1270,9 @@ class SupabaseService {
       }
 
       // Collect all sale IDs
-      final saleIds = (salesResponse as List).map((s) => s['id'] as String).toList();
+      final saleIds = (salesResponse as List)
+          .map((s) => s['id'] as String)
+          .toList();
 
       // Query sale_items to get product quantities
       final itemsResponse = await _client
@@ -1195,33 +1318,67 @@ class SupabaseService {
         return {};
       }
 
-      final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+      final businessDayStartHour =
+          (outletData['business_day_start_hour'] as int?) ?? 4;
 
       // selectedDate comes as LOCAL time from DateTime.now() on device
       // Calculate business day in LOCAL time first, then convert to UTC for query
-      final year = selectedDate.year;
-      final month = selectedDate.month;
-      final day = selectedDate.day;
-      
+      final baseDate = _baseDateForBusinessDay(
+        selectedDate,
+        businessDayStartHour,
+      );
+      final year = baseDate.year;
+      final month = baseDate.month;
+      final day = baseDate.day;
+
       DateTime businessDayStartLocal;
       DateTime businessDayEndLocal;
-      
+
       if (businessDayStartHour >= 12) {
         // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayStartLocal = DateTime(
+          year,
+          month,
+          day - 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
       } else {
         // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
-        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        businessDayStartLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day + 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
-      
-      businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
+
+      businessDayEndLocal = businessDayEndLocal.subtract(
+        const Duration(milliseconds: 1),
+      );
 
       // Convert to UTC for database query
       final dailyStart = businessDayStartLocal.toUtc();
       final dailyEnd = businessDayEndLocal.toUtc();
-
 
       // Query product_returns for this outlet on this business day
       final returnsResponse = await _client
@@ -1272,33 +1429,67 @@ class SupabaseService {
         return {};
       }
 
-      final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+      final businessDayStartHour =
+          (outletData['business_day_start_hour'] as int?) ?? 4;
 
       // selectedDate comes as LOCAL time from DateTime.now() on device
       // Calculate business day in LOCAL time first, then convert to UTC for query
-      final year = selectedDate.year;
-      final month = selectedDate.month;
-      final day = selectedDate.day;
-      
+      final baseDate = _baseDateForBusinessDay(
+        selectedDate,
+        businessDayStartHour,
+      );
+      final year = baseDate.year;
+      final month = baseDate.month;
+      final day = baseDate.day;
+
       DateTime businessDayStartLocal;
       DateTime businessDayEndLocal;
-      
+
       if (businessDayStartHour >= 12) {
         // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-        businessDayStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayStartLocal = DateTime(
+          year,
+          month,
+          day - 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
       } else {
         // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
-        businessDayStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        businessDayStartLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day + 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
-      
-      businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
+
+      businessDayEndLocal = businessDayEndLocal.subtract(
+        const Duration(milliseconds: 1),
+      );
 
       // Convert to UTC for database query
       final dailyStart = businessDayStartLocal.toUtc();
       final dailyEnd = businessDayEndLocal.toUtc();
-
 
       // Initialize transfer stats map
       final transferStats = <String, Map<String, int>>{};
@@ -1311,10 +1502,11 @@ class SupabaseService {
           .gte('created_at', dailyStart.toIso8601String())
           .lte('created_at', dailyEnd.toIso8601String());
 
-
       if (sentResponse.isNotEmpty) {
-        final sentTransferIds = (sentResponse as List).map((s) => s['id'] as String).toList();
-        
+        final sentTransferIds = (sentResponse as List)
+            .map((s) => s['id'] as String)
+            .toList();
+
         // Get items from sent transfers
         final sentItemsResponse = await _client
             .from('stock_transfer_items')
@@ -1329,7 +1521,8 @@ class SupabaseService {
             if (!transferStats.containsKey(productId)) {
               transferStats[productId] = {'dikirim': 0, 'diterima': 0};
             }
-            transferStats[productId]!['dikirim'] = (transferStats[productId]!['dikirim'] ?? 0) + quantity;
+            transferStats[productId]!['dikirim'] =
+                (transferStats[productId]!['dikirim'] ?? 0) + quantity;
           }
         }
       }
@@ -1342,10 +1535,11 @@ class SupabaseService {
           .gte('created_at', dailyStart.toIso8601String())
           .lte('created_at', dailyEnd.toIso8601String());
 
-
       if (receivedResponse.isNotEmpty) {
-        final receivedTransferIds = (receivedResponse as List).map((s) => s['id'] as String).toList();
-        
+        final receivedTransferIds = (receivedResponse as List)
+            .map((s) => s['id'] as String)
+            .toList();
+
         // Get items from received transfers
         final receivedItemsResponse = await _client
             .from('stock_transfer_items')
@@ -1360,7 +1554,8 @@ class SupabaseService {
             if (!transferStats.containsKey(productId)) {
               transferStats[productId] = {'dikirim': 0, 'diterima': 0};
             }
-            transferStats[productId]!['diterima'] = (transferStats[productId]!['diterima'] ?? 0) + quantity;
+            transferStats[productId]!['diterima'] =
+                (transferStats[productId]!['diterima'] ?? 0) + quantity;
           }
         }
       }
@@ -1376,7 +1571,7 @@ class SupabaseService {
     if (!_isInitialized) {
       return [];
     }
-    
+
     try {
       final response = await _client
           .from('stock_transfers')
@@ -1397,7 +1592,7 @@ class SupabaseService {
     if (!_isInitialized) {
       throw Exception('SupabaseService not initialized');
     }
-    
+
     final response = await _client
         .from('users')
         .select()
@@ -1416,15 +1611,13 @@ class SupabaseService {
     if (!_isInitialized) {
       return null;
     }
-    
+
     try {
-      await _client
-          .from('stock_transfers')
-          .insert({
-            'from_outlet_id': fromOutletId,
-            'to_outlet_id': toOutletId,
-            'status': 'requested',
-          });
+      await _client.from('stock_transfers').insert({
+        'from_outlet_id': fromOutletId,
+        'to_outlet_id': toOutletId,
+        'status': 'requested',
+      });
 
       // Get the ID of the newly created transfer by querying the latest one
       final latestTransfer = await _client
@@ -1463,17 +1656,15 @@ class SupabaseService {
     if (!_isInitialized) {
       return null;
     }
-    
+
     try {
-      await _client
-          .from('stock_returns')
-          .insert({
-            'outlet_id': outletId,
-            'ingredient_id': ingredientId,
-            'quantity': quantity,
-            'reason': reason,
-            'status': 'pending',
-          });
+      await _client.from('stock_returns').insert({
+        'outlet_id': outletId,
+        'ingredient_id': ingredientId,
+        'quantity': quantity,
+        'reason': reason,
+        'status': 'pending',
+      });
 
       // Get the ID of the newly created return by querying the latest one
       final latestReturn = await _client
@@ -1500,7 +1691,6 @@ class SupabaseService {
     }
 
     try {
-      
       // Get all products
       final productsResponse = await _client
           .from('products')
@@ -1512,34 +1702,29 @@ class SupabaseService {
       }
 
       // Delete existing batches for this outlet first
-      await _client
-          .from('product_batches')
-          .delete()
-          .eq('outlet_id', outletId);
+      await _client.from('product_batches').delete().eq('outlet_id', outletId);
 
       // Insert sample batches
       for (int i = 0; i < productsResponse.length; i++) {
         final product = productsResponse[i];
         final productId = product['id'] as String;
         final productName = product['name'] as String;
-        
-        await _client
-            .from('product_batches')
-            .insert({
-              'batch_code': 'BATCH-${DateTime.now().millisecondsSinceEpoch}-$i',
-              'product_id': productId,
-              'quantity': 50 + (i * 10),
-              'production_date': DateTime.now().toIso8601String().split('T')[0],
-              'expired_date': DateTime.now().add(Duration(days: 30)).toIso8601String().split('T')[0],
-              'status': 'ready',
-              'outlet_id': outletId,
-              'notes': 'Sample batch for $productName',
-            });
 
+        await _client.from('product_batches').insert({
+          'batch_code': 'BATCH-${DateTime.now().millisecondsSinceEpoch}-$i',
+          'product_id': productId,
+          'quantity': 50 + (i * 10),
+          'production_date': DateTime.now().toIso8601String().split('T')[0],
+          'expired_date': DateTime.now()
+              .add(Duration(days: 30))
+              .toIso8601String()
+              .split('T')[0],
+          'status': 'ready',
+          'outlet_id': outletId,
+          'notes': 'Sample batch for $productName',
+        });
       }
-
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   // Add or update batch damage record (cacat/dikembalikan)
@@ -1557,7 +1742,6 @@ class SupabaseService {
     }
 
     try {
-
       // Check if damage record already exists for this batch
       final existingResponse = await _client
           .from('batch_damages')
@@ -1578,21 +1762,17 @@ class SupabaseService {
               'notes': notes,
             })
             .eq('id', existingId);
-
       } else {
         // Create new record
-        await _client
-            .from('batch_damages')
-            .insert({
-              'batch_id': batchId,
-              'outlet_id': outletId,
-              'cacat_quantity': cacatQty,
-              'dikembalikan_quantity': dikembalikanQty,
-              'reason': reason,
-              'notes': notes,
-              'created_by': userId,
-            });
-
+        await _client.from('batch_damages').insert({
+          'batch_id': batchId,
+          'outlet_id': outletId,
+          'cacat_quantity': cacatQty,
+          'dikembalikan_quantity': dikembalikanQty,
+          'reason': reason,
+          'notes': notes,
+          'created_by': userId,
+        });
       }
 
       return true;
@@ -1602,7 +1782,10 @@ class SupabaseService {
   }
 
   // Get batch damage record by batch ID
-  Future<Map<String, dynamic>?> getBatchDamage(String batchId, String outletId) async {
+  Future<Map<String, dynamic>?> getBatchDamage(
+    String batchId,
+    String outletId,
+  ) async {
     if (!_isInitialized) {
       return null;
     }
@@ -1682,13 +1865,11 @@ class SupabaseService {
       // antara id auth user vs id investor yang dipakai oleh tabel investor_assignments.
       final effectiveInvestorId = investorId.trim();
 
-
       final endIso = DateTime.now().toUtc().toIso8601String();
       final startIso = DateTime.now()
           .toUtc()
           .subtract(Duration(days: profitTrendDays))
           .toIso8601String();
-
 
       // 1) Fetch assignments (field spesifik seperti web)
       final assignmentsResponse = await _client
@@ -1700,8 +1881,7 @@ class SupabaseService {
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      if (assignmentsRows.isNotEmpty) {
-      }
+      if (assignmentsRows.isNotEmpty) {}
 
       if (assignmentsRows.isEmpty) {
         return [];
@@ -1713,7 +1893,6 @@ class SupabaseService {
           .where((id) => id.isNotEmpty)
           .toSet()
           .toList();
-
 
       if (outletIds.isEmpty) {
         return [];
@@ -1729,12 +1908,10 @@ class SupabaseService {
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      if (outletRows.isNotEmpty) {
-      }
+      if (outletRows.isNotEmpty) {}
 
       final outletMap = <String, Map<String, dynamic>>{
-        for (final o in outletRows)
-          (o['id'] as String): o,
+        for (final o in outletRows) (o['id'] as String): o,
       };
 
       // 3) Aggregate sales profit for those outlets
@@ -1748,7 +1925,6 @@ class SupabaseService {
       final salesRows = (salesResponse as List<dynamic>)
           .whereType<Map<String, dynamic>>()
           .toList();
-
 
       final profitMap = <String, double>{};
       for (final sale in salesRows) {
@@ -1806,32 +1982,33 @@ class SupabaseService {
             .select('id, email, role')
             .eq('id', effectiveInvestorId)
             .maybeSingle();
-        
+
         if (userData != null) {
-        } else {
-        }
-      } catch (e) {
-      }
+        } else {}
+      } catch (e) {}
 
       // Query investor_assignments with direct outlet join
-      
+
       List<Map<String, dynamic>> response;
       try {
         // Try with outlet join first
         response = await _client
             .from('investor_assignments')
-            .select('id, outlet_id, investment_amount, margin_percentage, status, created_at, outlets(id, name, type, address)')
+            .select(
+              'id, outlet_id, investment_amount, margin_percentage, status, created_at, outlets(id, name, type, address)',
+            )
             .eq('investor_id', effectiveInvestorId)
             .order('created_at', ascending: false);
       } catch (joinError) {
         // Fallback: query without join
         response = await _client
             .from('investor_assignments')
-            .select('id, outlet_id, investment_amount, margin_percentage, status, created_at')
+            .select(
+              'id, outlet_id, investment_amount, margin_percentage, status, created_at',
+            )
             .eq('investor_id', effectiveInvestorId)
             .order('created_at', ascending: false);
       }
-
 
       final assignmentRows = (response as List<dynamic>)
           .whereType<Map<String, dynamic>>()
@@ -1839,36 +2016,35 @@ class SupabaseService {
 
       if (assignmentRows.isNotEmpty) {
       } else {
-        
         // Fallback: Check all investor_ids in the table for debugging
         try {
           final allAssignments = await _client
               .from('investor_assignments')
               .select('investor_id')
               .limit(5);
-          
+
           final uniqueIds = <String>{};
           (allAssignments as List<dynamic>?)?.forEach((row) {
             final id = (row as Map<String, dynamic>)['investor_id'] as String?;
             if (id != null) uniqueIds.add(id);
           });
-          
-          
+
           // If we found investor_ids in database, query with first one for dev testing
           if (uniqueIds.isNotEmpty) {
             final firstInvestorId = uniqueIds.first;
-            
+
             final devResponse = await _client
                 .from('investor_assignments')
-                .select('id, outlet_id, investment_amount, margin_percentage, status, created_at')
+                .select(
+                  'id, outlet_id, investment_amount, margin_percentage, status, created_at',
+                )
                 .eq('investor_id', firstInvestorId)
                 .order('created_at', ascending: false);
-            
+
             final devRows = (devResponse as List<dynamic>)
                 .whereType<Map<String, dynamic>>()
                 .toList();
-            
-            
+
             if (devRows.isNotEmpty) {
               return devRows.map((assignment) {
                 return <String, dynamic>{
@@ -1880,8 +2056,7 @@ class SupabaseService {
               }).toList();
             }
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
 
       if (assignmentRows.isEmpty) {
@@ -1890,11 +2065,11 @@ class SupabaseService {
 
       // For each assignment, fetch outlet data if not in join
       final enrichedAssignments = <Map<String, dynamic>>[];
-      
+
       for (final assignment in assignmentRows) {
         final outletId = (assignment['outlet_id'] as String?)?.trim() ?? '';
         var outlet = assignment['outlets'] as Map<String, dynamic>?;
-        
+
         // If outlet data not in join, fetch it separately
         if (outlet == null || outlet.isEmpty) {
           try {
@@ -1903,14 +2078,12 @@ class SupabaseService {
                 .select('id, name, type, address')
                 .eq('id', outletId)
                 .maybeSingle();
-            
+
             if (outletData != null) {
               outlet = outletData;
             }
-          } catch (e) {
-          }
+          } catch (e) {}
         }
-
 
         enrichedAssignments.add(<String, dynamic>{
           ...assignment,
@@ -1919,7 +2092,7 @@ class SupabaseService {
           'outlet_address': outlet?['address'] ?? '',
         });
       }
-      
+
       return enrichedAssignments;
     } catch (e) {
       return [];
@@ -1928,7 +2101,6 @@ class SupabaseService {
 
   // Get all outlets
   Future<List<Map<String, dynamic>>> getOutlets() async {
-
     if (!_isInitialized) {
       return [];
     }
@@ -1939,11 +2111,13 @@ class SupabaseService {
           .select('id, name, business_day_start_hour')
           .order('name', ascending: true);
 
-      print('[SupabaseService] getOutlets() - Total outlets: ${(response as List).length}');
+      print(
+        '[SupabaseService] getOutlets() - Total outlets: ${(response as List).length}',
+      );
       for (final outlet in response as List) {
         print('  - ${outlet['name']} (id: ${outlet['id']})');
       }
-      
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('[SupabaseService] Error in getOutlets(): $e');
@@ -1964,7 +2138,6 @@ class SupabaseService {
           .eq('outlet_id', outletId)
           .order('created_at', ascending: false);
 
-      
       // Map product name into response
       final returns = response.map((item) {
         return {
@@ -1980,7 +2153,10 @@ class SupabaseService {
   }
 
   // Get product returns (pengembalian) for an outlet
-  Future<List<Map<String, dynamic>>> getProductReturns(String outletId, {DateTime? selectedDate}) async {
+  Future<List<Map<String, dynamic>>> getProductReturns(
+    String outletId, {
+    DateTime? selectedDate,
+  }) async {
     if (!_isInitialized) {
       return [];
     }
@@ -1996,10 +2172,10 @@ class SupabaseService {
               .eq('id', outletId)
               .maybeSingle();
           if (outletData != null) {
-            businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+            businessDayStartHour =
+                (outletData['business_day_start_hour'] as int?) ?? 4;
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
 
       // Build query
@@ -2011,12 +2187,29 @@ class SupabaseService {
       // Add date filter if provided
       if (selectedDate != null) {
         final selectedDateUtc = selectedDate.toUtc();
-        final dailyStart = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day)
-            .subtract(const Duration(days: 1))
-            .copyWith(hour: businessDayStartHour, minute: 0, second: 0, millisecond: 0, microsecond: 0);
-        final dailyEnd = DateTime.utc(selectedDateUtc.year, selectedDateUtc.month, selectedDateUtc.day, businessDayStartHour, 0, 0)
-            .subtract(const Duration(milliseconds: 1));
-        
+        final dailyStart =
+            DateTime.utc(
+                  selectedDateUtc.year,
+                  selectedDateUtc.month,
+                  selectedDateUtc.day,
+                )
+                .subtract(const Duration(days: 1))
+                .copyWith(
+                  hour: businessDayStartHour,
+                  minute: 0,
+                  second: 0,
+                  millisecond: 0,
+                  microsecond: 0,
+                );
+        final dailyEnd = DateTime.utc(
+          selectedDateUtc.year,
+          selectedDateUtc.month,
+          selectedDateUtc.day,
+          businessDayStartHour,
+          0,
+          0,
+        ).subtract(const Duration(milliseconds: 1));
+
         query = query
             .gte('return_date', dailyStart.toIso8601String())
             .lte('return_date', dailyEnd.toIso8601String());
@@ -2028,7 +2221,6 @@ class SupabaseService {
         return [];
       }
 
-      
       // Get all products to enrich with product names
       final products = await getProducts();
       final productMap = {for (var p in products) p.id: p.name};
@@ -2038,11 +2230,8 @@ class SupabaseService {
         final itemMap = Map<String, dynamic>.from(item as Map);
         final productId = itemMap['product_id'] as String?;
         final productName = productId != null ? productMap[productId] : null;
-        
-        return {
-          ...itemMap,
-          'product_name': productName ?? 'Unknown',
-        };
+
+        return {...itemMap, 'product_name': productName ?? 'Unknown'};
       }).toList();
 
       return List<Map<String, dynamic>>.from(returns);
@@ -2064,7 +2253,6 @@ class SupabaseService {
     }
 
     try {
-
       // Create product_returns records (one per unit returned)
       // Condition status must be one of: 'sellable', 'damaged', 'partially_damaged'
       // Default to 'damaged' for returns - can be changed during inspection
@@ -2101,7 +2289,6 @@ class SupabaseService {
     }
 
     try {
-
       // Step 0: Get showcase_allocation for source outlet to find showcase_product_id
       try {
         // First, get the showcase_product_id from showcase_products table
@@ -2109,8 +2296,7 @@ class SupabaseService {
             .from('showcase_products')
             .select('id')
             .eq('product_id', productId);
-        
-        
+
         if (showcaseProducts.isEmpty) {
           return false;
         }
@@ -2130,53 +2316,64 @@ class SupabaseService {
           return false;
         }
 
-        final sourceAllocation = allocations[0] as Map<String, dynamic>;
+        final sourceAllocation = allocations[0];
         final currentQty = sourceAllocation['quantity'] as int? ?? 0;
-        
+
         // Calculate "sisa" (remaining stock) using the same formula as UI:
         // sisa = quantity - sold - returned - dikirim + diterima
-        final checkDate = selectedDate ?? DateTime.now();
-        final soldMap = await getSoldQuantityToday(outletId: fromOutletId, selectedDate: checkDate);
-        final returnedMap = await getReturnedQuantityToday(outletId: fromOutletId, selectedDate: checkDate);
-        final transferStats = await getProductTransferStats(outletId: fromOutletId, selectedDate: checkDate);
-        
+        final businessDayStartHour = await getBusinessDayStartHour(
+          outletId: fromOutletId,
+        );
+        final checkDate = _baseDateForBusinessDay(
+          selectedDate ?? DateTime.now(),
+          businessDayStartHour,
+        );
+        final soldMap = await getSoldQuantityToday(
+          outletId: fromOutletId,
+          selectedDate: checkDate,
+        );
+        final returnedMap = await getReturnedQuantityToday(
+          outletId: fromOutletId,
+          selectedDate: checkDate,
+        );
+        final transferStats = await getProductTransferStats(
+          outletId: fromOutletId,
+          selectedDate: checkDate,
+        );
+
         final sold = soldMap[productId] ?? 0;
         final returned = returnedMap[productId] ?? 0;
-        final transfers = transferStats[productId] ?? {'dikirim': 0, 'diterima': 0};
+        final transfers =
+            transferStats[productId] ?? {'dikirim': 0, 'diterima': 0};
         final dikirim = (transfers['dikirim'] ?? 0) as num;
         final diterima = (transfers['diterima'] ?? 0) as num;
-        final sisa = currentQty - sold - returned - dikirim.toInt() + diterima.toInt();
-        
-        
+        final sisa =
+            currentQty - sold - returned - dikirim.toInt() + diterima.toInt();
+
         if (sisa < quantity) {
           return false;
         }
-
 
         // Step 1: DON'T decrease quantity yet - only check availability
         // Quantity will be decreased when transfer is approved
 
         // Step 2: DO NOT update destination outlet quantity - only update when approved
 
-
         // Step 3: Create transfer record with 'requested' status (awaiting approval)
         try {
           // Don't use .select() here to avoid "single row" issues
           // Just insert without returning data, then query it
           try {
-            await _client
-                .from('stock_transfers')
-                .insert({
-                  'from_outlet_id': fromOutletId,
-                  'to_outlet_id': toOutletId,
-                  'status': 'requested',
-                  // Let database set created_at to ensure correct server time
-                });
-            
+            await _client.from('stock_transfers').insert({
+              'from_outlet_id': fromOutletId,
+              'to_outlet_id': toOutletId,
+              'status': 'requested',
+              // Let database set created_at to ensure correct server time
+            });
           } catch (insertError) {
-            throw insertError;
+            rethrow;
           }
-          
+
           // Get the ID of the newly created transfer by querying the latest one
           try {
             final transferQuery = await _client
@@ -2187,44 +2384,42 @@ class SupabaseService {
                 .eq('status', 'requested')
                 .order('created_at', ascending: false)
                 .limit(1);
-            
+
             if (transferQuery.isEmpty) {
               return false;
             }
-            
+
             final transferId = transferQuery[0]['id'] as String;
-            
+
             // Insert transfer item details
             try {
-              
               // Just insert without .select() to avoid "single row" issues
               try {
-                await _client
-                    .from('stock_transfer_items')
-                    .insert({
-                      'transfer_id': transferId,
-                      'product_id': productId,
-                      'quantity': quantity.toDouble(), // Fill the DECIMAL quantity column
-                      'quantity_int': quantity, // Also fill quantity_int for integer reference
-                      'created_at': DateTime.now().toIso8601String(),
-                    });
-                
+                await _client.from('stock_transfer_items').insert({
+                  'transfer_id': transferId,
+                  'product_id': productId,
+                  'quantity': quantity
+                      .toDouble(), // Fill the DECIMAL quantity column
+                  'quantity_int':
+                      quantity, // Also fill quantity_int for integer reference
+                  'created_at': DateTime.now().toIso8601String(),
+                });
               } catch (itemInsertError) {
-                throw itemInsertError;
+                rethrow;
               }
             } catch (itemError) {
-              throw itemError;
+              rethrow;
             }
           } catch (queryError) {
-            throw queryError;
+            rethrow;
           }
         } catch (e) {
-          throw e;
+          rethrow;
         }
       } catch (allocError) {
-        throw allocError;
+        rethrow;
       }
-      
+
       return true;
     } catch (e) {
       return false;
@@ -2232,13 +2427,15 @@ class SupabaseService {
   }
 
   // Get product transfers for an outlet
-  Future<List<Map<String, dynamic>>> getProductTransfers(String outletId, {DateTime? selectedDate}) async {
+  Future<List<Map<String, dynamic>>> getProductTransfers(
+    String outletId, {
+    DateTime? selectedDate,
+  }) async {
     if (!_isInitialized) {
       return [];
     }
 
     try {
-      
       // Get outlet's business_day_start_hour if filtering by date
       int businessDayStartHour = 4; // default
       if (selectedDate != null) {
@@ -2249,12 +2446,12 @@ class SupabaseService {
               .eq('id', outletId)
               .maybeSingle();
           if (outletData != null) {
-            businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+            businessDayStartHour =
+                (outletData['business_day_start_hour'] as int?) ?? 4;
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
-      
+
       // Build query
       var query = _client
           .from('stock_transfers')
@@ -2269,47 +2466,76 @@ class SupabaseService {
 
       // Filter by selected date (business day) if provided
       if (selectedDate != null) {
-        final year = selectedDate.year;
-        final month = selectedDate.month;
-        final day = selectedDate.day;
-        
+        final baseDate = _baseDateForBusinessDay(
+          selectedDate,
+          businessDayStartHour,
+        );
+        final year = baseDate.year;
+        final month = baseDate.month;
+        final day = baseDate.day;
+
         // Calculate business day in LOCAL time first, then convert to UTC for query
         DateTime dailyStartLocal;
         DateTime dailyEndLocal;
-        
+
         if (businessDayStartHour >= 12) {
           // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-          dailyStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
-          dailyEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+          dailyStartLocal = DateTime(
+            year,
+            month,
+            day - 1,
+            businessDayStartHour,
+            0,
+            0,
+          );
+          dailyEndLocal = DateTime(
+            year,
+            month,
+            day,
+            businessDayStartHour,
+            0,
+            0,
+          );
         } else {
           // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
-          dailyStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-          dailyEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+          dailyStartLocal = DateTime(
+            year,
+            month,
+            day,
+            businessDayStartHour,
+            0,
+            0,
+          );
+          dailyEndLocal = DateTime(
+            year,
+            month,
+            day + 1,
+            businessDayStartHour,
+            0,
+            0,
+          );
         }
-        
+
         dailyEndLocal = dailyEndLocal.subtract(const Duration(milliseconds: 1));
-        
+
         // Convert to UTC for database query
         final dailyStart = dailyStartLocal.toUtc();
         final dailyEnd = dailyEndLocal.toUtc();
-        
+
         query = query
             .gte('created_at', dailyStart.toIso8601String())
             .lte('created_at', dailyEnd.toIso8601String());
-      } else {
-      }
-      
+      } else {}
+
       final response = await query.order('created_at', ascending: false);
 
-      for (final t in response) {
-      }
+      // response is used below for enrichment; no-op loop removed
 
       // Enrich with outlet names and product names
       final enrichedTransfers = <Map<String, dynamic>>[];
-      
+
       for (final transfer in response) {
         try {
-          
           // Step 1: Get outlet names
           late final String fromName;
           late final String toName;
@@ -2320,7 +2546,7 @@ class SupabaseService {
                 .eq('id', transfer['from_outlet_id'])
                 .maybeSingle();
             fromName = (fromOutlet?['name'] as String?) ?? 'Unknown';
-            
+
             final toOutlet = await _client
                 .from('outlets')
                 .select('name')
@@ -2330,7 +2556,7 @@ class SupabaseService {
           } catch (e) {
             continue;
           }
-          
+
           // Step 2: Get transfer items
           late final List<dynamic> itemsResponse;
           try {
@@ -2341,15 +2567,13 @@ class SupabaseService {
           } catch (e) {
             continue;
           }
-          
-          
+
           if (itemsResponse.isNotEmpty) {
             final firstItem = itemsResponse[0];
-            
+
             final productId = firstItem['product_id'] as String?;
             final quantity = firstItem['quantity_int'] as int? ?? 0;
-            
-            
+
             if (productId != null) {
               // Step 3: Get product name
               late final String productName;
@@ -2363,7 +2587,7 @@ class SupabaseService {
               } catch (e) {
                 continue;
               }
-              
+
               // Step 4: Get showcase_product_id for current stock lookup
               int currentStockSending = 0;
               try {
@@ -2372,10 +2596,10 @@ class SupabaseService {
                     .select('id')
                     .eq('product_id', productId)
                     .limit(1);
-                
+
                 if (showcaseProduct.isNotEmpty) {
                   final showcaseProductId = showcaseProduct[0]['id'] as String;
-                  
+
                   // Step 5: Get current stock
                   try {
                     final sendingOutletStockList = await _client
@@ -2385,17 +2609,17 @@ class SupabaseService {
                         .eq('showcase_product_id', showcaseProductId)
                         .limit(1)
                         .order('created_at', ascending: false);
-                    
+
                     if (sendingOutletStockList.isNotEmpty) {
-                      currentStockSending = (sendingOutletStockList[0]['quantity'] as int?) ?? 0;
+                      currentStockSending =
+                          (sendingOutletStockList[0]['quantity'] as int?) ?? 0;
                     }
                   } catch (e) {
                     currentStockSending = 0;
                   }
                 }
-              } catch (e) {
-              }
-              
+              } catch (e) {}
+
               final enrichedTransfer = {
                 'id': transfer['id'],
                 'from_outlet_id': transfer['from_outlet_id'],
@@ -2409,17 +2633,14 @@ class SupabaseService {
                 'status': transfer['status'] ?? 'received',
                 'created_at': transfer['created_at'],
               };
-              
+
               enrichedTransfers.add(enrichedTransfer);
             }
-          } else {
-          }
-        } catch (e) {
-        }
+          } else {}
+        } catch (e) {}
       }
-      
-      for (final t in enrichedTransfers) {
-      }
+
+      // no-op
       return enrichedTransfers;
     } catch (e) {
       return [];
@@ -2427,13 +2648,15 @@ class SupabaseService {
   }
 
   /// Get transfers RECEIVED by this outlet (transfers where to_outlet_id == outletId)
-  Future<List<Map<String, dynamic>>> getReceivedTransfers(String outletId, {DateTime? selectedDate}) async {
+  Future<List<Map<String, dynamic>>> getReceivedTransfers(
+    String outletId, {
+    DateTime? selectedDate,
+  }) async {
     if (!_isInitialized) {
       throw Exception('SupabaseService not initialized');
     }
 
     try {
-      
       // Get outlet's business_day_start_hour if filtering by date
       int businessDayStartHour = 4; // default
       if (selectedDate != null) {
@@ -2444,12 +2667,12 @@ class SupabaseService {
               .eq('id', outletId)
               .maybeSingle();
           if (outletData != null) {
-            businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+            businessDayStartHour =
+                (outletData['business_day_start_hour'] as int?) ?? 4;
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
-      
+
       // Build query
       var query = _client
           .from('stock_transfers')
@@ -2462,92 +2685,120 @@ class SupabaseService {
         // selectedDate is DateTime.now() or picked by user (no time component)
         // Business day starts at businessDayStartHour on selectedDate
         // and ends at (businessDayStartHour - 1):59 on selectedDate + 1 day
-        
-        final year = selectedDate.year;
-        final month = selectedDate.month;
-        final day = selectedDate.day;
-        
+
+        final baseDate = _baseDateForBusinessDay(
+          selectedDate,
+          businessDayStartHour,
+        );
+        final year = baseDate.year;
+        final month = baseDate.month;
+        final day = baseDate.day;
+
         // Calculate business day in LOCAL time first, then convert to UTC for query
         DateTime dailyStartLocal;
         DateTime dailyEndLocal;
-        
+
         if (businessDayStartHour >= 12) {
           // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-          dailyStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
-          dailyEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+          dailyStartLocal = DateTime(
+            year,
+            month,
+            day - 1,
+            businessDayStartHour,
+            0,
+            0,
+          );
+          dailyEndLocal = DateTime(
+            year,
+            month,
+            day,
+            businessDayStartHour,
+            0,
+            0,
+          );
         } else {
           // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
-          dailyStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-          dailyEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+          dailyStartLocal = DateTime(
+            year,
+            month,
+            day,
+            businessDayStartHour,
+            0,
+            0,
+          );
+          dailyEndLocal = DateTime(
+            year,
+            month,
+            day + 1,
+            businessDayStartHour,
+            0,
+            0,
+          );
         }
-        
+
         dailyEndLocal = dailyEndLocal.subtract(const Duration(milliseconds: 1));
-        
+
         // Convert to UTC for database query
         final dailyStart = dailyStartLocal.toUtc();
         final dailyEnd = dailyEndLocal.toUtc();
-        
+
         query = query
             .gte('created_at', dailyStart.toIso8601String())
             .lte('created_at', dailyEnd.toIso8601String());
       }
-      
+
       final response = await query.order('created_at', ascending: false);
 
-      for (final t in response) {
-      }
+      // no-op
 
       // Enrich with outlet names and product names
       final enrichedTransfers = <Map<String, dynamic>>[];
-      
+
       for (final transfer in response) {
         try {
-          
           final fromOutlet = await _client
               .from('outlets')
               .select('name')
               .eq('id', transfer['from_outlet_id'])
               .maybeSingle();
-          
+
           final toOutlet = await _client
               .from('outlets')
               .select('name')
               .eq('id', transfer['to_outlet_id'])
               .maybeSingle();
-          
+
           final fromName = (fromOutlet?['name'] as String?) ?? 'Unknown';
           final toName = (toOutlet?['name'] as String?) ?? 'Unknown';
-          
+
           // Get items from stock_transfer_items table directly (not nested)
           final itemsResponse = await _client
               .from('stock_transfer_items')
               .select('product_id, quantity_int')
               .eq('transfer_id', transfer['id']);
-          
-          
+
           if (itemsResponse.isNotEmpty) {
             final firstItem = itemsResponse[0];
-            
+
             final productId = firstItem['product_id'] as String?;
             final quantity = firstItem['quantity_int'] as int? ?? 0;
-            
-            
+
             if (productId != null) {
               final product = await _client
                   .from('products')
                   .select('name')
                   .eq('id', productId)
                   .maybeSingle();
-              
+
               final productName = (product?['name'] as String?) ?? 'Unknown';
-              
+
               // Get showcase_product_id for current stock lookup
               final showcaseProduct = await _client
                   .from('showcase_products')
                   .select('id')
                   .eq('product_id', productId)
                   .maybeSingle();
-              
+
               int currentStockReceiving = 0;
               if (showcaseProduct != null) {
                 final showcaseProductId = showcaseProduct['id'] as String;
@@ -2557,10 +2808,11 @@ class SupabaseService {
                     .eq('outlet_id', transfer['to_outlet_id'])
                     .eq('showcase_product_id', showcaseProductId)
                     .maybeSingle();
-                
-                currentStockReceiving = (receivingOutletStock?['quantity'] as int?) ?? 0;
+
+                currentStockReceiving =
+                    (receivingOutletStock?['quantity'] as int?) ?? 0;
               }
-              
+
               final enrichedTransfer = {
                 'id': transfer['id'],
                 'from_outlet_id': transfer['from_outlet_id'],
@@ -2574,17 +2826,14 @@ class SupabaseService {
                 'status': transfer['status'] ?? 'received',
                 'created_at': transfer['created_at'],
               };
-              
+
               enrichedTransfers.add(enrichedTransfer);
             }
-          } else {
-          }
-        } catch (e) {
-        }
+          } else {}
+        } catch (e) {}
       }
-      
-      for (final t in enrichedTransfers) {
-      }
+
+      // no-op
       return enrichedTransfers;
     } catch (e) {
       return [];
@@ -2605,7 +2854,6 @@ class SupabaseService {
     }
 
     try {
-      
       await _client.from('sales_records').insert({
         'batch_id': batchId,
         'outlet_id': outletId,
@@ -2613,38 +2861,36 @@ class SupabaseService {
         'sale_date': saleDate.toIso8601String(),
         'notes': notes ?? 'Dari POS mobile',
       });
-
     } catch (e) {
       throw Exception('Gagal mencatat penjualan ke sistem warehouse: $e');
     }
   }
 
-// Get available batches for an outlet
-  Future<List<Map<String, dynamic>>> getAvailableBatches(String outletId) async {
+  // Get available batches for an outlet
+  Future<List<Map<String, dynamic>>> getAvailableBatches(
+    String outletId,
+  ) async {
     if (!_isInitialized) {
       return [];
     }
 
     try {
-      
       final response = await _client
           .from('product_batches')
           .select()
           .eq('outlet_id', outletId)
           .inFilter('status', ['ready', 'assigned']);
 
-      
       final batches = List<Map<String, dynamic>>.from(response);
-      for (final batch in batches) {
-      }
-      
+      // batches returned for caller; no-op loop removed
+
       return batches;
-    } catch (e, stackTrace) {
+    } catch (e) {
       return [];
     }
   }
 
-// Get revenue data for finance screen
+  // Get revenue data for finance screen
   // If outletId is empty, fetch global revenue from all outlets
   Future<Map<String, dynamic>> getRevenueData({
     required String outletId,
@@ -2659,7 +2905,6 @@ class SupabaseService {
     }
 
     try {
-      
       if (outletId.isEmpty) {
         print('ERROR getRevenueData: Outlet ID is empty');
         return {
@@ -2668,14 +2913,14 @@ class SupabaseService {
           'monthly': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
         };
       }
-      
+
       // Get outlet's business_day_start_hour
       final outletData = await _client
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
           .maybeSingle();
-      
+
       if (outletData == null) {
         print('ERROR getRevenueData: Outlet not found for id=$outletId');
         return {
@@ -2684,78 +2929,139 @@ class SupabaseService {
           'monthly': {'amount': 0.0, 'count': 0, 'cash': 0.0, 'qris': 0.0},
         };
       }
-      
-      final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
-      
+
+      final businessDayStartHour =
+          (outletData['business_day_start_hour'] as int?) ?? 4;
+
       // IMPORTANT: Calculate business day in LOCAL time first, then convert to UTC for query
       // This ensures we respect the device's timezone
       // selectedDate comes as LOCAL time from DateTime.now() on device
-      final year = selectedDate.year;
-      final month = selectedDate.month;
-      final day = selectedDate.day;
-      
+      final baseDate = _baseDateForBusinessDay(
+        selectedDate,
+        businessDayStartHour,
+      );
+      final year = baseDate.year;
+      final month = baseDate.month;
+      final day = baseDate.day;
+
       // Calculate daily range in LOCAL time
       DateTime dailyStartLocal;
       DateTime dailyEndLocal;
-      
+
       if (businessDayStartHour >= 12) {
         // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-        dailyStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        dailyStartLocal = DateTime(
+          year,
+          month,
+          day - 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
         dailyEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
       } else {
         // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
-        dailyStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-        dailyEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        dailyStartLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
+        dailyEndLocal = DateTime(
+          year,
+          month,
+          day + 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
-      
+
       dailyEndLocal = dailyEndLocal.subtract(const Duration(milliseconds: 1));
-      
+
       // Convert to UTC for database query
       final dailyStart = dailyStartLocal.toUtc();
       final dailyEnd = dailyEndLocal.toUtc();
-      
+
       print('DEBUG getRevenueData: businessDayStartHour=$businessDayStartHour');
-      print('DEBUG getRevenueData: selectedDate=$selectedDate (local device time)');
+      print(
+        'DEBUG getRevenueData: selectedDate=$selectedDate (local device time)',
+      );
       print('DEBUG getRevenueData: dailyStartLocal=$dailyStartLocal');
-      print('DEBUG getRevenueData: dailyStart=${dailyStart.toIso8601String()} (UTC for query)');
-      
+      print(
+        'DEBUG getRevenueData: dailyStart=${dailyStart.toIso8601String()} (UTC for query)',
+      );
+
       // Query daily sales
-      final dailyResponse = await _client.from('sales')
+      final dailyResponse = await _client
+          .from('sales')
           .select('payment_method, total_amount, created_at, outlet_id')
           .eq('outlet_id', outletId)
           .gte('created_at', dailyStart.toIso8601String())
           .lte('created_at', dailyEnd.toIso8601String());
-      
+
       // Calculate weekly (last 7 business days)
       DateTime weeklyStartLocal;
       if (businessDayStartHour >= 12) {
-        weeklyStartLocal = DateTime(year, month, day - 7 - 1, businessDayStartHour, 0, 0);
+        weeklyStartLocal = DateTime(
+          year,
+          month,
+          day - 7 - 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       } else {
-        weeklyStartLocal = DateTime(year, month, day - 7, businessDayStartHour, 0, 0);
+        weeklyStartLocal = DateTime(
+          year,
+          month,
+          day - 7,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
       final weeklyStart = weeklyStartLocal.toUtc();
-      
-      final weeklyResponse = await _client.from('sales')
+
+      final weeklyResponse = await _client
+          .from('sales')
           .select('payment_method, total_amount, created_at, outlet_id')
           .eq('outlet_id', outletId)
           .gte('created_at', weeklyStart.toIso8601String())
           .lte('created_at', dailyEnd.toIso8601String());
-      
+
       // Calculate monthly (last 30 business days)
       DateTime monthlyStartLocal;
       if (businessDayStartHour >= 12) {
-        monthlyStartLocal = DateTime(year, month, day - 30 - 1, businessDayStartHour, 0, 0);
+        monthlyStartLocal = DateTime(
+          year,
+          month,
+          day - 30 - 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       } else {
-        monthlyStartLocal = DateTime(year, month, day - 30, businessDayStartHour, 0, 0);
+        monthlyStartLocal = DateTime(
+          year,
+          month,
+          day - 30,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
       final monthlyStart = monthlyStartLocal.toUtc();
-      
-      final monthlyResponse = await _client.from('sales')
+
+      final monthlyResponse = await _client
+          .from('sales')
           .select('payment_method, total_amount, created_at, outlet_id')
           .eq('outlet_id', outletId)
           .gte('created_at', monthlyStart.toIso8601String())
           .lte('created_at', dailyEnd.toIso8601String());
-      
+
       // Process daily data
       double dailyTotal = 0, dailyCash = 0, dailyQris = 0;
       int dailyCount = 0;
@@ -2764,10 +3070,12 @@ class SupabaseService {
         final method = (sale['payment_method'] as String?)?.toUpperCase() ?? '';
         dailyTotal += amount;
         dailyCount++;
-        if (method == 'CASH') dailyCash += amount;
-        else if (method == 'QRIS') dailyQris += amount;
+        if (method == 'CASH') {
+          dailyCash += amount;
+        } else if (method == 'QRIS')
+          dailyQris += amount;
       }
-      
+
       // Process weekly data
       double weeklyTotal = 0, weeklyCash = 0, weeklyQris = 0;
       int weeklyCount = 0;
@@ -2776,10 +3084,12 @@ class SupabaseService {
         final method = (sale['payment_method'] as String?)?.toUpperCase() ?? '';
         weeklyTotal += amount;
         weeklyCount++;
-        if (method == 'CASH') weeklyCash += amount;
-        else if (method == 'QRIS') weeklyQris += amount;
+        if (method == 'CASH') {
+          weeklyCash += amount;
+        } else if (method == 'QRIS')
+          weeklyQris += amount;
       }
-      
+
       // Process monthly data
       double monthlyTotal = 0, monthlyCash = 0, monthlyQris = 0;
       int monthlyCount = 0;
@@ -2788,10 +3098,11 @@ class SupabaseService {
         final method = (sale['payment_method'] as String?)?.toUpperCase() ?? '';
         monthlyTotal += amount;
         monthlyCount++;
-        if (method == 'CASH') monthlyCash += amount;
-        else if (method == 'QRIS') monthlyQris += amount;
+        if (method == 'CASH') {
+          monthlyCash += amount;
+        } else if (method == 'QRIS')
+          monthlyQris += amount;
       }
-      
 
       return {
         'daily': {
@@ -2813,7 +3124,7 @@ class SupabaseService {
           'qris': monthlyQris,
         },
       };
-    } catch (e, stackTrace) {
+    } catch (e) {
       return {
         'daily': {'amount': 0.0, 'count': 0},
         'weekly': {'amount': 0.0, 'count': 0},
@@ -2843,63 +3154,77 @@ class SupabaseService {
     }
 
     try {
-      
       // First: Check if outlet_id is valid
       if (outletId.isEmpty) {
         throw Exception('Outlet ID is empty');
       }
-      
+
       // Get outlet's business_day_start_hour
       final outletData = await _client
           .from('outlets')
           .select('business_day_start_hour')
           .eq('id', outletId)
           .maybeSingle();
-      
+
       if (outletData == null) {
         throw Exception('Outlet not found');
       }
-      
-      final businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
-      
+
+      final businessDayStartHour =
+          (outletData['business_day_start_hour'] as int?) ?? 4;
+
       // Calculate business day date range in LOCAL time first, then convert to UTC
       // date comes as LOCAL time from DateTime.now() on device
       final year = date.year;
       final month = date.month;
       final day = date.day;
-      
+
       DateTime dateStartLocal;
       DateTime dateEndLocal;
-      
+
       if (businessDayStartHour >= 12) {
         // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-        dateStartLocal = DateTime(year, month, day - 1, businessDayStartHour, 0, 0);
+        dateStartLocal = DateTime(
+          year,
+          month,
+          day - 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
         dateEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
       } else {
         // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
         dateStartLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
-        dateEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        dateEndLocal = DateTime(
+          year,
+          month,
+          day + 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
-      
+
       dateEndLocal = dateEndLocal.subtract(const Duration(milliseconds: 1));
-      
+
       // Convert to UTC for database query
       final dateStart = dateStartLocal.toUtc();
       final dateEnd = dateEndLocal.toUtc();
-      
-      
+
       // Query sales for this business day
-      var query = _client.from('sales').select('payment_method, total_amount, created_at, outlet_id');
-      
+      var query = _client
+          .from('sales')
+          .select('payment_method, total_amount, created_at, outlet_id');
+
       if (outletId.isNotEmpty) {
         query = query.eq('outlet_id', outletId);
       }
-      
+
       final response = await query
           .gte('created_at', dateStart.toIso8601String())
           .lte('created_at', dateEnd.toIso8601String());
-      
-      
+
       double cashAmount = 0;
       int cashCount = 0;
       double qrisAmount = 0;
@@ -2909,14 +3234,13 @@ class SupabaseService {
       double otherAmount = 0;
       int otherCount = 0;
       double totalOmset = 0;
-      
+
       for (final sale in response) {
         final paymentMethod = sale['payment_method'] as String?;
         final amount = (sale['total_amount'] as num?)?.toDouble() ?? 0;
-        
+
         totalOmset += amount;
-        
-        
+
         if (paymentMethod?.toUpperCase() == 'CASH') {
           cashAmount += amount;
           cashCount++;
@@ -2932,35 +3256,37 @@ class SupabaseService {
           otherCount++;
         }
       }
-      
+
       // Calculate bonus using tiered system with holiday detection
       // Determine if the date is a holiday (weekend or national holiday)
-      final businessDate = date;  // This is the date from the query parameter
+      final businessDate = date; // This is the date from the query parameter
       final isHolidayDate = isHolidaySync(businessDate);
-      
+
       // Use the same bonus calculation as in the Revenue tab
       double bonus = 0;
       if (totalOmset > 0) {
-        final bonusResult = calculateBonus(totalOmset, isHoliday: isHolidayDate);
+        final bonusResult = calculateBonus(
+          totalOmset,
+          isHoliday: isHolidayDate,
+        );
         bonus = bonusResult.totalBonus;
       }
 
-      
       // Calculate meal allowance
       // If omset is 0, no meal allowance
       double mealAllowance = 0.0;
       if (totalOmset > 0) {
         mealAllowance = totalOmset >= 300000 ? 34000.0 : 25000.0;
       }
-      
+
       // Calculate deposit amount: CASH - BONUS - MEAL ALLOWANCE
       double depositAmount = cashAmount - bonus - mealAllowance;
-      
+
       // Calculate kekurangan upah (shortfall) if deposit is negative
       double kekuranganUpah = 0;
       if (depositAmount < 0) {
-        kekuranganUpah = -depositAmount;  // Absolute value of deficit
-        depositAmount = 0;  // Set deposit to 0, shortfall will be provided
+        kekuranganUpah = -depositAmount; // Absolute value of deficit
+        depositAmount = 0; // Set deposit to 0, shortfall will be provided
       }
 
       // Check handover status for this date
@@ -2980,8 +3306,10 @@ class SupabaseService {
           businessDayDate = DateTime(date.year, date.month, date.day + 1);
         }
         final dateStr = businessDayDate.toIso8601String().split('T')[0];
-        print('DEBUG getCashDepositData: Querying handover for businessDayDate=$dateStr (businessDayStartHour=$businessDayStartHour), outletId=$outletId, baristaId=$baristaId');
-        
+        print(
+          'DEBUG getCashDepositData: Querying handover for businessDayDate=$dateStr (businessDayStartHour=$businessDayStartHour), outletId=$outletId, baristaId=$baristaId',
+        );
+
         final handoversForDate = await _client
             .from('cash_deposit_handovers')
             .select('status, shortfall_receipt_recorded, id, date')
@@ -2990,26 +3318,38 @@ class SupabaseService {
             .eq('barista_id', baristaId)
             .order('created_at', ascending: false)
             .limit(1);
-        
-        print('DEBUG getCashDepositData: handoversForDate count=${handoversForDate.length}');
+
+        print(
+          'DEBUG getCashDepositData: handoversForDate count=${handoversForDate.length}',
+        );
         if (handoversForDate.isNotEmpty) {
-          print('DEBUG getCashDepositData: Found handover: ${handoversForDate[0]}');
-          handoverStatus = handoversForDate[0]['status'] as String? ?? 'pending';
-          shortfallReceiptRecorded = handoversForDate[0]['shortfall_receipt_recorded'] as bool? ?? false;
-          handoverDate = handoversForDate[0]['date'] as String?; // Get the actual business day date
-          print('DEBUG getCashDepositData: Set handoverStatus=$handoverStatus, shortfallReceiptRecorded=$shortfallReceiptRecorded, handoverDate=$handoverDate');
+          print(
+            'DEBUG getCashDepositData: Found handover: ${handoversForDate[0]}',
+          );
+          handoverStatus =
+              handoversForDate[0]['status'] as String? ?? 'pending';
+          shortfallReceiptRecorded =
+              handoversForDate[0]['shortfall_receipt_recorded'] as bool? ??
+              false;
+          handoverDate =
+              handoversForDate[0]['date']
+                  as String?; // Get the actual business day date
+          print(
+            'DEBUG getCashDepositData: Set handoverStatus=$handoverStatus, shortfallReceiptRecorded=$shortfallReceiptRecorded, handoverDate=$handoverDate',
+          );
         } else {
-          print('DEBUG getCashDepositData: No handover found for this date/outlet/barista');
+          print(
+            'DEBUG getCashDepositData: No handover found for this date/outlet/barista',
+          );
         }
       } catch (e) {
         print('DEBUG getCashDepositData: Error querying handover: $e');
         // Continue with default status
       }
-      
+
       if (kekuranganUpah > 0) {
-      } else {
-      }
-      
+      } else {}
+
       return {
         'cashAmount': cashAmount,
         'cashCount': cashCount,
@@ -3068,7 +3408,6 @@ class SupabaseService {
       final currentQty = batch['quantity'] as int? ?? 0;
       final newQty = currentQty - quantitySold;
 
-
       // Update quantity
       await _client
           .from('product_batches')
@@ -3110,37 +3449,42 @@ class SupabaseService {
 
     try {
       final dateStr = date.toIso8601String().split('T')[0];
-      print('DEBUG: Submitting cash deposit handover - outlet=$outletId, barista=$baristaId, status=$status, date=$dateStr');
-      
-      // Upsert: insert or update if exists (based on unique constraint)
-      await _client.from('cash_deposit_handovers').upsert(
-        {
-          'outlet_id': outletId,
-          'barista_id': baristaId,
-          'total_omset': totalOmset,
-          'cash_amount': cashAmount,
-          'qris_amount': qrisAmount,
-          'bonus': bonus,
-          'meal_allowance': mealAllowance,
-          'deposit_amount': depositAmount,
-          'status': status,
-          'shortfall_receipt_recorded': false,  // Initially false, set to true when barista signs
-          'date': dateStr,
-        },
-        onConflict: 'outlet_id,barista_id,date',
+      print(
+        'DEBUG: Submitting cash deposit handover - outlet=$outletId, barista=$baristaId, status=$status, date=$dateStr',
       );
-      
+
+      // Upsert: insert or update if exists (based on unique constraint)
+      await _client.from('cash_deposit_handovers').upsert({
+        'outlet_id': outletId,
+        'barista_id': baristaId,
+        'total_omset': totalOmset,
+        'cash_amount': cashAmount,
+        'qris_amount': qrisAmount,
+        'bonus': bonus,
+        'meal_allowance': mealAllowance,
+        'deposit_amount': depositAmount,
+        'status': status,
+        'shortfall_receipt_recorded':
+            false, // Initially false, set to true when barista signs
+        'date': dateStr,
+      }, onConflict: 'outlet_id,barista_id,date');
+
       print('DEBUG: Cash deposit handover submitted successfully');
       return true;
     } catch (e) {
       print('ERROR: Failed to submit cash deposit handover: $e');
-      
+
       // Log untuk debugging
-      if (e.toString().contains('42501') || e.toString().contains('row-level security')) {
-        print('ERROR: RLS policy violation. Please disable RLS on cash_deposit_handovers table');
-        print('ERROR: Run: ALTER TABLE cash_deposit_handovers DISABLE ROW LEVEL SECURITY;');
+      if (e.toString().contains('42501') ||
+          e.toString().contains('row-level security')) {
+        print(
+          'ERROR: RLS policy violation. Please disable RLS on cash_deposit_handovers table',
+        );
+        print(
+          'ERROR: Run: ALTER TABLE cash_deposit_handovers DISABLE ROW LEVEL SECURITY;',
+        );
       }
-      
+
       return false;
     }
   }
@@ -3165,10 +3509,8 @@ class SupabaseService {
         query = query.eq('barista_id', baristaId);
       }
 
-      final response = await query
-          .order('date', ascending: false)
-          .limit(100);
-      
+      final response = await query.order('date', ascending: false).limit(100);
+
       return List<Map<String, dynamic>>.from(response as List);
     } catch (e) {
       return [];
@@ -3190,7 +3532,7 @@ class SupabaseService {
           .eq('outlet_id', outletId)
           .eq('status', 'pending')
           .order('submitted_at', ascending: true);
-      
+
       return List<Map<String, dynamic>>.from(response as List);
     } catch (e) {
       return [];
@@ -3219,7 +3561,9 @@ class SupabaseService {
           .eq('id', outletId)
           .maybeSingle();
 
-      final businessDayStartHour = (outletData != null) ? (outletData['business_day_start_hour'] as int?) ?? 4 : 4;
+      final businessDayStartHour = (outletData != null)
+          ? (outletData['business_day_start_hour'] as int?) ?? 4
+          : 4;
 
       DateTime businessDayDate;
       if (businessDayStartHour >= 12) {
@@ -3229,26 +3573,27 @@ class SupabaseService {
       }
 
       final dateStr = businessDayDate.toIso8601String().split('T')[0];
-      print('DEBUG: Recording shortfall receipt - outlet=$outletId, barista=$baristaId, amount=$kekuranganUpah, inputDate=$date, businessDayStartHour=$businessDayStartHour, businessDayDate=$dateStr');
-      
-      // Use upsert with onConflict to handle duplicate records (update if exists, insert if not)
-      await _client.from('shortfall_receipts').upsert(
-        {
-          'outlet_id': outletId,
-          'barista_id': baristaId,
-          'amount': kekuranganUpah,
-          'notes': notes.isEmpty ? 'Tanda terima upah yang kurang' : notes,
-          'date': dateStr,
-        },
-        onConflict: 'outlet_id,barista_id,date',
+      print(
+        'DEBUG: Recording shortfall receipt - outlet=$outletId, barista=$baristaId, amount=$kekuranganUpah, inputDate=$date, businessDayStartHour=$businessDayStartHour, businessDayDate=$dateStr',
       );
-      
+
+      // Use upsert with onConflict to handle duplicate records (update if exists, insert if not)
+      await _client.from('shortfall_receipts').upsert({
+        'outlet_id': outletId,
+        'barista_id': baristaId,
+        'amount': kekuranganUpah,
+        'notes': notes.isEmpty ? 'Tanda terima upah yang kurang' : notes,
+        'date': dateStr,
+      }, onConflict: 'outlet_id,barista_id,date');
+
       print('DEBUG: Shortfall receipt recorded/updated successfully');
-      
+
       // Update cash_deposit_handovers to mark that shortfall receipt was recorded
-      print('DEBUG: About to update cash_deposit_handovers with: outlet_id=$outletId, barista_id=$baristaId, date=$dateStr');
-      
-        final updateResponse = await _client
+      print(
+        'DEBUG: About to update cash_deposit_handovers with: outlet_id=$outletId, barista_id=$baristaId, date=$dateStr',
+      );
+
+      final updateResponse = await _client
           .from('cash_deposit_handovers')
           .update({'shortfall_receipt_recorded': true})
           .eq('outlet_id', outletId)
@@ -3260,9 +3605,12 @@ class SupabaseService {
       // If no existing handover row was updated, create a minimal handover record
       // with status 'verified by barista' so UI can reflect the recorded receipt.
       // Do NOT overwrite an existing 'approved' status — only insert when none exists.
-      final bool didUpdate = (updateResponse is List && updateResponse.isNotEmpty);
+      final bool didUpdate =
+          (updateResponse is List && updateResponse.isNotEmpty);
       if (!didUpdate) {
-        print('DEBUG: No existing handover found, inserting minimal handover record to mark shortfall recorded');
+        print(
+          'DEBUG: No existing handover found, inserting minimal handover record to mark shortfall recorded',
+        );
         await _client.from('cash_deposit_handovers').upsert({
           'outlet_id': outletId,
           'barista_id': baristaId,
@@ -3277,11 +3625,15 @@ class SupabaseService {
           'status': 'verified by barista',
           'submitted_at': DateTime.now().toIso8601String(),
         }, onConflict: 'outlet_id,barista_id,date');
-        print('DEBUG: Inserted minimal cash_deposit_handovers record to reflect shortfall receipt');
+        print(
+          'DEBUG: Inserted minimal cash_deposit_handovers record to reflect shortfall receipt',
+        );
       } else {
-        print('DEBUG: cash_deposit_handovers updated to mark shortfall receipt recorded');
+        print(
+          'DEBUG: cash_deposit_handovers updated to mark shortfall receipt recorded',
+        );
       }
-      
+
       return true;
     } catch (e) {
       print('ERROR: Failed to record shortfall receipt: $e');
@@ -3299,7 +3651,6 @@ class SupabaseService {
     }
 
     try {
-      
       await _client
           .from('cash_deposit_handovers')
           .update({
@@ -3308,7 +3659,7 @@ class SupabaseService {
             'approved_at': DateTime.now().toIso8601String(),
           })
           .eq('id', handoverId);
-      
+
       return true;
     } catch (e) {
       return false;
@@ -3325,15 +3676,11 @@ class SupabaseService {
     }
 
     try {
-      
       await _client
           .from('cash_deposit_handovers')
-          .update({
-            'status': 'rejected',
-            'rejection_reason': rejectionReason,
-          })
+          .update({'status': 'rejected', 'rejection_reason': rejectionReason})
           .eq('id', handoverId);
-      
+
       return true;
     } catch (e) {
       return false;
@@ -3352,10 +3699,9 @@ class SupabaseService {
           .select('id, title, description, created_at')
           .order('created_at', ascending: false)
           .limit(10);
-      
-      for (var ann in response) {
-      }
-      
+
+      // no-op: response will be returned directly
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw Exception('Failed to fetch announcements: $e');
@@ -3363,7 +3709,9 @@ class SupabaseService {
   }
 
   // Get private messages for a user
-  Future<List<Map<String, dynamic>>> getPrivateMessages({required String userId}) async {
+  Future<List<Map<String, dynamic>>> getPrivateMessages({
+    required String userId,
+  }) async {
     if (!_isInitialized) {
       throw Exception('SupabaseService not initialized');
     }
@@ -3375,7 +3723,7 @@ class SupabaseService {
           .or('sender_id.eq.$userId,receiver_id.eq.$userId')
           .order('created_at', ascending: false)
           .limit(50);
-      
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw Exception('Failed to fetch private messages: $e');
@@ -3383,7 +3731,9 @@ class SupabaseService {
   }
 
   // Get private messages with enriched sender info
-  Future<List<Map<String, dynamic>>> getPrivateMessagesWithSenderInfo({required String userId}) async {
+  Future<List<Map<String, dynamic>>> getPrivateMessagesWithSenderInfo({
+    required String userId,
+  }) async {
     if (!_isInitialized) {
       throw Exception('SupabaseService not initialized');
     }
@@ -3395,15 +3745,16 @@ class SupabaseService {
           .or('sender_id.eq.$userId,receiver_id.eq.$userId')
           .order('created_at', ascending: false)
           .limit(50);
-      
-      
+
       // Enrich messages with sender and receiver info
-      List<Map<String, dynamic>> messages = List<Map<String, dynamic>>.from(response);
-      
+      List<Map<String, dynamic>> messages = List<Map<String, dynamic>>.from(
+        response,
+      );
+
       for (var message in messages) {
         final senderId = message['sender_id'];
         final receiverId = message['receiver_id'];
-        
+
         // Get sender info
         try {
           final senderData = await _client
@@ -3417,7 +3768,7 @@ class SupabaseService {
           message['sender_name'] = 'Unknown';
           message['sender_email'] = '';
         }
-        
+
         // Get receiver info
         try {
           final receiverData = await _client
@@ -3432,7 +3783,7 @@ class SupabaseService {
           message['receiver_email'] = '';
         }
       }
-      
+
       return messages;
     } catch (e) {
       throw Exception('Failed to fetch private messages: $e');
@@ -3450,7 +3801,7 @@ class SupabaseService {
           .from('group_chats')
           .select('*')
           .order('created_at', ascending: false);
-      
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw Exception('Failed to fetch group chats: $e');
@@ -3466,15 +3817,13 @@ class SupabaseService {
     if (!_isInitialized) return false;
 
     try {
-      await _client
-          .from('private_messages')
-          .insert({
-            'sender_id': senderId,
-            'receiver_id': receiverId,
-            'message': message,
-            'created_at': DateTime.now().toIso8601String(),
-          });
-      
+      await _client.from('private_messages').insert({
+        'sender_id': senderId,
+        'receiver_id': receiverId,
+        'message': message,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
       return true;
     } catch (e) {
       return false;
@@ -3490,15 +3839,13 @@ class SupabaseService {
     if (!_isInitialized) return false;
 
     try {
-      await _client
-          .from('group_chat_messages')
-          .insert({
-            'group_chat_id': groupChatId,
-            'user_id': userId,
-            'message': message,
-            'created_at': DateTime.now().toIso8601String(),
-          });
-      
+      await _client.from('group_chat_messages').insert({
+        'group_chat_id': groupChatId,
+        'user_id': userId,
+        'message': message,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
       return true;
     } catch (e) {
       return false;
@@ -3557,15 +3904,28 @@ class SupabaseService {
 
     try {
       final yesterday = DateTime.now().subtract(const Duration(days: 1));
-      final startOfYesterday = DateTime(yesterday.year, yesterday.month, yesterday.day);
-      final endOfYesterday = DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59);
+      final startOfYesterday = DateTime(
+        yesterday.year,
+        yesterday.month,
+        yesterday.day,
+      );
+      final endOfYesterday = DateTime(
+        yesterday.year,
+        yesterday.month,
+        yesterday.day,
+        23,
+        59,
+        59,
+      );
 
-      final response = await _client
-          .rpc('get_revenue_data', params: {
-            'p_outlet_id': outletId,
-            'p_start_date': startOfYesterday.toIso8601String(),
-            'p_end_date': endOfYesterday.toIso8601String(),
-          });
+      final response = await _client.rpc(
+        'get_revenue_data',
+        params: {
+          'p_outlet_id': outletId,
+          'p_start_date': startOfYesterday.toIso8601String(),
+          'p_end_date': endOfYesterday.toIso8601String(),
+        },
+      );
 
       return {
         'amount': (response?['daily']?['amount'] as num?)?.toDouble() ?? 0.0,
@@ -3623,18 +3983,12 @@ class SupabaseService {
   }
 
   // DEBUG: Create test investor assignments for development
-  Future<void> seedTestInvestorAssignments({
-    required String investorId,
-  }) async {
+  Future<void> seedTestInvestorAssignments({required String investorId}) async {
     if (!_isInitialized) return;
 
     try {
-
       // Get first 2 outlets
-      final outlets = await _client
-          .from('outlets')
-          .select('id, name')
-          .limit(2);
+      final outlets = await _client.from('outlets').select('id, name').limit(2);
 
       if ((outlets as List<dynamic>).isEmpty) {
         return;
@@ -3642,19 +3996,19 @@ class SupabaseService {
 
       // Create assignments
       final assignments = (outlets as List<dynamic>)
-          .map((outlet) => {
-                'investor_id': investorId,
-                'outlet_id': outlet['id'],
-                'investment_amount': 50000000,
-                'margin_percentage': 10,
-                'status': 'active',
-              })
+          .map(
+            (outlet) => {
+              'investor_id': investorId,
+              'outlet_id': outlet['id'],
+              'investment_amount': 50000000,
+              'margin_percentage': 10,
+              'status': 'active',
+            },
+          )
           .toList();
 
-      final result = await _client.from('investor_assignments').insert(assignments);
-
-    } catch (e) {
-    }
+      await _client.from('investor_assignments').insert(assignments);
+    } catch (e) {}
   }
 
   /// Update transfer status (approve, reject, cancel)
@@ -3665,14 +4019,11 @@ class SupabaseService {
     }
 
     try {
-      
       // If cancelling/rejecting transfer, delete it
-      if ((newStatus.toLowerCase() == 'rejected' || newStatus.toLowerCase() == 'cancelled')) {
+      if ((newStatus.toLowerCase() == 'rejected' ||
+          newStatus.toLowerCase() == 'cancelled')) {
         try {
-          await _client
-              .from('stock_transfers')
-              .delete()
-              .eq('id', transferId);
+          await _client.from('stock_transfers').delete().eq('id', transferId);
           return true;
         } on PostgrestException catch (e) {
           if (e.code == '406' || e.code == 406) {
@@ -3682,7 +4033,7 @@ class SupabaseService {
           }
         }
       }
-      
+
       // For approve or other statuses, just update stock_transfers status
       // NO showcase_allocations changes
       try {
@@ -3699,7 +4050,7 @@ class SupabaseService {
       } catch (e) {
         return false;
       }
-      
+
       return true;
     } catch (e) {
       return false;
@@ -3775,7 +4126,7 @@ class SupabaseService {
       print('Outlet: $outletId');
       print('Start (UTC): $startISO');
       print('End (UTC): $endISO');
-      
+
       // Convert back to local to show user what range we're querying
       final startLocal = startDate.toLocal();
       final endLocal = endDate.toLocal();
@@ -3789,7 +4140,7 @@ class SupabaseService {
           .select('*')
           .eq('outlet_id', outletId)
           .order('created_at', ascending: false);
-      
+
       print('Total allocations for outlet: ${(allAllocations as List).length}');
       for (int i = 0; i < (allAllocations as List).length && i < 5; i++) {
         final item = allAllocations[i];
@@ -3824,7 +4175,7 @@ class SupabaseService {
       final showcaseProductsResp = await _client
           .from('showcase_products')
           .select('id, product_name');
-      
+
       final productMap = <String, String>{};
       for (final sp in showcaseProductsResp as List<dynamic>) {
         productMap[sp['id']] = sp['product_name'] as String;
@@ -3834,7 +4185,8 @@ class SupabaseService {
       final result = <Map<String, dynamic>>[];
       for (final item in response as List<dynamic>) {
         final showcaseProductId = item['showcase_product_id'] as String?;
-        if (showcaseProductId != null && productMap.containsKey(showcaseProductId)) {
+        if (showcaseProductId != null &&
+            productMap.containsKey(showcaseProductId)) {
           result.add({
             'id': item['id'],
             'showcase_product_id': showcaseProductId,
@@ -3847,7 +4199,9 @@ class SupabaseService {
 
       print('Final result: ${result.length} allocations');
       for (int i = 0; i < result.length && i < 3; i++) {
-        print('  - ${result[i]['product_name']}: ${result[i]['quantity']} (created: ${result[i]['created_at']})');
+        print(
+          '  - ${result[i]['product_name']}: ${result[i]['quantity']} (created: ${result[i]['created_at']})',
+        );
       }
       print('=== FETCH ASSIGNMENTS END ===');
       return result;
@@ -3872,20 +4226,18 @@ class SupabaseService {
       print('showcaseProductId: $showcaseProductId');
       print('outletId: $outletId');
       print('quantity: $quantity');
-      
+
       // Insert directly into showcase_allocations table
       // IMPORTANT: Store created_at in UTC to match the business day range queries
       final createdAtUtc = DateTime.now().toUtc().toIso8601String();
       print('created_at (UTC): $createdAtUtc');
-      
-      final response = await _client
-          .from('showcase_allocations')
-          .insert({
-            'showcase_product_id': showcaseProductId,
-            'outlet_id': outletId,
-            'quantity': quantity,
-            'created_at': createdAtUtc,
-          });
+
+      final response = await _client.from('showcase_allocations').insert({
+        'showcase_product_id': showcaseProductId,
+        'outlet_id': outletId,
+        'quantity': quantity,
+        'created_at': createdAtUtc,
+      });
 
       print('Insert response: $response');
       print('=== ALLOCATE END (success) ===');
@@ -3898,16 +4250,14 @@ class SupabaseService {
     } catch (e) {
       print('=== ALLOCATE END (error) ===');
       print('Error allocating product: $e');
-      return {
-        'success': false,
-        'message': 'Error: $e',
-      };
+      return {'success': false, 'message': 'Error: $e'};
     }
   }
 
   /// Delete a showcase allocation
   Future<Map<String, dynamic>> deleteShowcaseAllocation(
-      String allocationId) async {
+    String allocationId,
+  ) async {
     if (!_isInitialized) {
       return {'success': false, 'message': 'Service not initialized'};
     }
@@ -3918,16 +4268,10 @@ class SupabaseService {
           .delete()
           .eq('id', allocationId);
 
-      return {
-        'success': true,
-        'message': 'Alokasi berhasil dihapus',
-      };
+      return {'success': true, 'message': 'Alokasi berhasil dihapus'};
     } catch (e) {
       print('Error deleting allocation: $e');
-      return {
-        'success': false,
-        'message': 'Error: $e',
-      };
+      return {'success': false, 'message': 'Error: $e'};
     }
   }
 
@@ -3962,9 +4306,7 @@ class SupabaseService {
       print('Query result count: ${(response as List).length}');
 
       // Get products mapping
-      final productsResp = await _client
-          .from('products')
-          .select('id, name');
+      final productsResp = await _client.from('products').select('id, name');
 
       final productMap = <String, String>{};
       for (final p in productsResp as List<dynamic>) {
@@ -4020,7 +4362,7 @@ class SupabaseService {
       // Schema: product_id, outlet_id, return_reason, condition_status, resolution_status, return_date
       // Insert one record per unit (quantity) since the table tracks individual items
       final today = DateTime.now().toUtc().toIso8601String().split('T')[0];
-      
+
       for (int i = 0; i < quantity; i++) {
         await _client.from('product_returns').insert({
           'product_id': productId,
@@ -4041,10 +4383,7 @@ class SupabaseService {
     } catch (e) {
       print('=== RECORD PRODUCT RETURN END (error) ===');
       print('Error recording product return: $e');
-      return {
-        'success': false,
-        'message': 'Error: $e',
-      };
+      return {'success': false, 'message': 'Error: $e'};
     }
   }
 
@@ -4057,21 +4396,15 @@ class SupabaseService {
     try {
       await _client.from('product_returns').delete().eq('id', returnId);
 
-      return {
-        'success': true,
-        'message': 'Pengembalian berhasil dihapus',
-      };
+      return {'success': true, 'message': 'Pengembalian berhasil dihapus'};
     } catch (e) {
       print('Error deleting product return: $e');
-      return {
-        'success': false,
-        'message': 'Error: $e',
-      };
+      return {'success': false, 'message': 'Error: $e'};
     }
   }
 
   // ANNOUNCEMENT CRUD OPERATIONS
-  
+
   // Create new announcement
   Future<Map<String, dynamic>> createAnnouncement({
     required String title,
@@ -4089,7 +4422,7 @@ class SupabaseService {
           })
           .select()
           .single();
-      
+
       return response;
     } catch (e) {
       throw Exception('Failed to create announcement: $e');
@@ -4104,7 +4437,7 @@ class SupabaseService {
           .select('*')
           .eq('id', id)
           .single();
-      
+
       return response;
     } catch (e) {
       throw Exception('Failed to fetch announcement: $e');
@@ -4130,7 +4463,7 @@ class SupabaseService {
           .eq('id', id)
           .select()
           .single();
-      
+
       return response;
     } catch (e) {
       throw Exception('Failed to update announcement: $e');
@@ -4140,10 +4473,7 @@ class SupabaseService {
   // Delete announcement
   Future<void> deleteAnnouncement(String id) async {
     try {
-      await _client
-          .from('announcements')
-          .delete()
-          .eq('id', id);
+      await _client.from('announcements').delete().eq('id', id);
     } catch (e) {
       throw Exception('Failed to delete announcement: $e');
     }
@@ -4208,10 +4538,7 @@ class SupabaseService {
     }
 
     try {
-      await _client
-          .from('group_chats')
-          .delete()
-          .eq('id', groupId);
+      await _client.from('group_chats').delete().eq('id', groupId);
     } catch (e) {
       throw Exception('Failed to delete group chat: $e');
     }
@@ -4231,7 +4558,9 @@ class SupabaseService {
     try {
       final response = await _client
           .from('sales')
-          .select('id, total_amount, hpp_total, bonus_amount, created_at, payment_method')
+          .select(
+            'id, total_amount, hpp_total, bonus_amount, created_at, payment_method',
+          )
           .eq('outlet_id', outletId)
           .gte('created_at', startDate.toIso8601String())
           .lte('created_at', endDate.toIso8601String())
@@ -4290,11 +4619,7 @@ class SupabaseService {
     required String investorId,
   }) async {
     if (!_isInitialized) {
-      return {
-        'available': 0.0,
-        'pending': 0.0,
-        'thisMonth': 0.0,
-      };
+      return {'available': 0.0, 'pending': 0.0, 'thisMonth': 0.0};
     }
 
     try {
@@ -4318,7 +4643,9 @@ class SupabaseService {
         final status = withdrawal['status'] as String?;
         final createdAt = DateTime.parse(withdrawal['created_at'] as String);
 
-        if (status == 'pending' || status == 'verified' || status == 'processing') {
+        if (status == 'pending' ||
+            status == 'verified' ||
+            status == 'processing') {
           pending += amount;
         } else if (status == 'completed') {
           available += amount; // Add to available if completed
@@ -4329,25 +4656,25 @@ class SupabaseService {
       }
 
       // Get investor's total profit to calculate available balance
-      final investments = await getInvestorAssignments(
-        investorId: investorId,
-      );
-      
+      final investments = await getInvestorAssignments(investorId: investorId);
+
       double totalProfit = 0.0;
       for (final investment in investments) {
         // Calculate profit from revenue for each outlet
         final outletId = investment['outlet_id'] as String;
-        final marginPercentage = (investment['margin_percentage'] as num?)?.toDouble() ?? 0.0;
-        
+        final marginPercentage =
+            (investment['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+
         // Get this month's revenue
         final revenue = await getRevenueData(
           outletId: outletId,
           selectedDate: now,
         );
-        
-        final monthlyRevenue = (revenue['monthly']?['amount'] as num?)?.toDouble() ?? 0.0;
+
+        final monthlyRevenue =
+            (revenue['monthly']?['amount'] as num?)?.toDouble() ?? 0.0;
         final monthlyProfit = monthlyRevenue * (marginPercentage / 100);
-        
+
         totalProfit += monthlyProfit;
       }
 
@@ -4360,11 +4687,7 @@ class SupabaseService {
       };
     } catch (e) {
       print('Error getting withdrawal summary: $e');
-      return {
-        'available': 0.0,
-        'pending': 0.0,
-        'thisMonth': 0.0,
-      };
+      return {'available': 0.0, 'pending': 0.0, 'thisMonth': 0.0};
     }
   }
 
@@ -4377,7 +4700,9 @@ class SupabaseService {
     try {
       final response = await _client
           .from('withdrawals')
-          .select('id, amount, status, method, method_type, account_identifier, account_name, fee, created_at, updated_at')
+          .select(
+            'id, amount, status, method, method_type, account_identifier, account_name, fee, created_at, updated_at',
+          )
           .eq('investor_id', investorId)
           .inFilter('status', ['pending', 'verified', 'processing'])
           .order('created_at', ascending: false)
@@ -4401,7 +4726,9 @@ class SupabaseService {
     try {
       final response = await _client
           .from('withdrawals')
-          .select('id, amount, status, method, method_type, account_identifier, account_name, fee, created_at, updated_at')
+          .select(
+            'id, amount, status, method, method_type, account_identifier, account_name, fee, created_at, updated_at',
+          )
           .eq('investor_id', investorId)
           .inFilter('status', ['completed', 'rejected'])
           .order('created_at', ascending: false)
@@ -4431,7 +4758,9 @@ class SupabaseService {
       // Check if investor has enough balance
       final balance = await getInvestorBalance(investorId: investorId);
       if (balance < amount) {
-        throw Exception('Saldo tidak cukup. Saldo tersedia: Rp ${balance.toStringAsFixed(0)}');
+        throw Exception(
+          'Saldo tidak cukup. Saldo tersedia: Rp ${balance.toStringAsFixed(0)}',
+        );
       }
 
       await _client.from('withdrawals').insert({
@@ -4474,9 +4803,7 @@ class SupabaseService {
   // ========== INVESTOR BALANCE MANAGEMENT ==========
 
   /// Get investor's current balance
-  Future<double> getInvestorBalance({
-    required String investorId,
-  }) async {
+  Future<double> getInvestorBalance({required String investorId}) async {
     if (!_isInitialized) return 0.0;
 
     try {
@@ -4520,7 +4847,9 @@ class SupabaseService {
     try {
       final response = await _client
           .from('investor_balance')
-          .select('balance, total_received, total_withdrawn, last_transfer_date, last_withdrawal_date')
+          .select(
+            'balance, total_received, total_withdrawn, last_transfer_date, last_withdrawal_date',
+          )
           .eq('investor_id', investorId)
           .maybeSingle();
 
@@ -4537,8 +4866,10 @@ class SupabaseService {
 
       return {
         'balance': balance,
-        'total_received': (response['total_received'] as num?)?.toDouble() ?? 0.0,
-        'total_withdrawn': (response['total_withdrawn'] as num?)?.toDouble() ?? 0.0,
+        'total_received':
+            (response['total_received'] as num?)?.toDouble() ?? 0.0,
+        'total_withdrawn':
+            (response['total_withdrawn'] as num?)?.toDouble() ?? 0.0,
         'available_to_withdraw': balance > 0 ? balance : 0.0,
         'last_transfer_date': response['last_transfer_date'],
         'last_withdrawal_date': response['last_withdrawal_date'],
@@ -4662,14 +4993,18 @@ class SupabaseService {
     }
 
     try {
-      final now = DateTime.now();
       final businessDayStartHour = 4; // 04:00
 
       print('DEBUG getDailyReceipts - outletId: $outletId');
 
       // Helper function to get business day start
       DateTime getBusinessDayStart(DateTime date) {
-        DateTime startOfDay = DateTime(date.year, date.month, date.day, businessDayStartHour);
+        DateTime startOfDay = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          businessDayStartHour,
+        );
         if (date.hour < businessDayStartHour) {
           startOfDay = startOfDay.subtract(const Duration(days: 1));
         }
@@ -4692,21 +5027,29 @@ class SupabaseService {
       }
 
       // Get cash deposit handover data for the outlet
-      print('DEBUG getDailyReceipts - Querying cash_deposit_handovers table...');
+      print(
+        'DEBUG getDailyReceipts - Querying cash_deposit_handovers table...',
+      );
       final depositsResponse = await _client
           .from('cash_deposit_handovers')
-          .select('id, outlet_id, barista_id, date, deposit_amount, cash_amount, status, submitted_at, shortfall_receipt_recorded')
+          .select(
+            'id, outlet_id, barista_id, date, deposit_amount, cash_amount, status, submitted_at, shortfall_receipt_recorded',
+          )
           .eq('outlet_id', outletId)
           .order('submitted_at', ascending: false)
           .limit(limit * 2);
 
       final depositsList = List<Map<String, dynamic>>.from(depositsResponse);
-      print('DEBUG getDailyReceipts - depositsList count: ${depositsList.length}');
+      print(
+        'DEBUG getDailyReceipts - depositsList count: ${depositsList.length}',
+      );
       if (depositsList.isNotEmpty) {
         print('DEBUG getDailyReceipts - first deposit: ${depositsList.first}');
         print('DEBUG getDailyReceipts - ALL deposits:');
         for (var i = 0; i < depositsList.length; i++) {
-          print('  [$i] barista_id=${depositsList[i]['barista_id']}, date=${depositsList[i]['date']}, status=${depositsList[i]['status']}, shortfall_recorded=${depositsList[i]['shortfall_receipt_recorded']}');
+          print(
+            '  [$i] barista_id=${depositsList[i]['barista_id']}, date=${depositsList[i]['date']}, status=${depositsList[i]['status']}, shortfall_recorded=${depositsList[i]['shortfall_receipt_recorded']}',
+          );
         }
       }
 
@@ -4769,7 +5112,8 @@ class SupabaseService {
 
         dailyData[dateKey]!['depositAmount'] =
             (dailyData[dateKey]!['depositAmount'] as num).toDouble() + amount;
-        dailyData[dateKey]!['depositStatus'] = status; // Update with latest status
+        dailyData[dateKey]!['depositStatus'] =
+            status; // Update with latest status
 
         // Add deposit item
         (dailyData[dateKey]!['items'] as List).add({
@@ -4783,13 +5127,16 @@ class SupabaseService {
 
       // Convert to list and sort by date descending
       final result = dailyData.values.toList();
-      result.sort((a, b) =>
-          (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+      result.sort(
+        (a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime),
+      );
 
       // Limit results
       final finalResult = result.take(limit).toList();
-      print('DEBUG getDailyReceipts - finalResult count: ${finalResult.length}');
-      
+      print(
+        'DEBUG getDailyReceipts - finalResult count: ${finalResult.length}',
+      );
+
       // If no data, return sample data for demonstration
       if (finalResult.isEmpty) {
         print('DEBUG getDailyReceipts - No data found, creating sample data');
@@ -4798,8 +5145,15 @@ class SupabaseService {
         // Create sample data for last 7 days
         for (int i = 0; i < 7; i++) {
           final date = now.subtract(Duration(days: i));
-          final businessDay = DateTime(date.year, date.month, date.day, 4, 0, 0);
-          
+          final businessDay = DateTime(
+            date.year,
+            date.month,
+            date.day,
+            4,
+            0,
+            0,
+          );
+
           sampleData.add({
             'date': businessDay,
             'dateKey': businessDay.toIso8601String().split('T')[0],
@@ -4812,7 +5166,7 @@ class SupabaseService {
         }
         return sampleData;
       }
-      
+
       return finalResult;
     } catch (e) {
       print('Error getting daily receipts: $e');
@@ -4831,21 +5185,21 @@ class SupabaseService {
 
     try {
       print('DEBUG getAllBaristaPayments - Starting');
-      
-      final dateStr = DateTime(selectedDate.year, selectedDate.month, selectedDate.day).toIso8601String().split('T')[0];
+
+      final dateStr = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+      ).toIso8601String().split('T')[0];
       print('DEBUG getAllBaristaPayments - dateStr: $dateStr');
 
       // Get all users to get their names
-      final users = await _client
-          .from('users')
-          .select('id, name');
+      final users = await _client.from('users').select('id, name');
 
       print('DEBUG getAllBaristaPayments - users count: ${users.length}');
 
       // Get all outlets to get their names
-      final outlets = await _client
-          .from('outlets')
-          .select('id, name');
+      final outlets = await _client.from('outlets').select('id, name');
 
       print('DEBUG getAllBaristaPayments - outlets count: ${outlets.length}');
 
@@ -4867,39 +5221,54 @@ class SupabaseService {
         final oid = outlet['id']?.toString();
         if (oid != null) {
           outletNameMap[oid] = outlet['name'] as String? ?? 'Outlet Unknown';
-          outletBusinessStartMap[oid] = (outlet['business_day_start_hour'] as int?) ?? 4;
+          outletBusinessStartMap[oid] =
+              (outlet['business_day_start_hour'] as int?) ?? 4;
         }
       }
 
       // Get CASH and QRIS data from sales table for this date
       // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
       // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
-      final selectedLocal = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 4);
-      final startDate = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
+      final selectedLocal = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        4,
+      );
+      final startDate = selectedLocal.subtract(
+        const Duration(hours: 7),
+      ); // Convert to UTC
       final endDate = startDate.add(const Duration(days: 1));
       final startIso = startDate.toIso8601String();
       final endIso = endDate.toIso8601String();
-      print('DEBUG getAllBaristaPayments - Business day: local=${selectedLocal.toIso8601String()} UTC=$startIso to $endIso');
-      
-      Map<String, Map<String, dynamic>> baristaDataMap = {}; // baristaId -> {cashAmount, qrisAmount, outletId, freeCount, etc}
-      
+      print(
+        'DEBUG getAllBaristaPayments - Business day: local=${selectedLocal.toIso8601String()} UTC=$startIso to $endIso',
+      );
+
+      Map<String, Map<String, dynamic>> baristaDataMap =
+          {}; // baristaId -> {cashAmount, qrisAmount, outletId, freeCount, etc}
+
       try {
         final sales = await _client
             .from('sales')
-            .select('barista_id, outlet_id, total_amount, payment_method, created_at')
+            .select(
+              'barista_id, outlet_id, total_amount, payment_method, created_at',
+            )
             .gte('created_at', startIso)
             .lt('created_at', endIso);
-        
+
         print('DEBUG getAllBaristaPayments - sales count: ${sales.length}');
-        
+
         for (final sale in sales) {
           try {
             // Normalize IDs to String to match keys in user/outlet maps
             final baristaId = sale['barista_id']?.toString();
             final outletId = sale['outlet_id']?.toString();
-            final totalAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
-            final paymentMethod = (sale['payment_method'] as String?)?.toUpperCase() ?? 'UNKNOWN';
-            
+            final totalAmount =
+                (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+            final paymentMethod =
+                (sale['payment_method'] as String?)?.toUpperCase() ?? 'UNKNOWN';
+
             if (baristaId != null) {
               // Initialize barista data if not exists
               if (!baristaDataMap.containsKey(baristaId)) {
@@ -4910,19 +5279,21 @@ class SupabaseService {
                   'outletId': outletId,
                 };
               }
-              
+
               // Add to appropriate payment method total
               if (paymentMethod == 'GRATIS') {
                 // Count free transactions
-                baristaDataMap[baristaId]!['freeCount'] = 
+                baristaDataMap[baristaId]!['freeCount'] =
                     (baristaDataMap[baristaId]!['freeCount'] as int) + 1;
               } else if (totalAmount > 0) {
                 if (paymentMethod == 'CASH') {
-                  baristaDataMap[baristaId]!['cashAmount'] = 
-                      (baristaDataMap[baristaId]!['cashAmount'] as double) + totalAmount;
+                  baristaDataMap[baristaId]!['cashAmount'] =
+                      (baristaDataMap[baristaId]!['cashAmount'] as double) +
+                      totalAmount;
                 } else if (paymentMethod == 'QRIS') {
-                  baristaDataMap[baristaId]!['qrisAmount'] = 
-                      (baristaDataMap[baristaId]!['qrisAmount'] as double) + totalAmount;
+                  baristaDataMap[baristaId]!['qrisAmount'] =
+                      (baristaDataMap[baristaId]!['qrisAmount'] as double) +
+                      totalAmount;
                 }
               }
             }
@@ -4931,16 +5302,23 @@ class SupabaseService {
           }
         }
       } catch (e) {
-        print('DEBUG getAllBaristaPayments - Warning: Could not fetch sales data: $e');
+        print(
+          'DEBUG getAllBaristaPayments - Warning: Could not fetch sales data: $e',
+        );
       }
 
-      print('DEBUG getAllBaristaPayments - processed baristas: ${baristaDataMap.length}');
+      print(
+        'DEBUG getAllBaristaPayments - processed baristas: ${baristaDataMap.length}',
+      );
 
       // Create map of approval status - check cash_deposit_handovers per barista+outlet
       // Note: shortfall_receipt_recorded column indicates if barista signed shortfall receipt
-      Map<String, String> approvalStatusMap = {}; // baristaId|outletId -> status
-      Map<String, String> statusTypeMap = {}; // baristaId|outletId -> type ('shortfall' or 'approved')
-      Map<String, Map<String, dynamic>> handoverDetailsMap = {}; // baristaId|outletId -> {handoverStatus, shortfallReceiptRecorded, kekuranganUpah}
+      Map<String, String> approvalStatusMap =
+          {}; // baristaId|outletId -> status
+      Map<String, String> statusTypeMap =
+          {}; // baristaId|outletId -> type ('shortfall' or 'approved')
+      Map<String, Map<String, dynamic>> handoverDetailsMap =
+          {}; // baristaId|outletId -> {handoverStatus, shortfallReceiptRecorded, kekuranganUpah}
 
       // We must compute the business-day `date` the same way `getCashDepositData` does
       // because outlets may have different `business_day_start_hour`. Query handovers
@@ -4956,16 +5334,26 @@ class SupabaseService {
         // Determine business day date for this outlet
         DateTime businessDayDate;
         if (businessStart >= 12) {
-          businessDayDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+          businessDayDate = DateTime(
+            selectedDate.year,
+            selectedDate.month,
+            selectedDate.day,
+          );
         } else {
-          businessDayDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day + 1);
+          businessDayDate = DateTime(
+            selectedDate.year,
+            selectedDate.month,
+            selectedDate.day + 1,
+          );
         }
 
         final queryDateStr = businessDayDate.toIso8601String().split('T')[0];
         try {
           final handovers = await _client
               .from('cash_deposit_handovers')
-              .select('barista_id, outlet_id, status, shortfall_receipt_recorded, deposit_amount, date')
+              .select(
+                'barista_id, outlet_id, status, shortfall_receipt_recorded, deposit_amount, date',
+              )
               .eq('date', queryDateStr)
               .eq('outlet_id', outletId)
               .eq('barista_id', baristaId)
@@ -4975,20 +5363,30 @@ class SupabaseService {
           if (handovers.isNotEmpty) {
             final handover = handovers[0];
             var dbStatus = handover['status'] as String?;
-            final shortfallRecorded = handover['shortfall_receipt_recorded'] as bool? ?? false;
-            final depositAmount = (handover['deposit_amount'] as num?)?.toDouble() ?? 0.0;
+            final shortfallRecorded =
+                handover['shortfall_receipt_recorded'] as bool? ?? false;
+            final depositAmount =
+                (handover['deposit_amount'] as num?)?.toDouble() ?? 0.0;
 
             // Treat as shortfall when deposit_amount < 0 OR shortfall receipt has been recorded.
             // Some handovers record a shortfall via `shortfall_receipt_recorded` while
             // keeping `deposit_amount` at 0.0; classify those as shortfall for the UI.
-            final bool isShortfall = depositAmount < 0 || shortfallRecorded == true;
-            final double kekuranganUpah = depositAmount < 0 ? depositAmount.abs() : 0.0;
+            final bool isShortfall =
+                depositAmount < 0 || shortfallRecorded == true;
+            final double kekuranganUpah = depositAmount < 0
+                ? depositAmount.abs()
+                : 0.0;
 
-            print('DEBUG getAllBaristaPayments - handover found: baristaId=$baristaId, outletId=$outletId, dbStatus=$dbStatus, shortfallRecorded=$shortfallRecorded, depositAmount=$depositAmount');
+            print(
+              'DEBUG getAllBaristaPayments - handover found: baristaId=$baristaId, outletId=$outletId, dbStatus=$dbStatus, shortfallRecorded=$shortfallRecorded, depositAmount=$depositAmount',
+            );
 
             // If shortfallRecorded is true but status is still pending, upgrade status to 'verified by barista'
-            if (shortfallRecorded && (dbStatus == null || dbStatus.toLowerCase() == 'pending')) {
-              print('DEBUG getAllBaristaPayments - upgrading status from $dbStatus to verified by barista (shortfall case)');
+            if (shortfallRecorded &&
+                (dbStatus == null || dbStatus.toLowerCase() == 'pending')) {
+              print(
+                'DEBUG getAllBaristaPayments - upgrading status from $dbStatus to verified by barista (shortfall case)',
+              );
               dbStatus = 'verified by barista';
             }
 
@@ -5001,11 +5399,15 @@ class SupabaseService {
                 'shortfallReceiptRecorded': shortfallRecorded,
                 'kekuranganUpah': kekuranganUpah,
               };
-              print('DEBUG getAllBaristaPayments - stored: key=$key, handoverStatus=$dbStatus, statusType=${isShortfall ? 'shortfall' : 'deposit'}');
+              print(
+                'DEBUG getAllBaristaPayments - stored: key=$key, handoverStatus=$dbStatus, statusType=${isShortfall ? 'shortfall' : 'deposit'}',
+              );
             }
           }
         } catch (e) {
-          print('DEBUG getAllBaristaPayments - Warning: Could not fetch cash_deposit_handovers for $baristaId|$outletId date=$queryDateStr : $e');
+          print(
+            'DEBUG getAllBaristaPayments - Warning: Could not fetch cash_deposit_handovers for $baristaId|$outletId date=$queryDateStr : $e',
+          );
         }
       }
 
@@ -5020,12 +5422,12 @@ class SupabaseService {
           final qrisAmount = baristaData['qrisAmount'] as double;
           final freeCount = baristaData['freeCount'] as int;
           final outletId = baristaData['outletId'] as String?;
-          
+
           final omset = cashAmount + qrisAmount;
-          
+
           // Calculate bonus based on tier system
           double bonus = 0.0;
-          
+
           // Import holiday_detector at top for this
           // For now, check if it's a holiday (simple check - would need actual holiday_detector import)
           // This will be calculated in the UI layer with proper holiday_detector
@@ -5034,38 +5436,52 @@ class SupabaseService {
           } else if (omset <= 350000) {
             bonus = (200000 * 0.10) + ((omset - 200000) * 0.12);
           } else if (omset <= 500000) {
-            bonus = (200000 * 0.10) + (150000 * 0.12) + ((omset - 350000) * 0.15);
+            bonus =
+                (200000 * 0.10) + (150000 * 0.12) + ((omset - 350000) * 0.15);
           } else {
-            bonus = (200000 * 0.10) + (150000 * 0.12) + (150000 * 0.15) + ((omset - 500000) * 0.20);
+            bonus =
+                (200000 * 0.10) +
+                (150000 * 0.12) +
+                (150000 * 0.15) +
+                ((omset - 500000) * 0.20);
           }
-          
+
           // Calculate meal allowance
           // If omset is 0, no meal allowance
           double mealAllowance = 0.0;
           if (omset > 0) {
             mealAllowance = omset >= 300000 ? 34000 : 25000;
           }
-          
+
           // Calculate settlement
           double depositAmount = cashAmount - bonus - mealAllowance;
-          
+
           // Get payment status from approvalStatusMap (already mapped from database)
           // Use key combining barista + outlet to match sales grouping
           final statusKey = '$baristaId|$outletId';
           String paymentStatus = approvalStatusMap[statusKey] ?? 'pending';
-          String statusType = statusTypeMap[statusKey] ?? 'none'; // 'shortfall', 'deposit', or 'none'
-          
+          String statusType =
+              statusTypeMap[statusKey] ??
+              'none'; // 'shortfall', 'deposit', or 'none'
+
           // Get handover details if exists
           final handoverDetails = handoverDetailsMap[statusKey];
-          final String handoverStatus = handoverDetails?['handoverStatus'] ?? 'pending';
-          final bool shortfallReceiptRecorded = handoverDetails?['shortfallReceiptRecorded'] ?? false;
-          final double kekuranganUpah = (handoverDetails?['kekuranganUpah'] as num?)?.toDouble() ?? 0.0;
-          
+          final String handoverStatus =
+              handoverDetails?['handoverStatus'] ?? 'pending';
+          final bool shortfallReceiptRecorded =
+              handoverDetails?['shortfallReceiptRecorded'] ?? false;
+          final double kekuranganUpah =
+              (handoverDetails?['kekuranganUpah'] as num?)?.toDouble() ?? 0.0;
+
           final baristaName = userNameMap[baristaId] ?? 'Unknown';
-          final outletName = outletId != null ? (outletNameMap[outletId] ?? 'Outlet Unknown') : 'Outlet Unknown';
-          
-          print('DEBUG getAllBaristaPayments - building result: baristaId=$baristaId, name=$baristaName, handoverStatus=$handoverStatus');
-          
+          final outletName = outletId != null
+              ? (outletNameMap[outletId] ?? 'Outlet Unknown')
+              : 'Outlet Unknown';
+
+          print(
+            'DEBUG getAllBaristaPayments - building result: baristaId=$baristaId, name=$baristaName, handoverStatus=$handoverStatus',
+          );
+
           result.add({
             'baristaId': baristaId,
             'name': baristaName,
@@ -5076,17 +5492,16 @@ class SupabaseService {
             'qrisAmount': qrisAmount,
             'freeCount': freeCount,
             'isHoliday': false,
-            'bonus': {
-              'total': bonus,
-              'holiday': false,
-            },
+            'bonus': {'total': bonus, 'holiday': false},
             'mealAllowance': mealAllowance,
             'totalWage': bonus + mealAllowance,
             'depositAmount': depositAmount,
             'paymentStatus': paymentStatus,
             'statusType': statusType, // 'shortfall', 'deposit', or 'none'
-            'handoverStatus': handoverStatus, // Status from cash_deposit_handovers
-            'shortfallReceiptRecorded': shortfallReceiptRecorded, // From cash_deposit_handovers
+            'handoverStatus':
+                handoverStatus, // Status from cash_deposit_handovers
+            'shortfallReceiptRecorded':
+                shortfallReceiptRecorded, // From cash_deposit_handovers
             'kekuranganUpah': kekuranganUpah, // From cash_deposit_handovers
           });
         } catch (e) {
@@ -5114,8 +5529,13 @@ class SupabaseService {
 
     try {
       // Compute the business-day date for this outlet (same logic as getAllBaristaPayments)
-      final outletRow = await _client.from('outlets').select('business_day_start_hour').eq('id', outletId).maybeSingle();
-      final businessStart = (outletRow?['business_day_start_hour'] as int?) ?? 4;
+      final outletRow = await _client
+          .from('outlets')
+          .select('business_day_start_hour')
+          .eq('id', outletId)
+          .maybeSingle();
+      final businessStart =
+          (outletRow?['business_day_start_hour'] as int?) ?? 4;
 
       DateTime businessDayDate;
       if (businessStart >= 12) {
@@ -5125,7 +5545,9 @@ class SupabaseService {
       }
 
       final queryDateStr = businessDayDate.toIso8601String().split('T')[0];
-      print('DEBUG approveBaristaPayment - Starting for barista: $baristaId, outlet: $outletId, date: $queryDateStr (businessStart=$businessStart)');
+      print(
+        'DEBUG approveBaristaPayment - Starting for barista: $baristaId, outlet: $outletId, date: $queryDateStr (businessStart=$businessStart)',
+      );
 
       // Update existing record status to approved for the computed business day and outlet
       print('DEBUG approveBaristaPayment - Updating existing record');
@@ -5156,7 +5578,9 @@ class SupabaseService {
     }
 
     try {
-      print('DEBUG getBaristaPaymentHistory - Getting history for barista: $baristaId');
+      print(
+        'DEBUG getBaristaPaymentHistory - Getting history for barista: $baristaId',
+      );
 
       // Query cash deposit handovers for this barista
       final handovers = await _client
@@ -5166,7 +5590,9 @@ class SupabaseService {
           .order('date', ascending: false)
           .limit(limit);
 
-      print('DEBUG getBaristaPaymentHistory - handovers count: ${handovers.length}');
+      print(
+        'DEBUG getBaristaPaymentHistory - handovers count: ${handovers.length}',
+      );
 
       List<Map<String, dynamic>> result = [];
 
@@ -5174,11 +5600,13 @@ class SupabaseService {
         try {
           final date = handover['date'] as String;
           final bonus = (handover['bonus'] as num?)?.toDouble() ?? 0.0;
-          final mealAllowance = (handover['meal_allowance'] as num?)?.toDouble() ?? 0.0;
+          final mealAllowance =
+              (handover['meal_allowance'] as num?)?.toDouble() ?? 0.0;
           final totalWage = bonus + mealAllowance;
           final status = (handover['status'] as String?) ?? 'pending';
-          final outletName = handover['outlets'] != null 
-              ? (handover['outlets'] as Map)['name'] as String? ?? 'Outlet Unknown'
+          final outletName = handover['outlets'] != null
+              ? (handover['outlets'] as Map)['name'] as String? ??
+                    'Outlet Unknown'
               : 'Outlet Unknown';
 
           result.add({
@@ -5190,7 +5618,9 @@ class SupabaseService {
             'status': status,
           });
         } catch (e) {
-          print('DEBUG getBaristaPaymentHistory - Error processing handover: $e');
+          print(
+            'DEBUG getBaristaPaymentHistory - Error processing handover: $e',
+          );
         }
       }
 
@@ -5210,12 +5640,14 @@ class SupabaseService {
 
     try {
       print('DEBUG getAvailablePaymentDates - Starting');
-      
+
       final handovers = await _client
           .from('cash_deposit_handovers')
           .select('date');
 
-      print('DEBUG getAvailablePaymentDates - Total records: ${handovers.length}');
+      print(
+        'DEBUG getAvailablePaymentDates - Total records: ${handovers.length}',
+      );
 
       // Extract unique dates and sort
       Set<String> uniqueDates = {};
@@ -5301,7 +5733,9 @@ class SupabaseService {
     }
 
     try {
-      print('DEBUG getInvestorMonthlyProfits - Getting profits for investor: $investorId');
+      print(
+        'DEBUG getInvestorMonthlyProfits - Getting profits for investor: $investorId',
+      );
 
       // Get all outlet assignments for this investor
       final assignments = await _client
@@ -5309,7 +5743,9 @@ class SupabaseService {
           .select('outlet_id, margin_percentage')
           .eq('investor_id', investorId);
 
-      print('DEBUG getInvestorMonthlyProfits - Found ${assignments.length} assignments');
+      print(
+        'DEBUG getInvestorMonthlyProfits - Found ${assignments.length} assignments',
+      );
 
       if ((assignments as List).isEmpty) {
         return [];
@@ -5331,7 +5767,9 @@ class SupabaseService {
           .inFilter('outlet_id', outletIds)
           .gte('created_at', startDate);
 
-      print('DEBUG getInvestorMonthlyProfits - Found ${sales.length} sales records');
+      print(
+        'DEBUG getInvestorMonthlyProfits - Found ${sales.length} sales records',
+      );
 
       // Group by month and calculate investor profit
       Map<String, double> monthlyProfits = {};
@@ -5356,21 +5794,19 @@ class SupabaseService {
       if (monthlyProfits.isNotEmpty) {
         try {
           final monthKeys = monthlyProfits.keys.toList();
-            final handovers = await _client
+          final handovers = await _client
               .from('investor_profit_handovers')
               .select('month_key, status')
               .eq('investor_id', investorId)
               .inFilter('month_key', monthKeys);
 
-          if (handovers is List) {
-            for (final h in handovers) {
-              try {
-                final mk = h['month_key'] as String;
-                final st = (h['status'] as String?) ?? 'pending';
-                monthlyStatus[mk] = st;
-              } catch (e) {
-                // ignore malformed row
-              }
+          for (final h in (handovers as List)) {
+            try {
+              final mk = h['month_key'] as String;
+              final st = (h['status'] as String?) ?? 'pending';
+              monthlyStatus[mk] = st;
+            } catch (e) {
+              // ignore malformed row
             }
           }
         } catch (e) {
@@ -5395,8 +5831,8 @@ class SupabaseService {
         // Get margin percentage (use first assignment)
         final marginPercentage =
             ((assignments as List<dynamic>)[0]['margin_percentage'] as num?)
-                    ?.toDouble() ??
-                0.0;
+                ?.toDouble() ??
+            0.0;
 
         // Calculate investor's share of profit
         final investorProfit = profitAmount * (marginPercentage / 100);
@@ -5422,7 +5858,8 @@ class SupabaseService {
       });
 
       print(
-          'DEBUG getInvestorMonthlyProfits - Returning ${result.length} months');
+        'DEBUG getInvestorMonthlyProfits - Returning ${result.length} months',
+      );
       return result;
     } catch (e) {
       print('Error getting investor monthly profits: $e');
@@ -5460,7 +5897,9 @@ class SupabaseService {
     }
 
     try {
-      print('DEBUG approveInvestorMonthlyProfit - Approving profit for $investorId, month: $monthKey');
+      print(
+        'DEBUG approveInvestorMonthlyProfit - Approving profit for $investorId, month: $monthKey',
+      );
 
       // Determine profit amount for the month by reusing existing calculation
       final profits = await getInvestorMonthlyProfits(investorId);
@@ -5495,7 +5934,9 @@ class SupabaseService {
         'submitted_at': now,
       }, onConflict: 'investor_id,month_key');
 
-      print('DEBUG approveInvestorMonthlyProfit - Profit approved and recorded');
+      print(
+        'DEBUG approveInvestorMonthlyProfit - Profit approved and recorded',
+      );
       return true;
     } catch (e) {
       print('Error approving investor monthly profit: $e');
@@ -5504,5 +5945,3 @@ class SupabaseService {
     }
   }
 }
-
-

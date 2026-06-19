@@ -14,6 +14,7 @@
 /// - Tier 2: 150.000 × 12% = 18.000
 /// - Tier 3: 100.000 × 15% = 15.000
 /// Total = 53.000
+library;
 
 import 'dart:math';
 

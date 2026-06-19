@@ -14,7 +14,7 @@ class InvestorSettingsScreen extends StatefulWidget {
 
 class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
   final _supabaseService = SupabaseService();
-  
+
   bool _notificationsEnabled = true;
   bool _emailNotifications = true;
   String _theme = 'light';
@@ -22,8 +22,7 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-    final user = authProvider.currentUser;
+    context.watch<AuthProvider>();
 
     return Scaffold(
       appBar: AppBar(
@@ -44,10 +43,7 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
                 children: [
                   const Text(
                     'Notifikasi',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   // Push Notifications Toggle
@@ -81,10 +77,7 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
                 children: [
                   const Text(
                     'Tampilan',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   // Theme Selector
@@ -149,10 +142,7 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
                 children: [
                   const Text(
                     'Bahasa',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   Container(
@@ -208,10 +198,7 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
                 children: [
                   const Text(
                     'Akun',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   _SettingsButton(
@@ -221,7 +208,9 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Fitur ubah kata sandi akan segera tersedia'),
+                          content: Text(
+                            'Fitur ubah kata sandi akan segera tersedia',
+                          ),
                         ),
                       );
                     },
@@ -234,7 +223,9 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Kebijakan privasi akan segera ditampilkan'),
+                          content: Text(
+                            'Kebijakan privasi akan segera ditampilkan',
+                          ),
                         ),
                       );
                     },
@@ -249,7 +240,8 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
                         context: context,
                         applicationName: 'PapiApps Outlets',
                         applicationVersion: '1.0.0',
-                        applicationLegalese: '© 2024 PapiApps Outlets. All rights reserved.',
+                        applicationLegalese:
+                            '© 2024 PapiApps Outlets. All rights reserved.',
                         children: [
                           const SizedBox(height: 16),
                           const Text(
@@ -305,25 +297,23 @@ class _InvestorSettingsScreenState extends State<InvestorSettingsScreen> {
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Konfirmasi Keluar'),
         content: const Text('Apakah Anda yakin ingin keluar dari akun?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Batal'),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              final navigator = Navigator.of(context);
+              Navigator.pop(dialogContext);
               await _supabaseService.signOut();
               if (!mounted) return;
-              Navigator.of(context).pushReplacementNamed('/login');
+              navigator.pushReplacementNamed('/login');
             },
-            child: const Text(
-              'Keluar',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('Keluar', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -370,10 +360,7 @@ class _SettingsTile extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],
             ),
@@ -381,7 +368,7 @@ class _SettingsTile extends StatelessWidget {
           const SizedBox(width: 8),
           Switch(
             value: value,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
             onChanged: onChanged,
           ),
         ],
@@ -417,11 +404,7 @@ class _SettingsButton extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: AppColors.primary,
-              size: 24,
-            ),
+            Icon(icon, color: AppColors.primary, size: 24),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -437,19 +420,13 @@ class _SettingsButton extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            Icon(
-              Icons.chevron_right,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.chevron_right, color: Colors.grey[400]),
           ],
         ),
       ),
@@ -476,7 +453,9 @@ class _ThemeOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.2) : Colors.transparent,
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.2)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: isSelected ? AppColors.primary : Colors.grey[300]!,
@@ -515,7 +494,9 @@ class _LanguageOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.2) : Colors.transparent,
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.2)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: isSelected ? AppColors.primary : Colors.grey[300]!,

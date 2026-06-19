@@ -15,7 +15,7 @@ class AuthService {
 
   Future<void> initialize() async {
     if (_initialized && _prefsInstance != null) return;
-    
+
     // Avoid multiple simultaneous initialization attempts
     _initializationFuture ??= SharedPreferences.getInstance();
     _prefsInstance = await _initializationFuture;

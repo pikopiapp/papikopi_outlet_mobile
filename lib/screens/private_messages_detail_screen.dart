@@ -10,12 +10,12 @@ class PrivateMessagesDetailScreen extends StatefulWidget {
   final List<Map<String, dynamic>> initialMessages;
 
   const PrivateMessagesDetailScreen({
-    Key? key,
+    super.key,
     required this.conversationWithId,
     required this.conversationWithName,
     required this.currentUserId,
     required this.initialMessages,
-  }) : super(key: key);
+  });
 
   @override
   State<PrivateMessagesDetailScreen> createState() =>

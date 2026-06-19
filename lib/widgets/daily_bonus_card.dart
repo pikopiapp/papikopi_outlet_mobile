@@ -39,9 +39,7 @@ class DailyBonusCard extends StatelessWidget {
           child: Shimmer.fromColors(
             baseColor: Colors.white10,
             highlightColor: Colors.white30,
-            child: Container(
-              color: Colors.white,
-            ),
+            child: Container(color: Colors.white),
           ),
         ),
       );
@@ -82,7 +80,7 @@ class DailyBonusCard extends StatelessWidget {
             Text(
               'Belum ada penjualan',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 10,
               ),
             ),
@@ -92,14 +90,22 @@ class DailyBonusCard extends StatelessWidget {
     }
 
     // Determine if today/selected date is a holiday
-    final dateToCheck = selectedDate ?? DateTime.now();
+    final now = DateTime.now();
+    final baseNow = (now.hour < 4)
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(now.year, now.month, now.day);
+    final dateToCheck = selectedDate ?? baseNow;
     final isHolidayDate = SupabaseService().isHolidaySync(dateToCheck);
-    
+
     // Calculate bonus and wage components using the top-level functions
     final bonusData = calculateBonus(omset, isHoliday: isHolidayDate);
     final totalBonus = bonusData.totalBonus;
     final breakdown = bonusData.breakdown;
-    
+
     // Calculate meal allowance using the same function
     final mealAllowance = calculateMealAllowance(omset);
     final totalWage = totalBonus + mealAllowance;
@@ -130,13 +136,16 @@ class DailyBonusCard extends StatelessWidget {
               ),
               if (isHolidayDate)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.orange.shade600,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    '🎉 ${getHolidayDescription(selectedDate ?? DateTime.now())}',
+                    '🎉 ${getHolidayDescription(selectedDate ?? baseNow)}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
@@ -160,7 +169,7 @@ class DailyBonusCard extends StatelessWidget {
             decoration: BoxDecoration(
               border: Border(
                 top: BorderSide(
-                  color: Colors.white.withOpacity(0.3),
+                  color: Colors.white.withValues(alpha: 0.3),
                   width: 1,
                 ),
               ),
@@ -174,14 +183,14 @@ class DailyBonusCard extends StatelessWidget {
                     Text(
                       'Bonus (Bertahap):',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 11,
                       ),
                     ),
                     Text(
                       'Rp ${_formatCurrency(totalBonus)}',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
@@ -195,7 +204,7 @@ class DailyBonusCard extends StatelessWidget {
                     Text(
                       'Uang Makan:',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 11,
                       ),
                     ),
@@ -210,10 +219,7 @@ class DailyBonusCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Divider(
-                  color: Colors.white.withOpacity(0.2),
-                  height: 1,
-                ),
+                Divider(color: Colors.white.withValues(alpha: 0.2), height: 1),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -221,14 +227,14 @@ class DailyBonusCard extends StatelessWidget {
                     Text(
                       'Omset Hari Ini:',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 10,
                       ),
                     ),
                     Text(
                       'Rp ${_formatCurrency(omset)}',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                       ),
@@ -242,14 +248,14 @@ class DailyBonusCard extends StatelessWidget {
                     Text(
                       'Metode:',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 10,
                       ),
                     ),
                     Text(
                       'Progressive ${breakdown.length} Tier',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                       ),
@@ -258,11 +264,11 @@ class DailyBonusCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  omset >= 300000 
-                    ? '🔹 Omset ≥ Rp 300rb → Uang Makan Rp 34rb'
-                    : '🔹 Omset < Rp 300rb → Uang Makan Rp 25rb',
+                  omset >= 300000
+                      ? '🔹 Omset ≥ Rp 300rb → Uang Makan Rp 34rb'
+                      : '🔹 Omset < Rp 300rb → Uang Makan Rp 25rb',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 9,
                     fontStyle: FontStyle.italic,
                   ),
@@ -292,10 +298,7 @@ class DailyBonusCard extends StatelessWidget {
 class BonusSummaryCompactCard extends StatelessWidget {
   final double omset;
 
-  const BonusSummaryCompactCard({
-    super.key,
-    this.omset = 0,
-  });
+  const BonusSummaryCompactCard({super.key, this.omset = 0});
 
   String _formatCurrency(double amount) {
     final formatter = NumberFormat('#,###', 'id_ID');
@@ -356,8 +359,7 @@ class Shimmer extends StatefulWidget {
   State<Shimmer> createState() => _ShimmerState();
 }
 
-class _ShimmerState extends State<Shimmer>
-    with SingleTickerProviderStateMixin {
+class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override

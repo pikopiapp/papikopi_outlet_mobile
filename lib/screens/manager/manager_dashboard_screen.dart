@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../theme/thema.dart';
 import '../../services/supabase_service.dart';
+import '../../providers/auth_provider.dart';
 import 'manager_outlet_screen.dart';
 import 'expense_management_screen.dart';
 import 'barista_payment_screen.dart';
@@ -18,7 +20,7 @@ class ManagerDashboardScreen extends StatefulWidget {
 class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   late SupabaseService supabaseService;
   bool isLoading = true;
-  
+
   late DateTime selectedDate;
   double todaySales = 0;
   int totalTransactions = 0;
@@ -28,7 +30,19 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    selectedDate = DateTime.now();
+    // Default selectedDate should follow business-day logic: if current
+    // local time is before 04:00, treat selected date as previous calendar day.
+    final now = DateTime.now();
+    if (now.hour < 4) {
+      final prev = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(const Duration(days: 1));
+      selectedDate = prev;
+    } else {
+      selectedDate = DateTime(now.year, now.month, now.day);
+    }
     supabaseService = SupabaseService();
     _loadDashboardData();
   }
@@ -71,9 +85,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -82,8 +96,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     try {
       // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
       // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
-      final selectedLocal = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 4);
-      final startOfDay = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
+      final selectedLocal = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        4,
+      );
+      final startOfDay = selectedLocal.subtract(
+        const Duration(hours: 7),
+      ); // Convert to UTC
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
       final response = await supabaseService.client
@@ -99,44 +120,75 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
       setState(() => todaySales = total);
     } catch (e) {
-      print('Error loading date sales: $e');
+      debugPrint('Error loading date sales: $e');
     }
   }
 
   Future<void> _loadDateTransactions() async {
     try {
       // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
-      // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
-      final selectedLocal = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 4);
-      final startOfDay = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
-      final endOfDay = startOfDay.add(const Duration(days: 1));
+      final selectedLocal = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        4,
+      );
+      final startOfDayUtc = selectedLocal.subtract(const Duration(hours: 7)).toUtc();
+      final endOfDayUtc = startOfDayUtc.add(const Duration(days: 1));
 
-      // Include payment_method so dashboard shows how payment was made
-      final response = await supabaseService.client
-          .from('sales')
-          .select('id, total_amount, outlet_id, created_at, payment_method, outlets(name)')
-          .gte('created_at', startOfDay.toIso8601String())
-          .lt('created_at', endOfDay.toIso8601String())
-          .order('created_at', ascending: false)
-          .limit(5);
+        // Get outlet id from AuthProvider
+        final auth = context.read<AuthProvider>();
+        // Managers should see all outlets (no outlet filter). Baristas see their outlet only.
+        final outletId = auth.currentUser?.role == 'manager'
+          ? null
+          : auth.currentUser?.outletId;
 
-      List<Map<String, dynamic>> transactions = [];
-      for (var sale in response) {
-        transactions.add({
-          'id': sale['id'],
-          'amount': sale['total_amount'],
-          'outlet': sale['outlets']?['name'] ?? 'Unknown',
-          'time': sale['created_at'],
-          'payment_method': sale['payment_method'] ?? '',
-        });
+      // Fetch sales using service helper (reuses Sale.fromJson parsing)
+      final fetched = await supabaseService.getSales(outletId: outletId);
+      debugPrint('[ManagerDashboard] fetched sales: ${fetched.length}, outletId: $outletId');
+
+      // Filter by business-day UTC range
+      final filtered = fetched.where((s) {
+        final createdUtc = s.createdAt.toUtc();
+        return !createdUtc.isBefore(startOfDayUtc) && createdUtc.isBefore(endOfDayUtc);
+      }).toList();
+      debugPrint('[ManagerDashboard] filtered sales by range (${startOfDayUtc.toIso8601String()} - ${endOfDayUtc.toIso8601String()}): ${filtered.length}');
+
+      // Sort descending and take latest 5
+      filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final top5 = filtered.take(5).toList();
+
+      // Resolve outlet names (cache per id) to avoid showing raw ids
+      final Map<String, String> outletNames = {};
+      // Fetch outlet names from `outlets` table once to map ids -> names.
+      try {
+        final outletsResp = await supabaseService.client.from('outlets').select('id, name');
+        for (var o in outletsResp) {
+          outletNames[o['id']] = o['name'];
+        }
+      } catch (e) {
+        debugPrint('[ManagerDashboard] failed to fetch outlets: $e');
       }
+
+      final transactions = top5.map((sale) {
+        final oid = sale.outletId;
+        final displayTime = DateFormat('HH:mm', 'id_ID')
+            .format(sale.createdAt.add(const Duration(hours: 7)));
+        return {
+          'id': sale.id,
+          'amount': sale.totalAmount,
+          'outlet': outletNames[oid] ?? 'Unknown',
+          'time': displayTime,
+          'payment_method': sale.paymentMethod,
+        };
+      }).toList();
 
       setState(() {
         recentTransactions = transactions;
-        totalTransactions = response.length;
+        totalTransactions = filtered.length;
       });
     } catch (e) {
-      print('Error loading date transactions: $e');
+      debugPrint('Error loading date transactions: $e');
     }
   }
 
@@ -144,8 +196,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     try {
       // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
       // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
-      final selectedLocal = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 4);
-      final startOfDay = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
+      final selectedLocal = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        4,
+      );
+      final startOfDay = selectedLocal.subtract(
+        const Duration(hours: 7),
+      ); // Convert to UTC
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
       final response = await supabaseService.client
@@ -180,7 +239,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
       setState(() => topOutlets = topList);
     } catch (e) {
-      print('Error loading date top outlets: $e');
+      debugPrint('Error loading date top outlets: $e');
     }
   }
 
@@ -194,7 +253,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
     final dateFormat = DateFormat('dd MMMM yyyy', 'id_ID');
     final dayFormat = DateFormat('EEEE, dd MMMM yyyy', 'id_ID');
-    final isToday = DateTime.now().day == selectedDate.day &&
+    final isToday =
+        DateTime.now().day == selectedDate.day &&
         DateTime.now().month == selectedDate.month &&
         DateTime.now().year == selectedDate.year;
 
@@ -223,9 +283,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                             children: [
                               Text(
                                 'Dashboard',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge
+                                style: Theme.of(context).textTheme.titleLarge
                                     ?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.textPrimary,
@@ -234,12 +292,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 'manager',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: AppColors.textSecondary,
-                                    ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: AppColors.textSecondary),
                               ),
                             ],
                           ),
@@ -265,10 +319,13 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        isToday ? 'Hari Ini' : dayFormat.format(selectedDate),
+                                        isToday
+                                            ? 'Hari Ini'
+                                            : dayFormat.format(selectedDate),
                                         style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,
@@ -309,7 +366,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                           border: Border.all(color: AppColors.altSurface),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: Colors.black.withValues(alpha: 0.05),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -320,7 +377,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                           children: [
                             Text(
                               'Fitur Manajemen',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: AppColors.textPrimary,
                                   ),
@@ -332,16 +390,22 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                                   child: ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: AppColors.primary,
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
                                     ),
                                     onPressed: () {
                                       Navigator.of(context).push(
                                         MaterialPageRoute(
-                                          builder: (_) => const ManagerOutletScreen(),
+                                          builder: (_) =>
+                                              const ManagerOutletScreen(),
                                         ),
                                       );
                                     },
-                                    icon: const Icon(Icons.storefront_outlined, size: 20),
+                                    icon: const Icon(
+                                      Icons.storefront_outlined,
+                                      size: 20,
+                                    ),
                                     label: const Text('Outlet'),
                                   ),
                                 ),
@@ -350,16 +414,22 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                                   child: ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.orange.shade600,
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
                                     ),
                                     onPressed: () {
                                       Navigator.of(context).push(
                                         MaterialPageRoute(
-                                          builder: (_) => const ExpenseManagementScreen(),
+                                          builder: (_) =>
+                                              const ExpenseManagementScreen(),
                                         ),
                                       );
                                     },
-                                    icon: const Icon(Icons.receipt_long_outlined, size: 20),
+                                    icon: const Icon(
+                                      Icons.receipt_long_outlined,
+                                      size: 20,
+                                    ),
                                     label: const Text('Pengeluaran'),
                                   ),
                                 ),
@@ -371,16 +441,22 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                               child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.purple.shade600,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                 ),
                                 onPressed: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) => const BaristaPaymentScreen(),
+                                      builder: (_) =>
+                                          const BaristaPaymentScreen(),
                                     ),
                                   );
                                 },
-                                icon: const Icon(Icons.payments_outlined, size: 20),
+                                icon: const Icon(
+                                  Icons.payments_outlined,
+                                  size: 20,
+                                ),
                                 label: const Text('Pembayaran Bonus Barista'),
                               ),
                             ),
@@ -390,16 +466,22 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                               child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.teal.shade600,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                 ),
                                 onPressed: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) => const InvestorProfitPaymentScreen(),
+                                      builder: (_) =>
+                                          const InvestorProfitPaymentScreen(),
                                     ),
                                   );
                                 },
-                                icon: const Icon(Icons.trending_up_outlined, size: 20),
+                                icon: const Icon(
+                                  Icons.trending_up_outlined,
+                                  size: 20,
+                                ),
                                 label: const Text('Pembayaran Profit Investor'),
                               ),
                             ),
@@ -418,13 +500,13 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                             end: Alignment.bottomRight,
                             colors: [
                               AppColors.primary,
-                              AppColors.primary.withOpacity(0.8),
+                              AppColors.primary.withValues(alpha: 0.8),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withOpacity(0.3),
+                              color: AppColors.primary.withValues(alpha: 0.3),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -437,10 +519,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  isToday ? 'Penjualan Hari Ini' : 'Penjualan ${dayFormat.format(selectedDate)}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
+                                  isToday
+                                      ? 'Penjualan Hari Ini'
+                                      : 'Penjualan ${dayFormat.format(selectedDate)}',
+                                  style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w600,
@@ -449,7 +531,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
+                                    color: Colors.white.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: const Icon(
@@ -463,9 +545,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                             const SizedBox(height: 12),
                             Text(
                               currencyFormat.format(todaySales),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
+                              style: Theme.of(context).textTheme.headlineSmall
                                   ?.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -473,12 +553,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Total dari ${recentTransactions.length} transaksi',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                              'Total dari $totalTransactions transaksi',
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
-                                    color: Colors.white.withOpacity(0.8),
+                                    color: Colors.white.withValues(alpha: 0.8),
                                   ),
                             ),
                           ],
@@ -492,7 +570,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                           Expanded(
                             child: _buildStatCard(
                               title: 'Transaksi',
-                              value: recentTransactions.length.toString(),
+                              value: totalTransactions.toString(),
                               icon: Icons.receipt,
                               color: AppColors.success,
                             ),
@@ -501,10 +579,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                           Expanded(
                             child: _buildStatCard(
                               title: 'Rata-rata',
-                              value: recentTransactions.isEmpty
+                              value: totalTransactions == 0
                                   ? 'Rp 0'
                                   : currencyFormat.format(
-                                      todaySales / recentTransactions.length,
+                                      todaySales / totalTransactions,
                                     ),
                               icon: Icons.calculate,
                               color: Colors.blue,
@@ -516,8 +594,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
                       // Top Performing Outlets
                       Text(
-                        isToday ? 'Outlet Terbaik Hari Ini' : 'Outlet Terbaik ${dateFormat.format(selectedDate)}',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        isToday
+                            ? 'Outlet Terbaik Hari Ini'
+                            : 'Outlet Terbaik ${dateFormat.format(selectedDate)}',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: AppColors.textPrimary,
                             ),
@@ -534,16 +615,22 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                               child: Center(
                                 child: Text(
                                   'Belum ada data penjualan',
-                                  style: TextStyle(color: AppColors.textSecondary),
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                               ),
                             )
                           : Column(
-                              children: List.generate(topOutlets.length, (index) {
+                              children: List.generate(topOutlets.length, (
+                                index,
+                              ) {
                                 final outlet = topOutlets[index];
                                 return Padding(
                                   padding: EdgeInsets.only(
-                                    bottom: index < topOutlets.length - 1 ? 12 : 0,
+                                    bottom: index < topOutlets.length - 1
+                                        ? 12
+                                        : 0,
                                   ),
                                   child: _buildOutletCard(
                                     rank: outlet['rank'],
@@ -558,8 +645,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
                       // Recent Transactions
                       Text(
-                        isToday ? 'Transaksi Terbaru' : 'Transaksi ${dateFormat.format(selectedDate)}',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        isToday
+                            ? '5 Transaksi Terbaru'
+                            : '5 Transaksi ${dateFormat.format(selectedDate)}',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: AppColors.textPrimary,
                             ),
@@ -575,31 +665,40 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                               ),
                               child: Center(
                                 child: Text(
-                                  isToday ? 'Belum ada transaksi hari ini' : 'Belum ada transaksi pada tanggal tersebut',
-                                  style: TextStyle(color: AppColors.textSecondary),
+                                  isToday
+                                      ? 'Belum ada transaksi hari ini'
+                                      : 'Belum ada transaksi pada tanggal tersebut',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                               ),
                             )
                           : Column(
-                              children: List.generate(recentTransactions.length, (index) {
-                                final tx = recentTransactions[index];
-                                final timestamp = DateTime.parse(tx['time']);
-                                final timeString =
-                                    DateFormat('HH:mm', 'id_ID').format(timestamp);
+                              children: List.generate(
+                                recentTransactions.length,
+                                (index) {
+                                  final tx = recentTransactions[index];
+                                  // `tx['time']` is already a formatted string (HH:mm)
+                                  final timeString = tx['time'] as String;
 
-                                return Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom: index < recentTransactions.length - 1 ? 12 : 0,
-                                  ),
-                                  child: _buildTransactionCard(
-                                    outlet: tx['outlet'],
-                                    amount: tx['amount'],
-                                    time: timeString,
-                                    paymentMethod: tx['payment_method'] ?? '',
-                                    currencyFormat: currencyFormat,
-                                  ),
-                                );
-                              }),
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom:
+                                          index < recentTransactions.length - 1
+                                          ? 12
+                                          : 0,
+                                    ),
+                                    child: _buildTransactionCard(
+                                      outlet: tx['outlet'],
+                                      amount: tx['amount'],
+                                      time: timeString,
+                                      paymentMethod: tx['payment_method'] ?? '',
+                                      currencyFormat: currencyFormat,
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
                       const SizedBox(height: 24),
                     ],
@@ -619,9 +718,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -669,7 +768,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         border: Border.all(color: Color(0xFFE8E8E8)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -681,9 +780,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withOpacity(0.5)),
+              border: Border.all(color: color.withValues(alpha: 0.5)),
             ),
             child: Center(
               child: Text(
@@ -743,7 +842,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         border: Border.all(color: Color(0xFFE8E8E8)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -755,7 +854,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
+              color: AppColors.success.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(Icons.check_circle, color: AppColors.success, size: 24),
@@ -788,7 +887,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                     const SizedBox(width: 8),
                     if (paymentMethod.isNotEmpty)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
                           borderRadius: BorderRadius.circular(8),
@@ -821,4 +923,3 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 }
-

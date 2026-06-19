@@ -22,7 +22,9 @@ class OutletStock {
       ingredientId: json['ingredient_id'] as String,
       ingredientName: json['ingredient_name'] as String? ?? 'Unknown',
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0.0,
-      updatedAt: DateTime.parse(json['updated_at'] as String? ?? DateTime.now().toIso8601String()),
+      updatedAt: DateTime.parse(
+        json['updated_at'] as String? ?? DateTime.now().toIso8601String(),
+      ).toUtc(),
     );
   }
 
@@ -60,11 +62,17 @@ class StockTransfer {
       fromOutletId: json['from_outlet_id'] as String,
       toOutletId: json['to_outlet_id'] as String,
       status: json['status'] as String? ?? 'requested',
-      items: (json['stock_transfer_items'] as List<dynamic>?)
-              ?.map((item) => StockTransferItem.fromJson(item as Map<String, dynamic>))
+      items:
+          (json['stock_transfer_items'] as List<dynamic>?)
+              ?.map(
+                (item) =>
+                    StockTransferItem.fromJson(item as Map<String, dynamic>),
+              )
               .toList() ??
           [],
-      createdAt: DateTime.parse(json['created_at'] as String? ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.parse(
+        json['created_at'] as String? ?? DateTime.now().toIso8601String(),
+      ).toUtc(),
     );
   }
 }
@@ -125,7 +133,9 @@ class StockReturn {
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0.0,
       reason: json['reason'] as String? ?? '',
       status: json['status'] as String? ?? 'pending',
-      createdAt: DateTime.parse(json['created_at'] as String? ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.parse(
+        json['created_at'] as String? ?? DateTime.now().toIso8601String(),
+      ).toUtc(),
     );
   }
 }

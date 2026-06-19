@@ -50,7 +50,8 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
   }
 
   String _formatCurrency(double amount) {
-    return amount.toStringAsFixed(0)
+    return amount
+        .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
           (match) => '${match.group(1)}.',
@@ -69,11 +70,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
       );
       return result;
     } catch (e) {
-      return {
-        'available': 0.0,
-        'pending': 0.0,
-        'thisMonth': 0.0,
-      };
+      return {'available': 0.0, 'pending': 0.0, 'thisMonth': 0.0};
     }
   }
 
@@ -112,8 +109,9 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
     final user = authProvider.currentUser;
     if (user == null) return;
 
-    final amount = double.tryParse(_amountController.text.replaceAll('.', '')) ?? 0.0;
-    
+    final amount =
+        double.tryParse(_amountController.text.replaceAll('.', '')) ?? 0.0;
+
     if (amount < 100000) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Minimal penarikan Rp 100.000')),
@@ -135,14 +133,17 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
         method: _selectedMethod,
         methodType: _selectedBank,
         accountIdentifier: _selectedMethod == 'bank'
-            ? _amountController.text // placeholder - should be account number
+            ? _amountController
+                  .text // placeholder - should be account number
             : _amountController.text, // placeholder - should be phone
         accountName: _accountNameController.text,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Request penarikan berhasil! Menunggu verifikasi admin.'),
+          content: Text(
+            'Request penarikan berhasil! Menunggu verifikasi admin.',
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -151,9 +152,9 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
       _accountNameController.clear();
       setState(() => _selectedMethod = 'bank');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -185,14 +186,17 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AppColors.primary, AppColors.primary.withOpacity(0.7)],
+                      colors: [
+                        AppColors.primary,
+                        AppColors.primary.withValues(alpha: 0.7),
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
+                        color: AppColors.primary.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -221,17 +225,17 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                       if (balance < 100000) ...[
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.3),
+                            color: Colors.orange.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
                             'Saldo kurang (min: Rp 100.000)',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                            ),
+                            style: TextStyle(color: Colors.white, fontSize: 11),
                           ),
                         ),
                       ],
@@ -287,9 +291,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
             // Tab Bar
             Container(
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: AppColors.altSurface),
-                ),
+                border: Border(bottom: BorderSide(color: AppColors.altSurface)),
               ),
               child: TabBar(
                 controller: _tabController,
@@ -407,13 +409,16 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                       ),
                       borderRadius: BorderRadius.circular(8),
                       color: selected
-                          ? AppColors.primary.withOpacity(0.1)
+                          ? AppColors.primary.withValues(alpha: 0.1)
                           : Colors.transparent,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(bank['icon'] ?? '', style: const TextStyle(fontSize: 16)),
+                        Text(
+                          bank['icon'] ?? '',
+                          style: const TextStyle(fontSize: 16),
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           bank['name'] ?? '',
@@ -471,13 +476,16 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                       ),
                       borderRadius: BorderRadius.circular(8),
                       color: selected
-                          ? AppColors.primary.withOpacity(0.1)
+                          ? AppColors.primary.withValues(alpha: 0.1)
                           : Colors.transparent,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(wallet['icon'] ?? '', style: const TextStyle(fontSize: 16)),
+                        Text(
+                          wallet['icon'] ?? '',
+                          style: const TextStyle(fontSize: 16),
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           wallet['name'] ?? '',
@@ -560,9 +568,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
         future: _getPendingWithdrawal(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (!snapshot.hasData || snapshot.data == null) {
@@ -587,20 +593,46 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
           final data = snapshot.data!;
           final amount = _formatCurrency(data['amount'] as double? ?? 0.0);
           final status = data['status'] as String? ?? 'pending';
-          final method = _getMethodDisplay(data['method'] as String?, data['method_type'] as String?);
+          final method = _getMethodDisplay(
+            data['method'] as String?,
+            data['method_type'] as String?,
+          );
           final account = data['account_identifier'] as String? ?? 'N/A';
           final accountName = data['account_name'] as String? ?? 'N/A';
           final fee = _formatCurrency(data['fee'] as double? ?? 5000.0);
           final net = _formatCurrency(
-            (data['amount'] as double? ?? 0.0) - (data['fee'] as double? ?? 5000.0),
+            (data['amount'] as double? ?? 0.0) -
+                (data['fee'] as double? ?? 5000.0),
           );
 
           // Calculate timeline based on status
           final timeline = [
-            {'step': 'Requested', 'completed': true, 'time': _formatDate(data['created_at'] as String?)},
-            {'step': 'Verified by Admin', 'completed': status != 'pending', 'time': status != 'pending' ? _formatDate(data['updated_at'] as String?) : 'Menunggu verifikasi'},
-            {'step': 'Processing', 'completed': status == 'processing' || status == 'completed', 'time': status == 'processing' || status == 'completed' ? 'Sedang diproses' : 'Menunggu'},
-            {'step': 'Completed', 'completed': status == 'completed', 'time': status == 'completed' ? _formatDate(data['updated_at'] as String?) : 'Est. 1-2 hari kerja'},
+            {
+              'step': 'Requested',
+              'completed': true,
+              'time': _formatDate(data['created_at'] as String?),
+            },
+            {
+              'step': 'Verified by Admin',
+              'completed': status != 'pending',
+              'time': status != 'pending'
+                  ? _formatDate(data['updated_at'] as String?)
+                  : 'Menunggu verifikasi',
+            },
+            {
+              'step': 'Processing',
+              'completed': status == 'processing' || status == 'completed',
+              'time': status == 'processing' || status == 'completed'
+                  ? 'Sedang diproses'
+                  : 'Menunggu',
+            },
+            {
+              'step': 'Completed',
+              'completed': status == 'completed',
+              'time': status == 'completed'
+                  ? _formatDate(data['updated_at'] as String?)
+                  : 'Est. 1-2 hari kerja',
+            },
           ];
 
           final statusColor = status == 'pending'
@@ -620,7 +652,10 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                   border: Border.all(color: AppColors.altSurface),
                   borderRadius: BorderRadius.circular(12),
                   gradient: LinearGradient(
-                    colors: [statusColor.withOpacity(0.05), statusColor.withOpacity(0.1)],
+                    colors: [
+                      statusColor.withValues(alpha: 0.05),
+                      statusColor.withValues(alpha: 0.1),
+                    ],
                   ),
                 ),
                 child: Column(
@@ -634,7 +669,10 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                           children: [
                             const Text(
                               'Request Penarikan',
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -653,7 +691,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.2),
+                            color: statusColor.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -725,7 +763,11 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                         shape: BoxShape.circle,
                       ),
                       child: isCompleted
-                          ? const Icon(Icons.check, size: 14, color: Colors.white)
+                          ? const Icon(
+                              Icons.check,
+                              size: 14,
+                              color: Colors.white,
+                            )
                           : const SizedBox(),
                     ),
                     if (!isLast)
@@ -752,7 +794,10 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                       const SizedBox(height: 2),
                       Text(
                         step['time'] as String,
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -769,10 +814,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: Colors.grey),
-        ),
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
         Text(
           value,
           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
@@ -787,9 +829,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
         future: _getWithdrawalHistory(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -813,28 +853,30 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
 
           final withdrawals = snapshot.data ?? [];
           return Column(
-            children: withdrawals
-                .map((withdrawal) {
-                  final status = withdrawal['status'] as String? ?? 'pending';
-                  final statusColor = status == 'completed' ? Colors.green : Colors.red;
-                  final amount = _formatCurrency(withdrawal['amount'] as double? ?? 0.0);
-                  final method = _getMethodDisplay(
-                    withdrawal['method'] as String?,
-                    withdrawal['method_type'] as String?,
-                  );
-                  final icon = status == 'completed' ? '✓' : '✗';
-                  final date = _formatDate(withdrawal['created_at'] as String?);
+            children: withdrawals.map((withdrawal) {
+              final status = withdrawal['status'] as String? ?? 'pending';
+              final statusColor = status == 'completed'
+                  ? Colors.green
+                  : Colors.red;
+              final amount = _formatCurrency(
+                withdrawal['amount'] as double? ?? 0.0,
+              );
+              final method = _getMethodDisplay(
+                withdrawal['method'] as String?,
+                withdrawal['method_type'] as String?,
+              );
+              final icon = status == 'completed' ? '✓' : '✗';
+              final date = _formatDate(withdrawal['created_at'] as String?);
 
-                  return _historyItem(
-                    date: date,
-                    amount: 'Rp $amount',
-                    status: _getStatusDisplay(status),
-                    statusColor: statusColor,
-                    method: method,
-                    icon: icon,
-                  );
-                })
-                .toList(),
+              return _historyItem(
+                date: date,
+                amount: 'Rp $amount',
+                status: _getStatusDisplay(status),
+                statusColor: statusColor,
+                method: method,
+                icon: icon,
+              );
+            }).toList(),
           );
         },
       ),
@@ -879,7 +921,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
@@ -904,10 +946,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                 const SizedBox(height: 4),
                 Text(
                   method,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                 ),
               ],
             ),
@@ -916,7 +955,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -945,7 +984,20 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
   }
 
   String _getMonthName(int month) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return months[month - 1];
   }
 
@@ -959,11 +1011,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
       };
       return bankNames[methodType] ?? 'Bank Transfer';
     } else if (method == 'e_wallet') {
-      const walletNames = {
-        'gopay': 'GoPay',
-        'ovo': 'OVO',
-        'dana': 'DANA',
-      };
+      const walletNames = {'gopay': 'GoPay', 'ovo': 'OVO', 'dana': 'DANA'};
       return walletNames[methodType] ?? 'E-Wallet';
     }
     return 'Unknown';
@@ -1008,7 +1056,10 @@ class _SummaryCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
           gradient: LinearGradient(
-            colors: [bgColor.withOpacity(0.1), bgColor.withOpacity(0.2)],
+            colors: [
+              bgColor.withValues(alpha: 0.1),
+              bgColor.withValues(alpha: 0.2),
+            ],
           ),
         ),
         child: Column(
@@ -1063,15 +1114,14 @@ class _MethodButton extends StatelessWidget {
             width: selected ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(8),
-          color: selected ? AppColors.primary.withOpacity(0.1) : Colors.white,
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.1)
+              : Colors.white,
         ),
         child: Center(
           child: Column(
             children: [
-              Text(
-                icon,
-                style: const TextStyle(fontSize: 20),
-              ),
+              Text(icon, style: const TextStyle(fontSize: 20)),
               const SizedBox(height: 4),
               Text(
                 label,

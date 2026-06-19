@@ -312,9 +312,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                                 decoration: BoxDecoration(
                                                   color: senderRole == 'manager'
                                                       ? AppColors.accent
-                                                          .withOpacity(0.2)
+                                                          .withValues(alpha: 0.2)
                                                       : AppColors.primary
-                                                          .withOpacity(0.2),
+                                                          .withValues(alpha: 0.2),
                                                   borderRadius:
                                                       BorderRadius.circular(4),
                                                 ),

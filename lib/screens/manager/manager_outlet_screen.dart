@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 
-
 import '../../models/outlet.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../../widgets/header.dart';
 import '../../widgets/screen_skeleton.dart';
-
 
 class ManagerOutletScreen extends StatefulWidget {
   const ManagerOutletScreen({super.key});
@@ -74,6 +72,7 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
           }
           return 'e-trike';
         }
+
         final type = normalizeType(rawTypeStr ?? row['type']);
         final address = (row['address'] as String?) ?? '';
         final createdAtRaw = row['created_at'];
@@ -121,14 +120,15 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
       if (v == 'e-trike') return 'E-trike';
       if (v == 'coffee_stand') return 'Coffee Stand';
       // fallback: replace underscore and titlecase
-      return v.replaceAll('_', ' ').split(' ').map((s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}').join(' ');
+      return v
+          .replaceAll('_', ' ')
+          .split(' ')
+          .map((s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}')
+          .join(' ');
     }
+
     return Scaffold(
-      appBar: PapikopiAppBar(
-        onLogout: null,
-        onProfile: null,
-        onSettings: null,
-      ),
+      appBar: PapikopiAppBar(onLogout: null, onProfile: null, onSettings: null),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -138,23 +138,26 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
               Text(
                 'Daftar Outlet',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Data outlet dari backend Supabase.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 16),
               Expanded(
                 child: Builder(
                   builder: (context) {
                     if (_isLoading) {
-                      return const ScreenSkeleton(lineCount: 8, showTitle: false);
+                      return const ScreenSkeleton(
+                        lineCount: 8,
+                        showTitle: false,
+                      );
                     }
 
                     if (_error != null) {
@@ -163,9 +166,8 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                           padding: const EdgeInsets.all(16),
                           child: Text(
                             'Gagal memuat outlet: $_error',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.textSecondary),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -177,9 +179,8 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                           padding: const EdgeInsets.all(16),
                           child: Text(
                             'Belum ada outlet.',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.textSecondary),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -193,7 +194,9 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final outlet = _outlets[index];
-                          final statusColor = outlet.isActive ? AppColors.success : AppColors.textSecondary;
+                          final statusColor = outlet.isActive
+                              ? AppColors.success
+                              : AppColors.textSecondary;
 
                           return Card(
                             elevation: 0,
@@ -210,25 +213,35 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                                     width: 44,
                                     height: 44,
                                     decoration: BoxDecoration(
-                                      color: statusColor.withOpacity(0.12),
+                                      color: statusColor.withValues(
+                                        alpha: 0.12,
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: statusColor.withOpacity(0.35),
+                                        color: statusColor.withValues(
+                                          alpha: 0.35,
+                                        ),
                                       ),
                                     ),
                                     child: Icon(
-                                      outlet.isActive ? Icons.storefront : Icons.pause_circle,
+                                      outlet.isActive
+                                          ? Icons.storefront
+                                          : Icons.pause_circle,
                                       color: statusColor,
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           outlet.name,
-                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
                                                 fontWeight: FontWeight.bold,
                                                 color: AppColors.textPrimary,
                                               ),
@@ -238,7 +251,10 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                                         const SizedBox(height: 4),
                                         Text(
                                           displayType(outlet.type),
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
                                                 color: AppColors.textSecondary,
                                               ),
                                           maxLines: 1,
@@ -247,7 +263,10 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                                         const SizedBox(height: 4),
                                         Text(
                                           outlet.location,
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
                                                 color: AppColors.textSecondary,
                                               ),
                                           maxLines: 2,
@@ -256,26 +275,32 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                                         const SizedBox(height: 8),
                                         Text(
                                           'Barista: (data belum tersedia)',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
                                                 color: AppColors.textSecondary,
                                               ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ],
-
                                     ),
                                   ),
                                   IconButton(
                                     onPressed: () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
-                                          content: Text('Belum ada halaman detail outlet'),
+                                          content: Text(
+                                            'Belum ada halaman detail outlet',
+                                          ),
                                         ),
                                       );
                                     },
                                     icon: const Icon(Icons.chevron_right),
-                                  )
+                                  ),
                                 ],
                               ),
                             ),
@@ -293,5 +318,3 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
     );
   }
 }
-
-

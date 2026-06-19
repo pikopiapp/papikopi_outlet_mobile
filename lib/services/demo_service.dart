@@ -12,7 +12,9 @@ class DemoService {
       'name': 'Budi Santoso',
       'role': 'barista',
       'outlet_id': 'outlet-1',
-      'created_at': DateTime.now().subtract(Duration(days: 30)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 30))
+          .toIso8601String(),
     },
     {
       'id': 'user-2',
@@ -20,7 +22,9 @@ class DemoService {
       'name': 'Siti Nurhayati',
       'role': 'manager',
       'outlet_id': 'outlet-1',
-      'created_at': DateTime.now().subtract(Duration(days: 60)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 60))
+          .toIso8601String(),
     },
     {
       'id': 'user-3',
@@ -28,7 +32,9 @@ class DemoService {
       'name': 'Ahmad Rahman',
       'role': 'barista',
       'outlet_id': 'outlet-2',
-      'created_at': DateTime.now().subtract(Duration(days: 45)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 45))
+          .toIso8601String(),
     },
   ];
 
@@ -40,7 +46,9 @@ class DemoService {
       'category': 'kopi',
       'price': 15000,
       'image_url': null,
-      'created_at': DateTime.now().subtract(Duration(days: 100)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 100))
+          .toIso8601String(),
     },
     {
       'id': 'prod-2',
@@ -48,7 +56,9 @@ class DemoService {
       'category': 'kopi',
       'price': 25000,
       'image_url': null,
-      'created_at': DateTime.now().subtract(Duration(days: 100)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 100))
+          .toIso8601String(),
     },
     {
       'id': 'prod-3',
@@ -56,7 +66,9 @@ class DemoService {
       'category': 'kopi',
       'price': 28000,
       'image_url': null,
-      'created_at': DateTime.now().subtract(Duration(days: 100)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 100))
+          .toIso8601String(),
     },
     {
       'id': 'prod-4',
@@ -64,7 +76,9 @@ class DemoService {
       'category': 'kopi',
       'price': 18000,
       'image_url': null,
-      'created_at': DateTime.now().subtract(Duration(days: 100)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 100))
+          .toIso8601String(),
     },
     {
       'id': 'prod-5',
@@ -72,7 +86,9 @@ class DemoService {
       'category': 'kopi',
       'price': 22000,
       'image_url': null,
-      'created_at': DateTime.now().subtract(Duration(days: 100)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 100))
+          .toIso8601String(),
     },
   ];
 
@@ -93,9 +109,18 @@ class DemoService {
           'id': uuid.v4(),
           'outlet_id': outletId,
           'total': 50000 + (i * 1000) + (j * 5000),
-          'payment_method': j % 3 == 0 ? 'cash' : j % 3 == 1 ? 'card' : 'transfer',
-          'created_at': DateTime(date.year, date.month, date.day, 8 + j, j * 5)
-              .toIso8601String(),
+          'payment_method': j % 3 == 0
+              ? 'cash'
+              : j % 3 == 1
+              ? 'card'
+              : 'transfer',
+          'created_at': DateTime(
+            date.year,
+            date.month,
+            date.day,
+            8 + j,
+            j * 5,
+          ).toIso8601String(),
         });
       }
     }
@@ -112,7 +137,9 @@ class DemoService {
         'product_id': 'prod-1',
         'quantity': 2,
         'price': 15000,
-        'created_at': DateTime.now().subtract(Duration(hours: 2)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(hours: 2))
+            .toIso8601String(),
       },
       {
         'id': uuid.v4(),
@@ -120,7 +147,9 @@ class DemoService {
         'product_id': 'prod-2',
         'quantity': 1,
         'price': 25000,
-        'created_at': DateTime.now().subtract(Duration(hours: 2)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(hours: 2))
+            .toIso8601String(),
       },
       {
         'id': uuid.v4(),
@@ -128,7 +157,9 @@ class DemoService {
         'product_id': 'prod-3',
         'quantity': 3,
         'price': 28000,
-        'created_at': DateTime.now().subtract(Duration(hours: 1)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(hours: 1))
+            .toIso8601String(),
       },
     ];
   }
@@ -143,7 +174,9 @@ class DemoService {
         'recipient_id': 'user-2',
         'recipient_name': 'Siti Nurhayati',
         'message': 'Halo, stok espresso habis. Perlu order lagi',
-        'created_at': DateTime.now().subtract(Duration(hours: 3)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(hours: 3))
+            .toIso8601String(),
         'read_at': null,
       },
       {
@@ -153,8 +186,12 @@ class DemoService {
         'recipient_id': 'user-1',
         'recipient_name': 'Budi Santoso',
         'message': 'Baik, akan saya pesan hari ini. Tunggu update',
-        'created_at': DateTime.now().subtract(Duration(hours: 2)).toIso8601String(),
-        'read_at': DateTime.now().subtract(Duration(hours: 2)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(hours: 2))
+            .toIso8601String(),
+        'read_at': DateTime.now()
+            .subtract(Duration(hours: 2))
+            .toIso8601String(),
       },
       {
         'id': uuid.v4(),
@@ -163,7 +200,9 @@ class DemoService {
         'recipient_id': 'user-2',
         'recipient_name': 'Siti Nurhayati',
         'message': 'Terima kasih bu!',
-        'created_at': DateTime.now().subtract(Duration(hours: 2)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(hours: 2))
+            .toIso8601String(),
         'read_at': null,
       },
     ];
@@ -179,7 +218,9 @@ class DemoService {
         'sender_name': 'Budi Santoso',
         'sender_role': 'barista',
         'message': 'Pagi semua! Hari ini cafe penuh sekali',
-        'created_at': DateTime.now().subtract(Duration(hours: 4)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(hours: 4))
+            .toIso8601String(),
       },
       {
         'id': uuid.v4(),
@@ -188,7 +229,9 @@ class DemoService {
         'sender_name': 'Siti Nurhayati',
         'sender_role': 'manager',
         'message': 'Bagus! Berarti penjualan hari ini bagus',
-        'created_at': DateTime.now().subtract(Duration(hours: 3)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(hours: 3))
+            .toIso8601String(),
       },
       {
         'id': uuid.v4(),
@@ -197,7 +240,9 @@ class DemoService {
         'sender_name': 'Ahmad Rahman',
         'sender_role': 'barista',
         'message': 'Siap! Semua produk sudah disediakan dengan baik',
-        'created_at': DateTime.now().subtract(Duration(hours: 3)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(hours: 3))
+            .toIso8601String(),
       },
     ];
   }
@@ -236,19 +281,25 @@ class DemoService {
         'id': uuid.v4(),
         'title': 'Update Menu Baru',
         'message': 'Mulai hari ini ada menu baru: Affogato Special',
-        'created_at': DateTime.now().subtract(Duration(days: 1)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(days: 1))
+            .toIso8601String(),
       },
       {
         'id': uuid.v4(),
         'title': 'Maintenance Database',
         'message': 'Database akan maintenance Jumat malam 22:00 - 23:00 WIB',
-        'created_at': DateTime.now().subtract(Duration(days: 3)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(days: 3))
+            .toIso8601String(),
       },
       {
         'id': uuid.v4(),
         'title': 'Promo Hari Ini',
         'message': 'Buy 2 Get 1 Free untuk Americano hari ini saja',
-        'created_at': DateTime.now().subtract(Duration(days: 7)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(days: 7))
+            .toIso8601String(),
       },
     ];
   }
@@ -287,9 +338,15 @@ class DemoService {
       transactions.add({
         'id': uuid.v4(),
         'total': 50000 + (i * 12000),
-        'payment_method': i % 3 == 0 ? 'cash' : i % 3 == 1 ? 'card' : 'transfer',
+        'payment_method': i % 3 == 0
+            ? 'cash'
+            : i % 3 == 1
+            ? 'card'
+            : 'transfer',
         'item_count': 2 + (i % 4),
-        'created_at': DateTime.now().subtract(Duration(minutes: (i + 1) * 10)).toIso8601String(),
+        'created_at': DateTime.now()
+            .subtract(Duration(minutes: (i + 1) * 10))
+            .toIso8601String(),
       });
     }
     return transactions;
@@ -302,14 +359,18 @@ class DemoService {
       'name': 'PapiApps Outlets - Pusat',
       'location': 'Jl. Merdeka No. 1',
       'phone': '021-1234567',
-      'created_at': DateTime.now().subtract(Duration(days: 365)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 365))
+          .toIso8601String(),
     },
     {
       'id': 'outlet-2',
       'name': 'PapiApps Outlets - Cabang',
       'location': 'Jl. Ahmad Yani No. 5',
       'phone': '021-7654321',
-      'created_at': DateTime.now().subtract(Duration(days: 180)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 180))
+          .toIso8601String(),
     },
   ];
 
@@ -320,14 +381,18 @@ class DemoService {
       'name': 'PapiApps Outlets - Pusat',
       'location': 'Jl. Merdeka No. 1',
       'phone': '021-1234567',
-      'created_at': DateTime.now().subtract(Duration(days: 365)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 365))
+          .toIso8601String(),
     },
     {
       'id': 'outlet-2',
       'name': 'PapiApps Outlets - Cabang',
       'location': 'Jl. Ahmad Yani No. 5',
       'phone': '021-7654321',
-      'created_at': DateTime.now().subtract(Duration(days: 180)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(Duration(days: 180))
+          .toIso8601String(),
     },
   ];
 }

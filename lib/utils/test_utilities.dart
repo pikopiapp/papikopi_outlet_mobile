@@ -107,7 +107,7 @@ class TestUtilities {
     Duration timeout = const Duration(seconds: 3),
   }) async {
     try {
-      final message = generateMockMessage(
+      generateMockMessage(
         senderId: senderId,
         recipientId: recipientId,
         message: messageText,
@@ -241,12 +241,14 @@ class TestUtilities {
 
     // Print summary
     
-    int passed = results.values.where((v) => v).length;
-    int total = results.length;
-    
+    final passed = results.values.where((v) => v).length;
+    final total = results.length;
+
     results.forEach((test, result) {
-      final status = result ? '✅ PASSED' : '❌ FAILED';
+      debugPrint('$test: ${result ? '✅ PASSED' : '❌ FAILED'}');
     });
+
+    debugPrint('Test Summary: $passed / $total passed');
     
 
     return results;
@@ -255,7 +257,7 @@ class TestUtilities {
 
 /// Widget for testing animations visually
 class AnimationTestWidget extends StatefulWidget {
-  const AnimationTestWidget({Key? key}) : super(key: key);
+  const AnimationTestWidget({super.key});
 
   @override
   State<AnimationTestWidget> createState() => _AnimationTestWidgetState();

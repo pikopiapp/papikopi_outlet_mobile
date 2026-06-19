@@ -31,13 +31,13 @@ class _ApprovalScreenState extends State<ApprovalScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    
+
     // Initialize refresh animation controller
     _refreshAnimationController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
     );
-    
+
     _initializeOutletId();
   }
 
@@ -51,7 +51,7 @@ class _ApprovalScreenState extends State<ApprovalScreen>
   Future<void> _initializeOutletId() async {
     final supabaseService = SupabaseService();
     final user = supabaseService.getCurrentUser();
-    
+
     if (user != null) {
       setState(() => _outletId = user.outletId);
       _loadHandovers();
@@ -91,7 +91,6 @@ class _ApprovalScreenState extends State<ApprovalScreen>
   }
 
   Future<void> _refreshData() async {
-    
     // Prevent multiple simultaneous refreshes
     if (_isRefreshing) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -102,17 +101,17 @@ class _ApprovalScreenState extends State<ApprovalScreen>
       );
       return;
     }
-    
+
     setState(() {
       _isRefreshing = true;
     });
-    
+
     // Start animation loop
     _refreshAnimationController.repeat();
-    
+
     try {
       await _loadHandovers();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -135,7 +134,7 @@ class _ApprovalScreenState extends State<ApprovalScreen>
     } finally {
       // Stop animation
       _refreshAnimationController.stop();
-      
+
       if (mounted) {
         setState(() {
           _isRefreshing = false;
@@ -171,37 +170,53 @@ class _ApprovalScreenState extends State<ApprovalScreen>
               showDialog(
                 context: context,
                 barrierDismissible: false,
-                builder: (context) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                builder: (context) =>
+                    const Center(child: CircularProgressIndicator()),
               );
 
+              // Capture Navigator/ScaffoldMessenger before awaiting network call
+              final navigator = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
+
               try {
-                final success = await supabaseService.approveCashDepositHandover(
-                  handoverId: handoverId,
-                  approverId: currentUser.id,
-                );
+                final success = await supabaseService
+                    .approveCashDepositHandover(
+                      handoverId: handoverId,
+                      approverId: currentUser.id,
+                    );
 
-                if (mounted) {
-                  Navigator.pop(context);
+                navigator.pop();
 
-                  if (success) {
-                    _showSuccessSnackBar('✅ Serah terima diapprove');
-                    _loadHandovers();
-                  } else {
-                    _showErrorSnackBar('Gagal approve');
-                  }
+                if (success) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Serah terima diapprove'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                  if (mounted) _loadHandovers();
+                } else {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Gagal approve'),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
                 }
               } catch (e) {
-                if (mounted) {
-                  Navigator.pop(context);
-                  _showErrorSnackBar('Error: $e');
-                }
+                navigator.pop();
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             child: const Text('Approve'),
           ),
         ],
@@ -209,7 +224,10 @@ class _ApprovalScreenState extends State<ApprovalScreen>
     );
   }
 
-  Future<void> _recordShortfallCompensation(String handoverId, double kekuranganUpah) async {
+  Future<void> _recordShortfallCompensation(
+    String handoverId,
+    double kekuranganUpah,
+  ) async {
     final noteController = TextEditingController();
 
     showDialog(
@@ -273,45 +291,68 @@ class _ApprovalScreenState extends State<ApprovalScreen>
               showDialog(
                 context: context,
                 barrierDismissible: false,
-                builder: (context) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                builder: (context) =>
+                    const Center(child: CircularProgressIndicator()),
               );
+
+              // Capture navigator/messenger before awaiting network calls
+              final navigator = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
 
               try {
                 final supabaseService = SupabaseService();
                 final currentUser = supabaseService.getCurrentUser();
-                
+
                 if (currentUser == null) {
-                  _showErrorSnackBar('User tidak ditemukan');
+                  navigator.pop();
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('User tidak ditemukan'),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
                   return;
                 }
 
-                final success = await supabaseService.approveCashDepositHandover(
-                  handoverId: handoverId,
-                  approverId: currentUser.id,
-                );
+                final success = await supabaseService
+                    .approveCashDepositHandover(
+                      handoverId: handoverId,
+                      approverId: currentUser.id,
+                    );
 
-                if (mounted) {
-                  Navigator.pop(context);
+                navigator.pop();
 
-                  if (success) {
-                    _showSuccessSnackBar('✅ Kekurangan upah dicatat & disetujui');
-                    _loadHandovers();
-                  } else {
-                    _showErrorSnackBar('Gagal mencatat tanda terima');
-                  }
+                if (success) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Kekurangan upah dicatat & disetujui'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                  if (mounted) _loadHandovers();
+                } else {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Gagal mencatat tanda terima'),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
                 }
               } catch (e) {
-                if (mounted) {
-                  Navigator.pop(context);
-                  _showErrorSnackBar('Error: $e');
-                }
+                navigator.pop();
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             child: const Text('Catat Tanda Terima'),
           ),
         ],
@@ -351,51 +392,57 @@ class _ApprovalScreenState extends State<ApprovalScreen>
               showDialog(
                 context: context,
                 barrierDismissible: false,
-                builder: (context) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                builder: (context) =>
+                    const Center(child: CircularProgressIndicator()),
               );
+
+              // Capture navigator/messenger before awaiting network calls
+              final navigator = Navigator.of(context);
+              final messenger = ScaffoldMessenger.of(context);
 
               try {
                 final supabaseService = SupabaseService();
+
                 final success = await supabaseService.rejectCashDepositHandover(
                   handoverId: handoverId,
                   rejectionReason: reasonController.text,
                 );
 
-                if (mounted) {
-                  Navigator.pop(context);
+                navigator.pop();
 
-                  if (success) {
-                    _showSuccessSnackBar('❌ Serah terima ditolak');
-                    _loadHandovers();
-                  } else {
-                    _showErrorSnackBar('Gagal reject');
-                  }
+                if (success) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('❌ Serah terima ditolak'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                  if (mounted) _loadHandovers();
+                } else {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Gagal reject'),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
                 }
               } catch (e) {
-                if (mounted) {
-                  Navigator.pop(context);
-                  _showErrorSnackBar('Error: $e');
-                }
+                navigator.pop();
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Tolak'),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -427,10 +474,7 @@ class _ApprovalScreenState extends State<ApprovalScreen>
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: [
-                _buildPendingTab(),
-                _buildHistoryTab(),
-              ],
+              children: [_buildPendingTab(), _buildHistoryTab()],
             ),
           ),
         ],
@@ -448,18 +492,11 @@ class _ApprovalScreenState extends State<ApprovalScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.done_all,
-              size: 64,
-              color: Colors.green.shade300,
-            ),
+            Icon(Icons.done_all, size: 64, color: Colors.green.shade300),
             const SizedBox(height: 16),
             const Text(
               'Semua serah terima sudah diproses',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
           ],
         ),
@@ -471,15 +508,18 @@ class _ApprovalScreenState extends State<ApprovalScreen>
       itemCount: _pendingHandovers.length,
       itemBuilder: (context, index) {
         final handover = _pendingHandovers[index];
-        final baristaName =
-            handover['users'] != null ? handover['users']['full_name'] : 'Unknown';
+        final baristaName = handover['users'] != null
+            ? handover['users']['full_name']
+            : 'Unknown';
         final date = handover['date'] ?? '';
-        final depositAmount = (handover['deposit_amount'] as num?)?.toDouble() ?? 0;
+        final depositAmount =
+            (handover['deposit_amount'] as num?)?.toDouble() ?? 0;
         final cashAmount = (handover['cash_amount'] as num?)?.toDouble() ?? 0;
         final bonus = (handover['bonus'] as num?)?.toDouble() ?? 0;
         final mealAllowance =
             (handover['meal_allowance'] as num?)?.toDouble() ?? 0;
-        final kekuranganUpah = (handover['kekurangan_upah'] as num?)?.toDouble() ?? 0;
+        final kekuranganUpah =
+            (handover['kekurangan_upah'] as num?)?.toDouble() ?? 0;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -563,7 +603,10 @@ class _ApprovalScreenState extends State<ApprovalScreen>
                     if (kekuranganUpah > 0) ...[
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 6,
+                          horizontal: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.orange.shade50,
                           border: Border.all(color: Colors.orange, width: 1),
@@ -692,18 +735,11 @@ class _ApprovalScreenState extends State<ApprovalScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.history,
-              size: 64,
-              color: Colors.blue.shade300,
-            ),
+            Icon(Icons.history, size: 64, color: Colors.blue.shade300),
             const SizedBox(height: 16),
             const Text(
               'Belum ada riwayat approval',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
           ],
         ),
@@ -717,11 +753,13 @@ class _ApprovalScreenState extends State<ApprovalScreen>
         itemCount: _historyHandovers.length,
         itemBuilder: (context, index) {
           final handover = _historyHandovers[index];
-          final baristaName =
-              handover['users'] != null ? handover['users']['full_name'] : 'Unknown';
+          final baristaName = handover['users'] != null
+              ? handover['users']['full_name']
+              : 'Unknown';
           final date = handover['date'] ?? '';
           final status = handover['status'] ?? 'unknown';
-          final depositAmount = (handover['deposit_amount'] as num?)?.toDouble() ?? 0;
+          final depositAmount =
+              (handover['deposit_amount'] as num?)?.toDouble() ?? 0;
           final approvedAt = handover['approved_at'];
           final rejectionReason = handover['rejection_reason'];
 
@@ -743,9 +781,12 @@ class _ApprovalScreenState extends State<ApprovalScreen>
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              border: Border.all(color: statusColor.withOpacity(0.3), width: 1),
+              border: Border.all(
+                color: statusColor.withValues(alpha: 0.3),
+                width: 1,
+              ),
               borderRadius: BorderRadius.circular(12),
-              color: statusColor.withOpacity(0.05),
+              color: statusColor.withValues(alpha: 0.05),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -815,7 +856,8 @@ class _ApprovalScreenState extends State<ApprovalScreen>
                           Colors.blue,
                         ),
                       ],
-                      if (rejectionReason != null && rejectionReason.isNotEmpty) ...[
+                      if (rejectionReason != null &&
+                          rejectionReason.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
                           'Alasan Penolakan:',

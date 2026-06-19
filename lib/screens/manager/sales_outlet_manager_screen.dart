@@ -21,18 +21,27 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
   List<Map<String, dynamic>> _baristaList = [];
   Map<String, dynamic> _selectedOutletSales = {};
   Map<String, String> _baristaNameMap = {}; // Map baristaId to name
-  Map<String, String> _outletBaristaMap = {}; // Map outletId to primary barista name
-  Map<String, String> _productNameMap = {}; // Map productId to name
+  Map<String, String> _outletBaristaMap =
+      {}; // Map outletId to primary barista name
+  final Map<String, String> _productNameMap = {}; // Map productId to name
 
   bool _isLoading = true;
   String? _error;
 
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    final now = DateTime.now();
+    _selectedDate = (now.hour < 4)
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(now.year, now.month, now.day);
     _initialize();
   }
 
@@ -62,14 +71,19 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
         final outletId = outlet['id'] as String?;
         if (outletId != null) {
           try {
-            final baristas = await _supabaseService.getBaristasByOutlet(outletId: outletId);
+            final baristas = await _supabaseService.getBaristasByOutlet(
+              outletId: outletId,
+            );
             if (baristas.isNotEmpty) {
               final primaryBarista = baristas[0];
-              final baristaName = primaryBarista['name'] as String? ?? 'Unknown';
+              final baristaName =
+                  primaryBarista['name'] as String? ?? 'Unknown';
               outletBaristaMap[outletId] = baristaName;
             }
           } catch (e) {
-            print('[SalesOutletManager] Error fetching baristas for outlet $outletId: $e');
+            debugPrint(
+              '[SalesOutletManager] Error fetching baristas for outlet $outletId: $e',
+            );
           }
         }
       }
@@ -95,14 +109,23 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
   Future<void> _fetchOutletDetailedSales(String outletId) async {
     try {
       // Fetch baristas for this outlet
-      final baristas = await _supabaseService.getBaristasByOutlet(outletId: outletId);
-      
+      final baristas = await _supabaseService.getBaristasByOutlet(
+        outletId: outletId,
+      );
+
       final salesList = await _supabaseService.getSales(outletId: outletId);
 
       // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
       // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
-      final selectedLocal = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 4);
-      final startDate = selectedLocal.subtract(const Duration(hours: 7)); // Convert to UTC
+      final selectedLocal = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        4,
+      );
+      final startDate = selectedLocal.subtract(
+        const Duration(hours: 7),
+      ); // Convert to UTC
       final endDate = startDate.add(const Duration(days: 1));
 
       int totalItems = 0;
@@ -112,41 +135,54 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
       Map<String, String> productNames = {}; // productId -> productName
       Map<String, int> baristaItemCount = {};
       Map<String, double> baristaRevenue = {}; // Track revenue per barista
-      
+
       // Payment breakdown per barista
       Map<String, double> baristaCashRevenue = {}; // baristaId -> cash amount
       Map<String, double> baristaQrisRevenue = {}; // baristaId -> QRIS amount
-      Map<String, int> baristaFreeCount = {}; // baristaId -> free transaction count
+      Map<String, int> baristaFreeCount =
+          {}; // baristaId -> free transaction count
 
       for (final sale in salesList) {
-        if (sale.createdAt.isAfter(startDate) && sale.createdAt.isBefore(endDate)) {
+        if (sale.createdAt.isAfter(startDate) &&
+            sale.createdAt.isBefore(endDate)) {
           for (final item in sale.items) {
             totalItems += item.quantity;
             totalRevenue += item.unitPrice * item.quantity;
-            
-            productCount[item.productId] = (productCount[item.productId] ?? 0) + item.quantity;
-            productRevenue[item.productId] = (productRevenue[item.productId] ?? 0) + (item.unitPrice * item.quantity);
-            productNames[item.productId] = item.productName; // Store product name
-            
+
+            productCount[item.productId] =
+                (productCount[item.productId] ?? 0) + item.quantity;
+            productRevenue[item.productId] =
+                (productRevenue[item.productId] ?? 0) +
+                (item.unitPrice * item.quantity);
+            productNames[item.productId] =
+                item.productName; // Store product name
+
             // Track revenue per barista for bonus calculation
-            baristaRevenue[sale.baristaId] = (baristaRevenue[sale.baristaId] ?? 0.0) + (item.unitPrice * item.quantity);
+            baristaRevenue[sale.baristaId] =
+                (baristaRevenue[sale.baristaId] ?? 0.0) +
+                (item.unitPrice * item.quantity);
           }
 
           // Count items per barista
-          baristaItemCount[sale.baristaId] = (baristaItemCount[sale.baristaId] ?? 0) + sale.items.length;
-          
+          baristaItemCount[sale.baristaId] =
+              (baristaItemCount[sale.baristaId] ?? 0) + sale.items.length;
+
           // Track payment method breakdown per barista using paymentMethod field
           final pm = sale.paymentMethod.toString().toUpperCase();
           if (pm == 'CASH') {
-            baristaCashRevenue[sale.baristaId] = (baristaCashRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
+            baristaCashRevenue[sale.baristaId] =
+                (baristaCashRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
           } else if (pm == 'QRIS') {
-            baristaQrisRevenue[sale.baristaId] = (baristaQrisRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
+            baristaQrisRevenue[sale.baristaId] =
+                (baristaQrisRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
           } else if (pm == 'GRATIS' || sale.totalAmount <= 0) {
             // Free transaction
-            baristaFreeCount[sale.baristaId] = (baristaFreeCount[sale.baristaId] ?? 0) + 1;
+            baristaFreeCount[sale.baristaId] =
+                (baristaFreeCount[sale.baristaId] ?? 0) + 1;
           } else {
             // Unknown method - treat as cash fallback
-            baristaCashRevenue[sale.baristaId] = (baristaCashRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
+            baristaCashRevenue[sale.baristaId] =
+                (baristaCashRevenue[sale.baristaId] ?? 0.0) + sale.totalAmount;
           }
         }
       }
@@ -179,13 +215,14 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
         _productNameMap.addAll(productNames);
       });
 
-      print('[SalesOutletManager] Outlet $outletId: $totalItems items, Rp${totalRevenue.toStringAsFixed(0)} revenue');
-      print('[SalesOutletManager] Baristas in outlet: ${baristas.length}');
+      debugPrint(
+        '[SalesOutletManager] Outlet $outletId: $totalItems items, Rp${totalRevenue.toStringAsFixed(0)} revenue',
+      );
+      debugPrint('[SalesOutletManager] Baristas in outlet: ${baristas.length}');
     } catch (e) {
-      print('[SalesOutletManager] Error fetching outlet sales: $e');
+      debugPrint('[SalesOutletManager] Error fetching outlet sales: $e');
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -195,21 +232,18 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
         Container(
           color: AppColors.background,
           child: TabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(text: 'Penjualan'),
-                Tab(text: 'Bonus'),
-              ],
-            ),
+            controller: _tabController,
+            tabs: const [
+              Tab(text: 'Penjualan'),
+              Tab(text: 'Bonus'),
+            ],
+          ),
         ),
         // Tab content
         Expanded(
           child: TabBarView(
             controller: _tabController,
-            children: [
-              _buildSalesTab(),
-              _buildBaristaTab(),
-            ],
+            children: [_buildSalesTab(), _buildBaristaTab()],
           ),
         ),
       ],
@@ -218,15 +252,11 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
 
   Widget _buildSalesTab() {
     if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      );
+      return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
 
     if (_error != null) {
-      return Center(
-        child: Text('Error: $_error'),
-      );
+      return Center(child: Text('Error: $_error'));
     }
 
     return SingleChildScrollView(
@@ -254,7 +284,10 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                     }
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       border: Border.all(color: AppColors.primary),
                       borderRadius: BorderRadius.circular(8),
@@ -278,9 +311,9 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
           // Outlets list
           Text(
             'Ringkasan Penjualan per Outlet',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           ListView.builder(
@@ -300,7 +333,9 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
   Widget _buildOutletCard(Map<String, dynamic> outlet) {
     final outletId = outlet['id'] as String?;
     final outletName = outlet['name'] as String? ?? 'Unknown';
-    final baristaName = outletId != null ? _outletBaristaMap[outletId] ?? 'No barista' : 'No barista';
+    final baristaName = outletId != null
+        ? _outletBaristaMap[outletId] ?? 'No barista'
+        : 'No barista';
 
     return GestureDetector(
       onTap: () {
@@ -329,15 +364,15 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
               children: [
                 Text(
                   outletName,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 Text(
                   'Barista: $baristaName',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -354,13 +389,14 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
               ),
               const SizedBox(height: 12),
               // Top products
-              if ((_selectedOutletSales['product_count'] as Map? ?? {}).isNotEmpty) ...[
+              if ((_selectedOutletSales['product_count'] as Map? ?? {})
+                  .isNotEmpty) ...[
                 Text(
                   'Produk Terlaris',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textSecondary,
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 ..._buildTopProducts(),
@@ -368,9 +404,9 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
             ] else
               Text(
                 'Tap untuk detail penjualan',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
               ),
           ],
         ),
@@ -412,9 +448,9 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
               child: Text(
                 '${quantity}x',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -427,16 +463,13 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
         Text(
           value,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
+            fontWeight: FontWeight.bold,
+            color: AppColors.primary,
+          ),
         ),
       ],
     );
@@ -450,9 +483,9 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
         children: [
           Text(
             'Manajemen Bonus Barista',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
           // Info Box
@@ -483,9 +516,9 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
           if (_baristaList.isNotEmpty) ...[
             Text(
               'Daftar Barista (${_baristaList.length})',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             ListView.builder(
@@ -495,18 +528,37 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
               itemBuilder: (context, index) {
                 final barista = _baristaList[index];
                 final baristaId = barista['id'] as String? ?? '';
-                final cashAmount = (_selectedOutletSales['barista_cash'] as Map? ?? {})[baristaId] as double? ?? 0.0;
-                final qrisAmount = (_selectedOutletSales['barista_qris'] as Map? ?? {})[baristaId] as double? ?? 0.0;
-                final freeCount = (_selectedOutletSales['barista_free'] as Map? ?? {})[baristaId] as int? ?? 0;
-                
+                final cashAmount =
+                    (_selectedOutletSales['barista_cash'] as Map? ??
+                            {})[baristaId]
+                        as double? ??
+                    0.0;
+                final qrisAmount =
+                    (_selectedOutletSales['barista_qris'] as Map? ??
+                            {})[baristaId]
+                        as double? ??
+                    0.0;
+                final freeCount =
+                    (_selectedOutletSales['barista_free'] as Map? ??
+                            {})[baristaId]
+                        as int? ??
+                    0;
+
                 // Calculate bonus and settlement using finance_screen formula
-                final Map<String, dynamic> bonusCalc = _calculateBonusAndMeal(cashAmount, qrisAmount, freeCount);
+                final Map<String, dynamic> bonusCalc = _calculateBonusAndMeal(
+                  cashAmount,
+                  qrisAmount,
+                  freeCount,
+                );
                 final double omset = bonusCalc['omset'] as double;
                 final double bonus = bonusCalc['bonus'] as double;
-                final double mealAllowance = bonusCalc['mealAllowance'] as double;
-                final String settlementType = bonusCalc['settlementType'] as String;
-                final double settlementAmount = bonusCalc['settlementAmount'] as double;
-                
+                final double mealAllowance =
+                    bonusCalc['mealAllowance'] as double;
+                final String settlementType =
+                    bonusCalc['settlementType'] as String;
+                final double settlementAmount =
+                    bonusCalc['settlementAmount'] as double;
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
@@ -523,7 +575,8 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                           CircleAvatar(
                             backgroundColor: AppColors.primary,
                             child: Text(
-                              (barista['name'] as String? ?? '?')[0].toUpperCase(),
+                              (barista['name'] as String? ?? '?')[0]
+                                  .toUpperCase(),
                               style: const TextStyle(color: Colors.white),
                             ),
                           ),
@@ -534,13 +587,13 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                               children: [
                                 Text(
                                   barista['name'] ?? 'Unknown',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(fontWeight: FontWeight.bold),
                                 ),
                                 Text(
                                   barista['email'] ?? '',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
                                         color: AppColors.textSecondary,
                                         fontSize: 11,
                                       ),
@@ -563,7 +616,8 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                           children: [
                             Text(
                               'Omset:',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: AppColors.textSecondary,
                                   ),
@@ -609,15 +663,13 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                           ),
                           child: Row(
                             children: [
-                              const Text(
-                                '🎉',
-                                style: TextStyle(fontSize: 16),
-                              ),
+                              const Text('🎉', style: TextStyle(fontSize: 16)),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   'Bonus ${getHolidayDescription(_selectedDate)}: Semua Tier 20%',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
                                         color: Colors.purple,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -626,7 +678,8 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                             ],
                           ),
                         ),
-                      if (bonusCalc['isHolidayDate'] == true) const SizedBox(height: 12),
+                      if (bonusCalc['isHolidayDate'] == true)
+                        const SizedBox(height: 12),
                       // Settlement Calculation Section (Finance Screen Formula)
                       Container(
                         padding: const EdgeInsets.all(10),
@@ -636,7 +689,9 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                               : Colors.orange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                            color: settlementType == 'deposit' ? Colors.green : Colors.orange,
+                            color: settlementType == 'deposit'
+                                ? Colors.green
+                                : Colors.orange,
                             width: 1,
                           ),
                         ),
@@ -645,7 +700,8 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                           children: [
                             Text(
                               'Rincian Setoran',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: AppColors.textSecondary,
                                   ),
@@ -672,14 +728,21 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                             Container(
                               padding: const EdgeInsets.symmetric(vertical: 6),
                               decoration: BoxDecoration(
-                                border: Border(top: BorderSide(color: AppColors.altSurface, width: 1)),
+                                border: Border(
+                                  top: BorderSide(
+                                    color: AppColors.altSurface,
+                                    width: 1,
+                                  ),
+                                ),
                               ),
                               child: _buildBonusLine(
                                 settlementType == 'deposit'
                                     ? '= Setoran ke Papikopi'
                                     : '= Kekurangan (dari Papikopi)',
                                 'Rp ${NumberFormat('#,##0', 'id_ID').format(settlementAmount.toInt())}',
-                                settlementType == 'deposit' ? Colors.green : Colors.orange,
+                                settlementType == 'deposit'
+                                    ? Colors.green
+                                    : Colors.orange,
                               ),
                             ),
                           ],
@@ -692,11 +755,15 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                         decoration: BoxDecoration(
                           color: Colors.blue.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.blue.withValues(alpha: 0.3), width: 1),
+                          border: Border.all(
+                            color: Colors.blue.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
                         ),
                         child: Text(
                           'Rumus: Setoran = CASH - Bonus - Uang Makan\nQRIS langsung ke rekening toko',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
                                 fontSize: 10,
                                 color: Colors.blue.shade700,
                                 height: 1.3,
@@ -715,8 +782,8 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                 child: Text(
                   'Tidak ada data barista untuk outlet ini',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ),
@@ -728,12 +795,16 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
 
   Widget _buildBonusTierInfo() {
     final bool isHolidayDate = _supabaseService.isHolidaySync(_selectedDate);
-    final String holidayDescription = isHolidayDate ? getHolidayDescription(_selectedDate) : '';
-    
+    final String holidayDescription = isHolidayDate
+        ? getHolidayDescription(_selectedDate)
+        : '';
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isHolidayDate ? Colors.purple.withValues(alpha: 0.05) : AppColors.background,
+        color: isHolidayDate
+            ? Colors.purple.withValues(alpha: 0.05)
+            : AppColors.background,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isHolidayDate ? Colors.purple : AppColors.altSurface,
@@ -757,9 +828,9 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                     child: Text(
                       'Bonus $holidayDescription: Semua Tier 20%',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.purple,
-                          ),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple,
+                      ),
                     ),
                   ),
                 ],
@@ -768,11 +839,13 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
             const SizedBox(height: 12),
           ],
           Text(
-            isHolidayDate ? 'Sistem Bonus (Hari Libur)' : 'Sistem Bonus Bertingkat',
+            isHolidayDate
+                ? 'Sistem Bonus (Hari Libur)'
+                : 'Sistem Bonus Bertingkat',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: isHolidayDate ? Colors.purple : AppColors.primary,
-                ),
+              fontWeight: FontWeight.bold,
+              color: isHolidayDate ? Colors.purple : AppColors.primary,
+            ),
           ),
           const SizedBox(height: 8),
           if (isHolidayDate)
@@ -792,9 +865,9 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
           Text(
             'Uang Makan:',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
           ),
           const SizedBox(height: 4),
           _buildBonusLine('< Rp 300.000', 'Rp 25.000', Colors.black87),
@@ -809,22 +882,23 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
         Text(
           value,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: valueColor,
-              ),
+            fontWeight: FontWeight.bold,
+            color: valueColor,
+          ),
         ),
       ],
     );
   }
 
-  Map<String, dynamic> _calculateBonusAndMeal(double cashAmount, double qrisAmount, int freeCount) {
+  Map<String, dynamic> _calculateBonusAndMeal(
+    double cashAmount,
+    double qrisAmount,
+    int freeCount,
+  ) {
     double omset = cashAmount + qrisAmount; // Total omset (excluding free)
     // If there were no sales, meal allowance should be 0
     double mealAllowance = 0;
@@ -832,11 +906,11 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
       mealAllowance = omset >= 300000 ? 34000 : 25000;
     }
     double bonusAmount = 0.0;
-    
+
     // Check if selected date is a holiday or weekend using holiday_detector utility
     // isHoliday checks for both weekends and Indonesian national holidays
     final bool isHolidayDate = _supabaseService.isHolidaySync(_selectedDate);
-    
+
     if (isHolidayDate) {
       // Holiday calculation: 20% for all tiers
       bonusAmount = omset * 0.20;
@@ -847,20 +921,26 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
       } else if (omset <= 350000) {
         bonusAmount = (200000 * 0.10) + ((omset - 200000) * 0.12);
       } else if (omset <= 500000) {
-        bonusAmount = (200000 * 0.10) + (150000 * 0.12) + ((omset - 350000) * 0.15);
+        bonusAmount =
+            (200000 * 0.10) + (150000 * 0.12) + ((omset - 350000) * 0.15);
       } else {
-        bonusAmount = (200000 * 0.10) + (150000 * 0.12) + (150000 * 0.15) + ((omset - 500000) * 0.20);
+        bonusAmount =
+            (200000 * 0.10) +
+            (150000 * 0.12) +
+            (150000 * 0.15) +
+            ((omset - 500000) * 0.20);
       }
     }
 
     // Calculate final settlement using finance_screen formula:
     // Setoran = CASH - Bonus - Uang Makan
     double depositAmount = cashAmount - bonusAmount - mealAllowance;
-    
+
     // Determine settlement type and amount
-    String settlementType = 'deposit'; // 'deposit' (positive), 'shortfall' (negative)
+    String settlementType =
+        'deposit'; // 'deposit' (positive), 'shortfall' (negative)
     double settlementAmount = depositAmount;
-    
+
     if (depositAmount < 0) {
       settlementType = 'shortfall';
       settlementAmount = depositAmount.abs(); // Make positive for display

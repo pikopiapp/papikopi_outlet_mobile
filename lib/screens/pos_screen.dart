@@ -16,7 +16,6 @@ import 'profile_screen.dart';
 import 'transaction_history_screen.dart';
 import 'qr_camera_screen.dart';
 
-
 class POSScreen extends StatefulWidget {
   const POSScreen({super.key});
 
@@ -24,8 +23,7 @@ class POSScreen extends StatefulWidget {
   State<POSScreen> createState() => _POSScreenState();
 }
 
-class _POSScreenState extends State<POSScreen>
-    with TickerProviderStateMixin {
+class _POSScreenState extends State<POSScreen> with TickerProviderStateMixin {
   String? _selectedCategoryId;
   late TabController _tabController;
   late AnimationController _refreshAnimationController;
@@ -36,13 +34,13 @@ class _POSScreenState extends State<POSScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this); // 🔧 Only 3 tabs
     _tabController.addListener(_onTabChange);
-    
+
     // Initialize refresh animation controller
     _refreshAnimationController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
     );
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final product = context.read<ProductProvider>();
       final auth = context.read<AuthProvider>();
@@ -67,7 +65,7 @@ class _POSScreenState extends State<POSScreen>
     else if (_tabController.index == 2) {
       setState(() {});
     }
-    
+
     setState(() {});
   }
 
@@ -208,10 +206,10 @@ class _POSScreenState extends State<POSScreen>
       // Try to parse JSON from QR code first
       String? searchId;
       String? productName;
-      
+
       try {
         final jsonData = jsonDecode(code) as Map<String, dynamic>;
-        
+
         // Try to get product_id from JSON (warehouse QR format)
         if (jsonData.containsKey('product_id')) {
           searchId = jsonData['product_id'] as String;
@@ -220,7 +218,7 @@ class _POSScreenState extends State<POSScreen>
         else if (jsonData.containsKey('id')) {
           searchId = jsonData['id'] as String;
         }
-        
+
         // Get product name for matching
         if (jsonData.containsKey('product')) {
           productName = jsonData['product'] as String;
@@ -232,7 +230,7 @@ class _POSScreenState extends State<POSScreen>
 
       // Find product
       Product? product;
-      
+
       // Try exact ID match first
       if (searchId != null && searchId.isNotEmpty) {
         for (final p in productProvider.products) {
@@ -242,7 +240,7 @@ class _POSScreenState extends State<POSScreen>
           }
         }
       }
-      
+
       // If not found by ID, try product name match
       if (product == null && productName != null && productName.isNotEmpty) {
         for (final p in productProvider.products) {
@@ -252,7 +250,7 @@ class _POSScreenState extends State<POSScreen>
           }
         }
       }
-      
+
       // Last resort: partial matching
       if (product == null && searchId != null) {
         for (final p in productProvider.products) {
@@ -269,7 +267,7 @@ class _POSScreenState extends State<POSScreen>
           String errorMsg = '❌ Produk tidak ditemukan';
           if (searchId != null) errorMsg += ': $searchId';
           if (productName != null) errorMsg += ' ($productName)';
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(errorMsg),
@@ -308,9 +306,9 @@ class _POSScreenState extends State<POSScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('❌ Error: $e')));
       }
     }
   }
@@ -326,14 +324,14 @@ class _POSScreenState extends State<POSScreen>
       );
       return;
     }
-    
+
     setState(() {
       _isRefreshing = true;
     });
-    
+
     // Start animation loop
     _refreshAnimationController.repeat();
-    
+
     try {
       final product = context.read<ProductProvider>();
       final auth = context.read<AuthProvider>();
@@ -347,7 +345,7 @@ class _POSScreenState extends State<POSScreen>
       } else {
         product.loadProducts();
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -370,7 +368,7 @@ class _POSScreenState extends State<POSScreen>
     } finally {
       // Stop animation
       _refreshAnimationController.stop();
-      
+
       if (mounted) {
         setState(() {
           _isRefreshing = false;
@@ -438,10 +436,7 @@ class _POSScreenState extends State<POSScreen>
                       text: 'Keranjang',
                     ),
                     // 🔧 Checkout tab button hidden - only shown via navigation
-                    const Tab(
-                      icon: Icon(Icons.receipt_long),
-                      text: 'Riwayat',
-                    ),
+                    const Tab(icon: Icon(Icons.receipt_long), text: 'Riwayat'),
                   ],
                   labelColor: AppColors.primary,
                   unselectedLabelColor: AppColors.textSecondary,
@@ -454,7 +449,7 @@ class _POSScreenState extends State<POSScreen>
           ),
           // Content
           Expanded(
-child: TabBarView(
+            child: TabBarView(
               controller: _tabController,
               children: [
                 _buildPOSTab(),
@@ -466,11 +461,17 @@ child: TabBarView(
         ],
       ),
       // Floating Action Button - Only visible on Pemesanan tab
-      floatingActionButton: _tabController.index == 0 ? FloatingActionButton(
-        onPressed: _handleQRScan,
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
-      ) : null,
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton(
+              onPressed: _handleQRScan,
+              backgroundColor: AppColors.primary,
+              child: const Icon(
+                Icons.qr_code_scanner,
+                color: Colors.white,
+                size: 28,
+              ),
+            )
+          : null,
     );
   }
 
@@ -510,9 +511,7 @@ child: TabBarView(
           flex: 1,
           child: Container(
             decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(color: AppColors.altSurface),
-              ),
+              border: Border(left: BorderSide(color: AppColors.altSurface)),
             ),
             child: _buildCartSummaryPreview(),
           ),
@@ -558,9 +557,7 @@ child: TabBarView(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.primary,
-                border: Border(
-                  bottom: BorderSide(color: AppColors.altSurface),
-                ),
+                border: Border(bottom: BorderSide(color: AppColors.altSurface)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -646,9 +643,7 @@ child: TabBarView(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: AppColors.background,
-                border: Border(
-                  top: BorderSide(color: AppColors.altSurface),
-                ),
+                border: Border(top: BorderSide(color: AppColors.altSurface)),
               ),
               child: Column(
                 children: [
@@ -694,7 +689,7 @@ child: TabBarView(
     );
   }
 
-// ==================== APPBAR ====================
+  // ==================== APPBAR ====================
   // ==================== HEADER ====================
   Widget _buildHeader({bool isTablet = false}) {
     return Container(
@@ -709,10 +704,9 @@ child: TabBarView(
             children: [
               Text(
                 'Pilih Produk',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               // QR Scanner Button
               Tooltip(
@@ -748,15 +742,16 @@ child: TabBarView(
                 onTap: () => setState(() => _selectedCategoryId = null),
               ),
               const SizedBox(width: 6),
-              ...product.categories.map((c) => Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _buildChip(
-                      label: c.name,
-                      selected: _selectedCategoryId == c.id,
-                      onTap: () =>
-                          setState(() => _selectedCategoryId = c.id),
-                    ),
-                  )),
+              ...product.categories.map(
+                (c) => Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: _buildChip(
+                    label: c.name,
+                    selected: _selectedCategoryId == c.id,
+                    onTap: () => setState(() => _selectedCategoryId = c.id),
+                  ),
+                ),
+              ),
             ],
           ),
         );
@@ -784,7 +779,7 @@ child: TabBarView(
     );
   }
 
-// ==================== PRODUCTS ====================
+  // ==================== PRODUCTS ====================
   Widget _buildProductList() {
     return Consumer<ProductProvider>(
       builder: (_, product, __) {
@@ -796,7 +791,6 @@ child: TabBarView(
           return _buildProductGridSkeleton();
         }
 
-
         if (products.isEmpty) {
           return Center(
             child: Text(
@@ -807,11 +801,12 @@ child: TabBarView(
         }
 
         // Sort: products with stock > 0 first, then by stock descending
-        products = [...products]..sort((a, b) {
-          if (a.stock > 0 && b.stock <= 0) return -1;
-          if (a.stock <= 0 && b.stock > 0) return 1;
-          return b.stock.compareTo(a.stock);
-        });
+        products = [...products]
+          ..sort((a, b) {
+            if (a.stock > 0 && b.stock <= 0) return -1;
+            if (a.stock <= 0 && b.stock > 0) return 1;
+            return b.stock.compareTo(a.stock);
+          });
 
         return GridView.builder(
           padding: const EdgeInsets.all(12),
@@ -825,30 +820,32 @@ child: TabBarView(
           itemBuilder: (context, index) {
             final productItem = products[index];
             final isOutOfStock = productItem.tersedia <= 0;
-            
+
             return InkWell(
-              onTap: isOutOfStock ? null : () {
-                context.read<CartProvider>().addItem(productItem);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${productItem.name} ditambahkan'),
-                    duration: const Duration(milliseconds: 400),
-                  ),
-                );
-              },
+              onTap: isOutOfStock
+                  ? null
+                  : () {
+                      context.read<CartProvider>().addItem(productItem);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${productItem.name} ditambahkan'),
+                          duration: const Duration(milliseconds: 400),
+                        ),
+                      );
+                    },
               borderRadius: BorderRadius.circular(12),
               child: Container(
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: isOutOfStock 
-                      ? AppColors.textSecondary.withValues(alpha: 0.3) 
-                      : AppColors.altSurface,
+                    color: isOutOfStock
+                        ? AppColors.textSecondary.withValues(alpha: 0.3)
+                        : AppColors.altSurface,
                     width: 1,
                   ),
                   borderRadius: BorderRadius.circular(12),
-                  color: isOutOfStock 
-                    ? AppColors.surface.withValues(alpha: 0.5) 
-                    : AppColors.surface,
+                  color: isOutOfStock
+                      ? AppColors.surface.withValues(alpha: 0.5)
+                      : AppColors.surface,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.1),
@@ -888,9 +885,9 @@ child: TabBarView(
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 12,
-                              color: isOutOfStock 
-                                ? AppColors.textSecondary 
-                                : AppColors.textPrimary,
+                              color: isOutOfStock
+                                  ? AppColors.textSecondary
+                                  : AppColors.textPrimary,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -900,9 +897,9 @@ child: TabBarView(
                           Text(
                             NumberFormatter.formatRupiah(productItem.price),
                             style: TextStyle(
-                              color: isOutOfStock 
-                                ? AppColors.textSecondary 
-                                : AppColors.accent,
+                              color: isOutOfStock
+                                  ? AppColors.textSecondary
+                                  : AppColors.accent,
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                             ),
@@ -915,23 +912,27 @@ child: TabBarView(
                               // Stock Badge (quantity from showcase_allocations)
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, 
-                                  vertical: 2
+                                  horizontal: 6,
+                                  vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
                                   color: productItem.stock <= 0
-                                    ? AppColors.error.withValues(alpha: 0.15) 
-                                    : AppColors.success.withValues(alpha: 0.15),
+                                      ? AppColors.error.withValues(alpha: 0.15)
+                                      : AppColors.success.withValues(
+                                          alpha: 0.15,
+                                        ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  productItem.stock <= 0 ? 'Habis' : 'Stok: ${productItem.stock}',
+                                  productItem.stock <= 0
+                                      ? 'Habis'
+                                      : 'Stok: ${productItem.stock}',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                     color: productItem.stock <= 0
-                                      ? AppColors.error 
-                                      : AppColors.success,
+                                        ? AppColors.error
+                                        : AppColors.success,
                                   ),
                                 ),
                               ),
@@ -941,9 +942,9 @@ child: TabBarView(
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
-                                  color: isOutOfStock 
-                                    ? AppColors.textSecondary 
-                                    : AppColors.accent,
+                                  color: isOutOfStock
+                                      ? AppColors.textSecondary
+                                      : AppColors.accent,
                                 ),
                               ),
                             ],
@@ -964,7 +965,9 @@ child: TabBarView(
   // Helper to build product image
   Widget _buildProductImage(Product product, bool isOutOfStock) {
     // Get image path from product name using helper
-    final imagePath = product.imageUrl ?? ProductImageHelper.getProductImagePath(product.name);
+    final imagePath =
+        product.imageUrl ??
+        ProductImageHelper.getProductImagePath(product.name);
 
     // Try to load image from assets
     if (imagePath != null && imagePath.isNotEmpty) {
@@ -981,11 +984,7 @@ child: TabBarView(
             Container(
               color: Colors.black.withValues(alpha: 0.5),
               child: Center(
-                child: Icon(
-                  Icons.block,
-                  color: AppColors.error,
-                  size: 32,
-                ),
+                child: Icon(Icons.block, color: AppColors.error, size: 32),
               ),
             ),
         ],
@@ -1003,16 +1002,11 @@ child: TabBarView(
         Icon(
           Icons.coffee,
           size: 48,
-          color: isOutOfStock 
-            ? AppColors.textSecondary.withValues(alpha: 0.3)
-            : AppColors.primary.withValues(alpha: 0.3),
+          color: isOutOfStock
+              ? AppColors.textSecondary.withValues(alpha: 0.3)
+              : AppColors.primary.withValues(alpha: 0.3),
         ),
-        if (isOutOfStock)
-          Icon(
-            Icons.block,
-            color: AppColors.error,
-            size: 32,
-          ),
+        if (isOutOfStock) Icon(Icons.block, color: AppColors.error, size: 32),
       ],
     );
   }
@@ -1048,14 +1042,14 @@ child: TabBarView(
   }
 
   void _handleProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const ProfileScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const ProfileScreen()));
   }
 
   void _handleSettings() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Setting - Coming Soon')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Setting - Coming Soon')));
   }
 }

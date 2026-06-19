@@ -46,10 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final rawEmail = _emailController.text;
       final rawPassword = _passwordController.text;
 
-      await authProvider.signIn(
-        email: rawEmail,
-        password: rawPassword,
-      );
+      await authProvider.signIn(email: rawEmail, password: rawPassword);
 
       if (mounted && authProvider.isAuthenticated) {
         final role = authProvider.currentUser?.role;
@@ -77,7 +74,8 @@ class _LoginScreenState extends State<LoginScreen> {
           errorMessage =
               'Gagal terhubung ke server. Periksa koneksi WiFi/internet Anda. Coba:\n• Matikan dan nyalakan WiFi\n• Atau restart device';
         } else if (errorMessage.contains('not initialized')) {
-          errorMessage = 'Gagal menghubungkan ke server. Coba lagi dalam beberapa saat';
+          errorMessage =
+              'Gagal menghubungkan ke server. Coba lagi dalam beberapa saat';
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -109,7 +107,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Text(
                       'PapiApps Outlets',
-                      style: Theme.of(context).textTheme.headlineLarge!.copyWith(
+                      style: Theme.of(context).textTheme.headlineLarge!
+                          .copyWith(
                             fontWeight: FontWeight.bold,
                             color: AppColors.primary,
                           ),
@@ -117,19 +116,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     Text(
                       'Sistem POS Outlet Kopi',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium!
-                          .copyWith(color: AppColors.textSecondary),
+                      style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 60),
                 // Email Field
-                Text(
-                  'Email',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
+                Text('Email', style: Theme.of(context).textTheme.labelLarge),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _emailController,
@@ -150,10 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 // Password Field
-                Text(
-                  'Password',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
+                Text('Password', style: Theme.of(context).textTheme.labelLarge),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _passwordController,
@@ -207,8 +199,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 width: 24,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             : const Text(

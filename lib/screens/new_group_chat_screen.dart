@@ -5,10 +5,7 @@ import '../services/supabase_service.dart';
 class NewGroupChatScreen extends StatefulWidget {
   final Function() onGroupCreated;
 
-  const NewGroupChatScreen({
-    Key? key,
-    required this.onGroupCreated,
-  }) : super(key: key);
+  const NewGroupChatScreen({super.key, required this.onGroupCreated});
 
   @override
   State<NewGroupChatScreen> createState() => _NewGroupChatScreenState();
@@ -34,12 +31,15 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
 
   Future<void> _loadUsers() async {
     try {
-      final response = await supabaseService.client.from('users').select('id, email, name').order('email');
+      final response = await supabaseService.client
+          .from('users')
+          .select('id, email, name')
+          .order('email');
       setState(() {
         allUsers = List<Map<String, dynamic>>.from(response);
       });
     } catch (e) {
-      print('Error loading users: $e');
+      debugPrint('Error loading users: $e');
     }
   }
 
@@ -59,9 +59,9 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
     }
 
     if (selectedMemberIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih minimal 1 anggota')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Pilih minimal 1 anggota')));
       return;
     }
 
@@ -69,10 +69,13 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
 
     try {
       // Create group
-      final groupResponse = await supabaseService.client.from('group_chats').insert({
-        'name': nameController.text,
-        'description': descriptionController.text,
-      }).select();
+      final groupResponse = await supabaseService.client
+          .from('group_chats')
+          .insert({
+            'name': nameController.text,
+            'description': descriptionController.text,
+          })
+          .select();
 
       if (groupResponse.isNotEmpty) {
         final groupId = groupResponse[0]['id'] as String;
@@ -82,7 +85,7 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
           try {
             await supabaseService.addGroupMember(groupId, userId);
           } catch (e) {
-            print('Error adding member $userId: $e');
+            debugPrint('Error adding member $userId: $e');
           }
         }
       }
@@ -91,15 +94,15 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Group berhasil dibuat')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Group berhasil dibuat')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       setState(() => isLoading = false);
@@ -134,7 +137,10 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -148,7 +154,10 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -194,7 +203,9 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
                               }
                             });
                           },
-                          title: Text(user['name'] ?? user['email'] ?? 'Unknown'),
+                          title: Text(
+                            user['name'] ?? user['email'] ?? 'Unknown',
+                          ),
                           subtitle: Text(user['email'] ?? ''),
                           controlAffinity: ListTileControlAffinity.leading,
                         );
@@ -204,10 +215,7 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
             const SizedBox(height: 16),
             Text(
               '${selectedMemberIds.length} anggota dipilih',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -224,7 +232,9 @@ class _NewGroupChatScreenState extends State<NewGroupChatScreen> {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Text(

@@ -17,14 +17,15 @@ class InvestorProfitPaymentScreen extends StatefulWidget {
       _InvestorProfitPaymentScreenState();
 }
 
-class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScreen>
+class _InvestorProfitPaymentScreenState
+    extends State<InvestorProfitPaymentScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _supabaseService = SupabaseService();
   bool _isLoading = true;
   List<Map<String, dynamic>> _investors = [];
   String? _errorMessage;
-  
+
   // Track expanded sections for profit details
   final Map<String, bool> _expandedProfitDetails = {}; // monthKey -> isExpanded
 
@@ -46,7 +47,7 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
       _isLoading = true;
       _errorMessage = null;
     });
-    
+
     try {
       final investors = await _supabaseService.getAllInvestors();
       if (mounted) {
@@ -113,7 +114,7 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
+                            color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: AppColors.primary),
                           ),
@@ -143,9 +144,8 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                         // Monthly Profits Title
                         Text(
                           '📊 Daftar Profit Per Bulan',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 12),
 
@@ -158,7 +158,9 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                               padding: const EdgeInsets.all(16),
                               child: Text(
                                 'Belum ada data profit',
-                                style: TextStyle(color: AppColors.textSecondary),
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                             ),
                           )
@@ -173,22 +175,32 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                                 final month = profit['month'] as String;
                                 final monthKey = profit['monthKey'] as String;
                                 final profitAmount =
-                                    (profit['profit'] as num?)?.toDouble() ?? 0.0;
+                                    (profit['profit'] as num?)?.toDouble() ??
+                                    0.0;
                                 final rawStatus = profit['status'] as String;
                                 final status =
                                     (optimisticStatus[monthKey] ?? rawStatus)
                                         .toLowerCase();
-                                final statusColor =
-                                    status == 'approved' ? Colors.green : Colors.orange;
+                                final statusColor = status == 'approved'
+                                    ? Colors.green
+                                    : Colors.orange;
 
                                 final totalOmset =
-                                    (profit['totalOmset'] as num?)?.toDouble() ?? 0.0;
+                                    (profit['totalOmset'] as num?)
+                                        ?.toDouble() ??
+                                    0.0;
                                 final totalBonus =
-                                    (profit['totalBonus'] as num?)?.toDouble() ?? 0.0;
+                                    (profit['totalBonus'] as num?)
+                                        ?.toDouble() ??
+                                    0.0;
                                 final totalShortfall =
-                                    (profit['totalShortfall'] as num?)?.toDouble() ?? 0.0;
+                                    (profit['totalShortfall'] as num?)
+                                        ?.toDouble() ??
+                                    0.0;
                                 final marginPercentage =
-                                    (profit['marginPercentage'] as num?)?.toDouble() ?? 0.0;
+                                    (profit['marginPercentage'] as num?)
+                                        ?.toDouble() ??
+                                    0.0;
                                 final isExpanded =
                                     _expandedProfitDetails[monthKey] ?? false;
 
@@ -198,9 +210,14 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                                       margin: const EdgeInsets.only(bottom: 10),
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
-                                        color: statusColor.withOpacity(0.05),
+                                        color: statusColor.withValues(
+                                          alpha: 0.05,
+                                        ),
                                         border: Border.all(
-                                            color: statusColor.withOpacity(0.3)),
+                                          color: statusColor.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                        ),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Column(
@@ -217,7 +234,8 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                                                     Text(
                                                       month,
                                                       style: const TextStyle(
-                                                        fontWeight: FontWeight.bold,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                         fontSize: 12,
                                                       ),
                                                     ),
@@ -226,8 +244,10 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                                                       'Rp ${formatRupiah(profitAmount)}',
                                                       style: TextStyle(
                                                         fontSize: 12,
-                                                        color: AppColors.primary,
-                                                        fontWeight: FontWeight.bold,
+                                                        color:
+                                                            AppColors.primary,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                       ),
                                                     ),
                                                   ],
@@ -238,21 +258,30 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                                                     CrossAxisAlignment.end,
                                                 children: [
                                                   Container(
-                                                    padding: const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4,
-                                                    ),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 4,
+                                                        ),
                                                     decoration: BoxDecoration(
-                                                      color: statusColor.withOpacity(0.2),
+                                                      color: statusColor
+                                                          .withValues(
+                                                            alpha: 0.2,
+                                                          ),
                                                       borderRadius:
-                                                          BorderRadius.circular(6),
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
                                                     ),
                                                     child: Text(
-                                                      status == 'approved' ? 'Dibayar' : 'Pending',
+                                                      status == 'approved'
+                                                          ? 'Dibayar'
+                                                          : 'Pending',
                                                       style: TextStyle(
                                                         fontSize: 10,
                                                         color: statusColor,
-                                                        fontWeight: FontWeight.bold,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                       ),
                                                     ),
                                                   ),
@@ -261,49 +290,79 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                                                     onTap: status == 'pending'
                                                         ? () async {
                                                             modalSetState(() {
-                                                              optimisticStatus[monthKey] = 'approved';
+                                                              optimisticStatus[monthKey] =
+                                                                  'approved';
                                                             });
 
-                                                            final success = await _supabaseService
-                                                                .approveInvestorMonthlyProfit(
-                                                                    investorId, monthKey);
+                                                            final success =
+                                                                await _supabaseService
+                                                                    .approveInvestorMonthlyProfit(
+                                                                      investorId,
+                                                                      monthKey,
+                                                                    );
 
                                                             if (mounted) {
                                                               if (success) {
-                                                                ScaffoldMessenger.of(context)
-                                                                    .showSnackBar(SnackBar(
-                                                                  content: Text(
-                                                                      '✅ Pembayaran profit $monthKey untuk $investorName berhasil'),
-                                                                  backgroundColor: Colors.green,
-                                                                ));
+                                                                ScaffoldMessenger.of(
+                                                                  context,
+                                                                ).showSnackBar(
+                                                                  SnackBar(
+                                                                    content: Text(
+                                                                      '✅ Pembayaran profit $monthKey untuk $investorName berhasil',
+                                                                    ),
+                                                                    backgroundColor:
+                                                                        Colors
+                                                                            .green,
+                                                                  ),
+                                                                );
                                                               } else {
                                                                 modalSetState(() {
-                                                                  optimisticStatus.remove(monthKey);
+                                                                  optimisticStatus
+                                                                      .remove(
+                                                                        monthKey,
+                                                                      );
                                                                 });
-                                                                ScaffoldMessenger.of(context)
-                                                                    .showSnackBar(const SnackBar(
-                                                                  content: Text('❌ Gagal memproses pembayaran'),
-                                                                  backgroundColor: Colors.red,
-                                                                ));
+                                                                ScaffoldMessenger.of(
+                                                                  context,
+                                                                ).showSnackBar(
+                                                                  const SnackBar(
+                                                                    content: Text(
+                                                                      '❌ Gagal memproses pembayaran',
+                                                                    ),
+                                                                    backgroundColor:
+                                                                        Colors
+                                                                            .red,
+                                                                  ),
+                                                                );
                                                               }
                                                             }
                                                           }
                                                         : null,
                                                     child: Container(
-                                                      padding: const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4,
-                                                      ),
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 4,
+                                                          ),
                                                       decoration: BoxDecoration(
-                                                        color: status == 'pending' ? Colors.blue : Colors.grey,
-                                                        borderRadius: BorderRadius.circular(6),
+                                                        color:
+                                                            status == 'pending'
+                                                            ? Colors.blue
+                                                            : Colors.grey,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              6,
+                                                            ),
                                                       ),
                                                       child: Text(
-                                                        status == 'pending' ? 'Bayar' : 'Dibayar',
+                                                        status == 'pending'
+                                                            ? 'Bayar'
+                                                            : 'Dibayar',
                                                         style: const TextStyle(
                                                           fontSize: 10,
                                                           color: Colors.white,
-                                                          fontWeight: FontWeight.bold,
+                                                          fontWeight:
+                                                              FontWeight.bold,
                                                         ),
                                                       ),
                                                     ),
@@ -315,27 +374,37 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
 
                                           if (totalOmset > 0)
                                             Padding(
-                                              padding: const EdgeInsets.only(top: 8),
+                                              padding: const EdgeInsets.only(
+                                                top: 8,
+                                              ),
                                               child: GestureDetector(
                                                 onTap: () {
                                                   setState(() {
-                                                    _expandedProfitDetails[monthKey] = !isExpanded;
+                                                    _expandedProfitDetails[monthKey] =
+                                                        !isExpanded;
                                                   });
                                                 },
                                                 child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
                                                   children: [
                                                     Text(
-                                                      isExpanded ? 'Sembunyikan Detail' : 'Tampilkan Detail',
+                                                      isExpanded
+                                                          ? 'Sembunyikan Detail'
+                                                          : 'Tampilkan Detail',
                                                       style: TextStyle(
                                                         fontSize: 11,
-                                                        color: AppColors.primary,
-                                                        fontWeight: FontWeight.w500,
+                                                        color:
+                                                            AppColors.primary,
+                                                        fontWeight:
+                                                            FontWeight.w500,
                                                       ),
                                                     ),
                                                     const SizedBox(width: 4),
                                                     Icon(
-                                                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                                                      isExpanded
+                                                          ? Icons.expand_less
+                                                          : Icons.expand_more,
                                                       size: 16,
                                                       color: AppColors.primary,
                                                     ),
@@ -349,15 +418,22 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
 
                                     if (isExpanded && totalOmset > 0)
                                       Container(
-                                        margin: const EdgeInsets.only(bottom: 10),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 10,
+                                        ),
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: Colors.grey.shade50,
-                                          border: Border.all(color: Colors.grey.shade300),
-                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               'Rincian Perhitungan:',
@@ -395,9 +471,16 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
                                             ),
                                             const SizedBox(height: 10),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(vertical: 6),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 6,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                border: Border(top: BorderSide(color: Colors.grey.shade300)),
+                                                border: Border(
+                                                  top: BorderSide(
+                                                    color: Colors.grey.shade300,
+                                                  ),
+                                                ),
                                               ),
                                               child: _buildDetailLine(
                                                 'Margin Investor ($marginPercentage%)',
@@ -435,57 +518,7 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
     );
   }
 
-  Future<void> _approveMonthlyProfit(
-    String investorId,
-    String monthKey,
-    String investorName,
-  ) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-
-    try {
-      final success = await _supabaseService.approveInvestorMonthlyProfit(
-        investorId,
-        monthKey,
-      );
-
-      if (mounted) {
-        Navigator.pop(context);
-        if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  '✅ Pembayaran profit $monthKey untuk $investorName berhasil'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          _loadInvestorsData();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ Gagal memproses pembayaran'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
+  // Removed unused helper `_approveMonthlyProfit` (not referenced anywhere).
 
   Widget _buildInvestorCard(Map<String, dynamic> investorData) {
     final investorName = investorData['name'] as String;
@@ -507,7 +540,7 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
@@ -575,134 +608,113 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
           _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _errorMessage != null
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            size: 48,
-                            color: Colors.red.shade400,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Error: $_errorMessage',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _loadInvestorsData,
-                            child: const Text('Coba Lagi'),
-                          ),
-                        ],
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: Colors.red.shade400,
                       ),
-                    )
-                  : _investors.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error: $_errorMessage',
+                        style: TextStyle(color: AppColors.textSecondary),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadInvestorsData,
+                        child: const Text('Coba Lagi'),
+                      ),
+                    ],
+                  ),
+                )
+              : _investors.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inbox, size: 48, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Belum ada data investor',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // Header
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                Icons.inbox,
-                                size: 48,
-                                color: Colors.grey.shade400,
-                              ),
-                              const SizedBox(height: 16),
                               Text(
-                                'Belum ada data investor',
+                                'Daftar Investor',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Klik untuk melihat profit per bulan',
                                 style: TextStyle(
+                                  fontSize: 12,
                                   color: AppColors.textSecondary,
                                 ),
                               ),
                             ],
                           ),
-                        )
-                      : SingleChildScrollView(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              // Header
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Daftar Investor',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Klik untuk melihat profit per bulan',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '${_investors.length} investor',
-                                      style: TextStyle(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '${_investors.length} investor',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
                               ),
-                              const SizedBox(height: 20),
-
-                              // Investor List
-                              ListView.builder(
-                                shrinkWrap: true,
-                                physics:
-                                    const NeverScrollableScrollPhysics(),
-                                itemCount: _investors.length,
-                                itemBuilder: (context, index) =>
-                                    _buildInvestorCard(_investors[index]),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Investor List
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _investors.length,
+                        itemBuilder: (context, index) =>
+                            _buildInvestorCard(_investors[index]),
+                      ),
+                    ],
+                  ),
+                ),
 
           // Tab 2: History
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.history,
-                  size: 48,
-                  color: Colors.grey.shade400,
-                ),
+                Icon(Icons.history, size: 48, color: Colors.grey.shade400),
                 const SizedBox(height: 16),
                 Text(
                   'Fitur riwayat pembayaran',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -718,10 +730,7 @@ class _InvestorProfitPaymentScreenState extends State<InvestorProfitPaymentScree
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
         ),
         Text(
           value,

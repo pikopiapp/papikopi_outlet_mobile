@@ -71,8 +71,6 @@ class _ManagerProfileScreenState extends State<ManagerProfileScreen> {
     Navigator.of(context).pushReplacementNamed('/login');
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<User>(
@@ -104,7 +102,8 @@ class _ManagerProfileScreenState extends State<ManagerProfileScreen> {
         }
 
         final user = snapshot.data;
-        if (user == null) return const Center(child: Text('Data pengguna tidak ditemukan'));
+        if (user == null)
+          return const Center(child: Text('Data pengguna tidak ditemukan'));
 
         return Scaffold(
           body: SingleChildScrollView(
@@ -115,9 +114,7 @@ class _ManagerProfileScreenState extends State<ManagerProfileScreen> {
               children: [
                 Container(
                   width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                  ),
+                  decoration: const BoxDecoration(color: AppColors.primary),
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
@@ -126,12 +123,14 @@ class _ManagerProfileScreenState extends State<ManagerProfileScreen> {
                         height: 100,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           border: Border.all(color: Colors.white, width: 3),
                         ),
                         child: Center(
                           child: Text(
-                            user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                            user.name.isNotEmpty
+                                ? user.name[0].toUpperCase()
+                                : '?',
                             style: const TextStyle(
                               fontSize: 48,
                               fontWeight: FontWeight.bold,
@@ -151,9 +150,12 @@ class _ManagerProfileScreenState extends State<ManagerProfileScreen> {
                       ),
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.white, width: 1),
                         ),
@@ -184,10 +186,7 @@ class _ManagerProfileScreenState extends State<ManagerProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      _InfoBox(
-                        icon: Icons.email_outlined,
-                        value: user.email,
-                      ),
+                      _InfoBox(icon: Icons.email_outlined, value: user.email),
                       const SizedBox(height: 20),
                       const Text(
                         'Posisi',
@@ -247,10 +246,7 @@ class _InfoBox extends StatelessWidget {
   final IconData icon;
   final String value;
 
-  const _InfoBox({
-    required this.icon,
-    required this.value,
-  });
+  const _InfoBox({required this.icon, required this.value});
 
   @override
   Widget build(BuildContext context) {

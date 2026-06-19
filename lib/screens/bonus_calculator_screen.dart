@@ -44,10 +44,7 @@ class BonusCalculatorScreen extends StatelessWidget {
                   SizedBox(height: 8),
                   Text(
                     'Hitung bonus penjualan berdasarkan metode berjenjang (progressive). Semakin besar omset, semakin banyak layer bonus yang didapat.',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 14),
                   ),
                 ],
               ),
@@ -57,10 +54,7 @@ class BonusCalculatorScreen extends StatelessWidget {
             // Tier Structure Reference
             const Text(
               '📋 Struktur Tier Bonus',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             GridView.count(
@@ -96,10 +90,7 @@ class BonusCalculatorScreen extends StatelessWidget {
                 children: [
                   const Text(
                     '📌 Contoh Perhitungan Bonus',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   const Text(
@@ -179,10 +170,7 @@ class BonusCalculatorScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             range,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.green.shade600,
-            ),
+            style: TextStyle(fontSize: 11, color: Colors.green.shade600),
           ),
         ],
       ),

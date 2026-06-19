@@ -37,12 +37,10 @@ class _FinanceScreenState extends State<FinanceScreen>
   Map<String, dynamic>? _cashDepositData;
   bool _isLoadingCashDeposit = true;
   late DateTime _selectedDate;
-  bool _isLoadingLeaderboard = true;
   bool _isRefreshing = false;
   late String _outletId = '';
   late String _baristaId = ''; // 🆕 Cache barista ID
   late int _businessDayStartHour = 4; // 🆕 Cache business day start hour
-  
 
   @override
   void initState() {
@@ -57,7 +55,7 @@ class _FinanceScreenState extends State<FinanceScreen>
       duration: const Duration(seconds: 2),
       vsync: this,
     );
-    
+
     // Get outlet ID from AuthProvider
     // Note: We'll get it in the callback to ensure context is available
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -86,7 +84,6 @@ class _FinanceScreenState extends State<FinanceScreen>
             setState(() {
               _isLoadingRevenue = true;
               _isLoadingCashDeposit = true;
-              _isLoadingLeaderboard = true;
             });
           }
 
@@ -104,31 +101,28 @@ class _FinanceScreenState extends State<FinanceScreen>
     });
   }
 
-  
-
   Future<void> _loadCashDeposit() async {
     final supabaseService = SupabaseService();
-    
+
     try {
-      print('DEBUG: Starting _loadCashDeposit, baristaId=$_baristaId');
+      debugPrint('DEBUG: Starting _loadCashDeposit, baristaId=$_baristaId');
       final data = await supabaseService.getCashDepositData(
         outletId: _outletId,
         baristaId: _baristaId,
         date: _selectedDate,
       );
-      
+
       if (!mounted) {
         return;
       }
-      
+
       setState(() {
         _cashDepositData = data;
         _isLoadingCashDeposit = false;
       });
-      print('DEBUG: _loadCashDeposit completed');
-      
+      debugPrint('DEBUG: _loadCashDeposit completed');
     } catch (e) {
-      print('DEBUG: Error in _loadCashDeposit: $e');
+      debugPrint('DEBUG: Error in _loadCashDeposit: $e');
       if (!mounted) {
         return;
       }
@@ -147,11 +141,14 @@ class _FinanceScreenState extends State<FinanceScreen>
           .select('business_day_start_hour')
           .eq('id', _outletId)
           .single();
-      
-      _businessDayStartHour = (response['business_day_start_hour'] as int?) ?? 4;
-      print('DEBUG: Loaded businessDayStartHour=$_businessDayStartHour for outlet=$_outletId');
+
+      _businessDayStartHour =
+          (response['business_day_start_hour'] as int?) ?? 4;
+      debugPrint(
+        'DEBUG: Loaded businessDayStartHour=$_businessDayStartHour for outlet=$_outletId',
+      );
     } catch (e) {
-      print('DEBUG: Error loading businessDayStartHour: $e');
+      debugPrint('DEBUG: Error loading businessDayStartHour: $e');
       _businessDayStartHour = 4; // default
     }
   }
@@ -159,9 +156,11 @@ class _FinanceScreenState extends State<FinanceScreen>
   // Helper method to reload and ensure UI updates
   Future<void> _reloadCashDepositWithRetry() async {
     try {
-      print('DEBUG: Starting _reloadCashDepositWithRetry, baristaId=$_baristaId');
+      debugPrint(
+        'DEBUG: Starting _reloadCashDepositWithRetry, baristaId=$_baristaId',
+      );
       if (_baristaId.isEmpty) {
-        print('DEBUG: baristaId is empty, returning');
+        debugPrint('DEBUG: baristaId is empty, returning');
         if (mounted) {
           setState(() {
             _isLoadingCashDeposit = false;
@@ -169,48 +168,52 @@ class _FinanceScreenState extends State<FinanceScreen>
         }
         return;
       }
-      
+
       // Wait a bit for database to process insert
       await Future.delayed(const Duration(milliseconds: 1500));
-      print('DEBUG: Delay completed, now fetching data');
-      
+      debugPrint('DEBUG: Delay completed, now fetching data');
+
       final supabaseService = SupabaseService();
-      
+
       // Add timeout to prevent infinite wait
-      final data = await supabaseService.getCashDepositData(
-        outletId: _outletId,
-        baristaId: _baristaId,
-        date: _selectedDate,
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          print('DEBUG: getCashDepositData timeout!');
-          return {
-            'cashAmount': 0.0,
-            'cashCount': 0,
-            'qrisAmount': 0.0,
-            'qrisCount': 0,
-            'totalOmset': 0.0,
-            'bonus': 0.0,
-            'mealAllowance': 0.0,
-            'depositAmount': 0.0,
-            'handoverStatus': 'pending',
-          };
-        },
+      final data = await supabaseService
+          .getCashDepositData(
+            outletId: _outletId,
+            baristaId: _baristaId,
+            date: _selectedDate,
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('DEBUG: getCashDepositData timeout!');
+              return {
+                'cashAmount': 0.0,
+                'cashCount': 0,
+                'qrisAmount': 0.0,
+                'qrisCount': 0,
+                'totalOmset': 0.0,
+                'bonus': 0.0,
+                'mealAllowance': 0.0,
+                'depositAmount': 0.0,
+                'handoverStatus': 'pending',
+              };
+            },
+          );
+      debugPrint(
+        'DEBUG: Data fetched, handoverStatus=${data['handoverStatus']}',
       );
-      print('DEBUG: Data fetched, handoverStatus=${data['handoverStatus']}');
-      
+
       if (mounted) {
         setState(() {
           _cashDepositData = data;
           _isLoadingCashDeposit = false;
         });
-        print('DEBUG: setState completed, loading should be false now');
+        debugPrint('DEBUG: setState completed, loading should be false now');
       } else {
-        print('DEBUG: Not mounted, cannot setState');
+        debugPrint('DEBUG: Not mounted, cannot setState');
       }
     } catch (e) {
-      print('DEBUG: Error in _reloadCashDepositWithRetry: $e');
+      debugPrint('DEBUG: Error in _reloadCashDepositWithRetry: $e');
       if (mounted) {
         setState(() {
           _isLoadingCashDeposit = false;
@@ -222,9 +225,11 @@ class _FinanceScreenState extends State<FinanceScreen>
   // Reload with a specific date (used after recording shortfall to query the correct business day)
   Future<void> _reloadCashDepositWithRetryForDate(DateTime dateToQuery) async {
     try {
-      print('DEBUG: Starting _reloadCashDepositWithRetryForDate with dateToQuery=$dateToQuery, baristaId=$_baristaId');
+      debugPrint(
+        'DEBUG: Starting _reloadCashDepositWithRetryForDate with dateToQuery=$dateToQuery, baristaId=$_baristaId',
+      );
       if (_baristaId.isEmpty) {
-        print('DEBUG: baristaId is empty, returning');
+        debugPrint('DEBUG: baristaId is empty, returning');
         if (mounted) {
           setState(() {
             _isLoadingCashDeposit = false;
@@ -232,48 +237,55 @@ class _FinanceScreenState extends State<FinanceScreen>
         }
         return;
       }
-      
+
       // Wait a bit for database to process insert
       await Future.delayed(const Duration(milliseconds: 1500));
-      print('DEBUG: Delay completed, now fetching data with dateToQuery=$dateToQuery');
-      
-      final supabaseService = SupabaseService();
-      
-      // Add timeout to prevent infinite wait
-      final data = await supabaseService.getCashDepositData(
-        outletId: _outletId,
-        baristaId: _baristaId,
-        date: dateToQuery,  // Use the date we recorded for, not current _selectedDate
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          print('DEBUG: getCashDepositData timeout!');
-          return {
-            'cashAmount': 0.0,
-            'cashCount': 0,
-            'qrisAmount': 0.0,
-            'qrisCount': 0,
-            'totalOmset': 0.0,
-            'bonus': 0.0,
-            'mealAllowance': 0.0,
-            'depositAmount': 0.0,
-            'handoverStatus': 'pending',
-          };
-        },
+      debugPrint(
+        'DEBUG: Delay completed, now fetching data with dateToQuery=$dateToQuery',
       );
-      print('DEBUG: Data fetched with dateToQuery=$dateToQuery, handoverStatus=${data['handoverStatus']}, shortfall_recorded=${data['shortfall_receipt_recorded']}');
-      
+
+      final supabaseService = SupabaseService();
+
+      // Add timeout to prevent infinite wait
+      final data = await supabaseService
+          .getCashDepositData(
+            outletId: _outletId,
+            baristaId: _baristaId,
+            date:
+                dateToQuery, // Use the date we recorded for, not current _selectedDate
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('DEBUG: getCashDepositData timeout!');
+              return {
+                'cashAmount': 0.0,
+                'cashCount': 0,
+                'qrisAmount': 0.0,
+                'qrisCount': 0,
+                'totalOmset': 0.0,
+                'bonus': 0.0,
+                'mealAllowance': 0.0,
+                'depositAmount': 0.0,
+                'handoverStatus': 'pending',
+              };
+            },
+          );
+      debugPrint(
+        'DEBUG: Data fetched with dateToQuery=$dateToQuery, handoverStatus=${data['handoverStatus']}, shortfall_recorded=${data['shortfall_receipt_recorded']}',
+      );
+
       if (mounted) {
         setState(() {
           _cashDepositData = data;
           _isLoadingCashDeposit = false;
         });
-        print('DEBUG: setState completed, loading should be false now');
+        debugPrint('DEBUG: setState completed, loading should be false now');
       } else {
-        print('DEBUG: Not mounted, cannot setState');
+        debugPrint('DEBUG: Not mounted, cannot setState');
       }
     } catch (e) {
-      print('DEBUG: Error in _reloadCashDepositWithRetryForDate: $e');
+      debugPrint('DEBUG: Error in _reloadCashDepositWithRetryForDate: $e');
       if (mounted) {
         setState(() {
           _isLoadingCashDeposit = false;
@@ -284,28 +296,27 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   Future<void> _loadRevenue() async {
     final supabaseService = SupabaseService();
-    
+
     try {
       final data = await supabaseService.getRevenueData(
         outletId: _outletId,
         selectedDate: _selectedDate,
       );
-      
+
       // Check mounted BEFORE calling setState
       if (!mounted) {
         return;
       }
-      
+
       setState(() {
         _revenueData = data;
         _isLoadingRevenue = false;
       });
-      
     } catch (e) {
       if (!mounted) {
         return;
       }
-      
+
       setState(() {
         _isLoadingRevenue = false;
       });
@@ -318,26 +329,21 @@ class _FinanceScreenState extends State<FinanceScreen>
     // Fetch leaderboard from all outlets using business day
     // Assign future outside heavy setState to avoid race conditions
     setState(() {
-      _isLoadingLeaderboard = true;
       // keep previous future until we assign the real one below
       _leaderboardFuture = Future.value(<Map<String, dynamic>>[]);
     });
 
     final future = supabaseService
-        .getGlobalLeaderboard(
-      outletId: _outletId,
-      selectedDate: _selectedDate,
-    )
+        .getGlobalLeaderboard(outletId: _outletId, selectedDate: _selectedDate)
         .then((data) {
-      return data;
-    }).catchError((error) {
-      return <Map<String, dynamic>>[];
-    }).whenComplete(() {
-      if (!mounted) return;
-      setState(() {
-        _isLoadingLeaderboard = false;
-      });
-    });
+          return data;
+        })
+        .catchError((error) {
+          return <Map<String, dynamic>>[];
+        })
+        .whenComplete(() {
+          if (!mounted) return;
+        });
 
     // finally assign the future so FutureBuilder listens to it
     setState(() {
@@ -444,21 +450,15 @@ class _FinanceScreenState extends State<FinanceScreen>
       // Daily, Weekly, Monthly cards
       Row(
         children: [
-          Expanded(
-            child: _buildRevenueCardSkeleton('Daily'),
-          ),
+          Expanded(child: _buildRevenueCardSkeleton('Daily')),
           const SizedBox(width: 12),
-          Expanded(
-            child: _buildRevenueCardSkeleton('Weekly'),
-          ),
+          Expanded(child: _buildRevenueCardSkeleton('Weekly')),
         ],
       ),
       const SizedBox(height: 12),
       Row(
         children: [
-          Expanded(
-            child: _buildRevenueCardSkeleton('Monthly'),
-          ),
+          Expanded(child: _buildRevenueCardSkeleton('Monthly')),
           const SizedBox(width: 12),
           Expanded(
             child: Container(
@@ -561,7 +561,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.accentLight.withOpacity(0.2),
+                    color: AppColors.accentLight.withValues(alpha: 0.2),
                     border: Border.all(color: Colors.grey[300]!),
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -594,7 +594,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     border: Border.all(color: Colors.grey[300]!),
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -792,41 +792,36 @@ class _FinanceScreenState extends State<FinanceScreen>
   }
 
   Future<void> _refreshData() async {
-    
     // Prevent multiple simultaneous refreshes
     if (_isRefreshing) {
       _showErrorSnackBar('⏳ Refresh sedang berjalan, tunggu sebentar...');
       return;
     }
-    
+
     setState(() {
       _isRefreshing = true;
     });
-    
+
     // Start animation loop
     _refreshAnimationController.repeat();
-    
+
     try {
       setState(() {
         _isLoadingRevenue = true;
         _isLoadingCashDeposit = true;
-        _isLoadingLeaderboard = true;
       });
-      
-      await Future.wait([
-        _loadRevenue(),
-        _loadCashDeposit(),
-      ]);
-      
+
+      await Future.wait([_loadRevenue(), _loadCashDeposit()]);
+
       _loadLeaderboard();
-      
+
       _showSuccessSnackBar('✅ Data berhasil diperbarui');
     } catch (e) {
       _showErrorSnackBar('❌ Gagal memperbarui data: $e');
     } finally {
       // Stop animation
       _refreshAnimationController.stop();
-      
+
       if (mounted) {
         setState(() {
           _isRefreshing = false;
@@ -839,7 +834,8 @@ class _FinanceScreenState extends State<FinanceScreen>
   Widget build(BuildContext context) {
     final supabaseService = SupabaseService();
     final currentUser = supabaseService.getCurrentUser();
-    final isManager = currentUser?.role == 'manager' || currentUser?.role == 'admin';
+    final isManager =
+        currentUser?.role == 'manager' || currentUser?.role == 'admin';
 
     return Scaffold(
       appBar: PapikopiAppBar(
@@ -872,7 +868,6 @@ class _FinanceScreenState extends State<FinanceScreen>
                           _selectedDate = pickedDate;
                           _isLoadingRevenue = true;
                           _isLoadingCashDeposit = true;
-                          _isLoadingLeaderboard = true;
                           _loadRevenue();
                           _loadCashDeposit();
                           _loadLeaderboard();
@@ -880,13 +875,19 @@ class _FinanceScreenState extends State<FinanceScreen>
                       }
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         border: Border.all(color: AppColors.primary),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate),
+                        DateFormat(
+                          'dd MMMM yyyy',
+                          'id_ID',
+                        ).format(_selectedDate),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
@@ -899,17 +900,26 @@ class _FinanceScreenState extends State<FinanceScreen>
                 ElevatedButton(
                   onPressed: () {
                     setState(() {
-                      _selectedDate = DateTime.now();
+                      final now = DateTime.now();
+                      _selectedDate = (now.hour < _businessDayStartHour)
+                          ? DateTime(
+                              now.year,
+                              now.month,
+                              now.day,
+                            ).subtract(const Duration(days: 1))
+                          : DateTime(now.year, now.month, now.day);
                       _isLoadingRevenue = true;
                       _isLoadingCashDeposit = true;
-                      _isLoadingLeaderboard = true;
                       _loadRevenue();
                       _loadCashDeposit();
                       _loadLeaderboard();
                     });
                   },
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     backgroundColor: AppColors.primary,
                   ),
                   child: const Text(
@@ -926,22 +936,13 @@ class _FinanceScreenState extends State<FinanceScreen>
             child: TabBar(
               controller: _tabController,
               tabs: const [
-                Tab(
-                  icon: Icon(Icons.trending_up),
-                  text: 'Revenue',
-                ),
-                Tab(
-                  icon: Icon(Icons.payment),
-                  text: 'Setoran',
-                ),
+                Tab(icon: Icon(Icons.trending_up), text: 'Revenue'),
+                Tab(icon: Icon(Icons.payment), text: 'Setoran'),
                 Tab(
                   icon: Icon(Icons.account_balance_wallet),
                   text: 'Penarikan',
                 ),
-                Tab(
-                  icon: Icon(Icons.star),
-                  text: 'Top Rank',
-                ),
+                Tab(icon: Icon(Icons.star), text: 'Top Rank'),
               ],
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textSecondary,
@@ -990,21 +991,52 @@ class _FinanceScreenState extends State<FinanceScreen>
 
     // Get omset for bonus calculation
     final omset = (dailyData['amount'] as num?)?.toDouble() ?? 0.0;
-    
+
     // Format date for display
-    final isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final dateLabel = isToday ? 'Hari Ini' : DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate);
+    final isToday =
+        DateFormat('yyyy-MM-dd').format(_selectedDate) ==
+        DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final dateLabel = isToday
+        ? 'Hari Ini'
+        : DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate);
 
     // Calculate business day range for the selected date
     final businessDayStartHour = 4;
-    final businessDayStart = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, businessDayStartHour);
-    final businessDayEnd = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day + 1, businessDayStartHour);
-    final endHour = (businessDayStartHour - 1 < 0 ? 23 : businessDayStartHour - 1).toString().padLeft(2, '0');
+    final businessDayStart = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      businessDayStartHour,
+    );
+    final businessDayEnd = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day + 1,
+      businessDayStartHour,
+    );
+    final endHour =
+        (businessDayStartHour - 1 < 0 ? 23 : businessDayStartHour - 1)
+            .toString()
+            .padLeft(2, '0');
     final startHourPadded = businessDayStartHour.toString().padLeft(2, '0');
-    final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    final monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
     final startMonth = monthNames[businessDayStart.month - 1];
     final endMonth = monthNames[businessDayEnd.month - 1];
-    final businessDayDisplay = '${businessDayStart.day} $startMonth $startHourPadded:00 - ${businessDayEnd.day} $endMonth $endHour:59';
+    final businessDayDisplay =
+        '${businessDayStart.day} $startMonth $startHourPadded:00 - ${businessDayEnd.day} $endMonth $endHour:59';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1018,7 +1050,7 @@ class _FinanceScreenState extends State<FinanceScreen>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.accent.withOpacity(0.1),
+                color: AppColors.accent.withValues(alpha: 0.1),
                 border: Border.all(color: AppColors.accent, width: 1),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -1056,7 +1088,7 @@ class _FinanceScreenState extends State<FinanceScreen>
             const SizedBox(height: 16),
 
             // (Calendar button moved below calculator to improve visibility)
-            
+
             // Daily Bonus Card
             DailyBonusCard(
               omset: omset,
@@ -1148,15 +1180,16 @@ class _FinanceScreenState extends State<FinanceScreen>
             // Revenue Breakdown Title
             const Text(
               'Rincian Pendapatan',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
 
             // Revenue Breakdown Items
-            _buildBreakdownItem('Penjualan Produk', 'Rp ${formatRupiah(dailyData['amount'])}', '100%'),
+            _buildBreakdownItem(
+              'Penjualan Produk',
+              'Rp ${formatRupiah(dailyData['amount'])}',
+              '100%',
+            ),
             _buildBreakdownItem('Layanan Tambahan', 'Rp 0', '0%'),
             _buildBreakdownItem('Diskon & Promo', '-Rp 0', '0%'),
           ],
@@ -1176,7 +1209,7 @@ class _FinanceScreenState extends State<FinanceScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color, color.withOpacity(0.7)],
+          colors: [color, color.withValues(alpha: 0.7)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1188,7 +1221,7 @@ class _FinanceScreenState extends State<FinanceScreen>
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
+              color: Colors.white.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: Colors.white, size: 28),
@@ -1219,7 +1252,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                     fontSize: 12,
                   ),
                 ),
@@ -1265,7 +1298,7 @@ class _FinanceScreenState extends State<FinanceScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.accent.withOpacity(0.2),
+              color: AppColors.accent.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -1291,17 +1324,13 @@ class _FinanceScreenState extends State<FinanceScreen>
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Text('Error: ${snapshot.error}'),
-          );
+          return Center(child: Text('Error: ${snapshot.error}'));
         }
 
         final leaderboard = snapshot.data ?? [];
 
         if (leaderboard.isEmpty) {
-          return const Center(
-            child: Text('Belum ada data leaderboard'),
-          );
+          return const Center(child: Text('Belum ada data leaderboard'));
         }
 
         return ListView.builder(
@@ -1316,12 +1345,10 @@ class _FinanceScreenState extends State<FinanceScreen>
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: isTop3
-                    ? AppColors.accentLight.withOpacity(0.2)
+                    ? AppColors.accentLight.withValues(alpha: 0.2)
                     : AppColors.surface,
                 border: Border.all(
-                  color: isTop3
-                      ? AppColors.accent
-                      : AppColors.altSurface,
+                  color: isTop3 ? AppColors.accent : AppColors.altSurface,
                 ),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -1382,7 +1409,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-'Rp ${formatRupiah(item['total_sales'])}',
+                        'Rp ${formatRupiah(item['total_sales'])}',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -1410,17 +1437,19 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   // ==================== SETOR TUNAI TAB ====================
   Widget _buildCashDepositTab() {
-    final cashData = _cashDepositData ?? {
-      'cashAmount': 0.0,
-      'cashCount': 0,
-      'qrisAmount': 0.0,
-      'qrisCount': 0,
-      'gratisAmount': 0.0,
-      'gratisCount': 0,
-      'otherAmount': 0.0,
-      'otherCount': 0,
-    };
-    
+    final cashData =
+        _cashDepositData ??
+        {
+          'cashAmount': 0.0,
+          'cashCount': 0,
+          'qrisAmount': 0.0,
+          'qrisCount': 0,
+          'gratisAmount': 0.0,
+          'gratisCount': 0,
+          'otherAmount': 0.0,
+          'otherCount': 0,
+        };
+
     final cashAmount = (cashData['cashAmount'] as num?)?.toDouble() ?? 0.0;
     final cashCount = (cashData['cashCount'] as int?) ?? 0;
     final qrisAmount = (cashData['qrisAmount'] as num?)?.toDouble() ?? 0.0;
@@ -1431,21 +1460,29 @@ class _FinanceScreenState extends State<FinanceScreen>
     final otherCount = (cashData['otherCount'] as int?) ?? 0;
     final totalOmset = (cashData['totalOmset'] as num?)?.toDouble() ?? 0.0;
     final bonus = (cashData['bonus'] as num?)?.toDouble() ?? 0.0;
-    final mealAllowance = (cashData['mealAllowance'] as num?)?.toDouble() ?? 0.0;
-    final depositAmount = (cashData['depositAmount'] as num?)?.toDouble() ?? 0.0;
+    final mealAllowance =
+        (cashData['mealAllowance'] as num?)?.toDouble() ?? 0.0;
+    final depositAmount =
+        (cashData['depositAmount'] as num?)?.toDouble() ?? 0.0;
     final handoverStatus = (cashData['handoverStatus'] as String?) ?? 'pending';
-    final shortfallReceiptRecorded = (cashData['shortfall_receipt_recorded'] as bool?) ?? false;
-    
+    final shortfallReceiptRecorded =
+        (cashData['shortfall_receipt_recorded'] as bool?) ?? false;
+
     // Format date for display
-    final isToday = DateFormat('yyyy-MM-dd').format(_selectedDate) == DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final dateLabel = isToday ? 'Hari Ini' : DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate);
-    
+    final isToday =
+        DateFormat('yyyy-MM-dd').format(_selectedDate) ==
+        DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final dateLabel = isToday
+        ? 'Hari Ini'
+        : DateFormat('dd MMMM yyyy', 'id_ID').format(_selectedDate);
+
     // Get status display
     Color statusColor = Colors.grey;
     String statusText = 'PENDING';
     IconData statusIcon = Icons.schedule;
-    
-    if (handoverStatus == 'verified' || handoverStatus == 'verified by barista') {
+
+    if (handoverStatus == 'verified' ||
+        handoverStatus == 'verified by barista') {
       statusColor = Colors.blue;
       statusText = 'SUDAH DIVERIFIKASI BARISTA';
       statusIcon = Icons.verified;
@@ -1462,11 +1499,11 @@ class _FinanceScreenState extends State<FinanceScreen>
       statusText = 'DITOLAK';
       statusIcon = Icons.cancel;
     }
-    
+
     if (_isLoadingCashDeposit) {
       return _buildCashDepositTabSkeleton();
     }
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1474,13 +1511,23 @@ class _FinanceScreenState extends State<FinanceScreen>
         children: [
           // Kekurangan Upah Card
           // Show if: has shortfall value OR recorded OR (both deposit and shortfall are 0)
-          if (((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) > 0 || shortfallReceiptRecorded || (depositAmount == 0 && ((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) == 0))
+          if (((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) > 0 ||
+              shortfallReceiptRecorded ||
+              (depositAmount == 0 &&
+                  ((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) == 0))
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                border: Border.all(color: shortfallReceiptRecorded ? Colors.green : Colors.orange, width: 2),
+                border: Border.all(
+                  color: shortfallReceiptRecorded
+                      ? Colors.green
+                      : Colors.orange,
+                  width: 2,
+                ),
                 borderRadius: BorderRadius.circular(12),
-                color: shortfallReceiptRecorded ? Colors.green.shade50 : Colors.orange.shade50,
+                color: shortfallReceiptRecorded
+                    ? Colors.green.shade50
+                    : Colors.orange.shade50,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1499,21 +1546,42 @@ class _FinanceScreenState extends State<FinanceScreen>
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
-                          color: shortfallReceiptRecorded ? Colors.green.withOpacity(0.3) : Colors.orange.withOpacity(0.3),
-                          border: Border.all(color: shortfallReceiptRecorded ? Colors.green : Colors.orange),
+                          color: shortfallReceiptRecorded
+                              ? Colors.green.withValues(alpha: 0.3)
+                              : Colors.orange.withValues(alpha: 0.3),
+                          border: Border.all(
+                            color: shortfallReceiptRecorded
+                                ? Colors.green
+                                : Colors.orange,
+                          ),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(shortfallReceiptRecorded ? Icons.check_circle : Icons.pending_actions, color: shortfallReceiptRecorded ? Colors.green : Colors.orange, size: 14),
+                            Icon(
+                              shortfallReceiptRecorded
+                                  ? Icons.check_circle
+                                  : Icons.pending_actions,
+                              color: shortfallReceiptRecorded
+                                  ? Colors.green
+                                  : Colors.orange,
+                              size: 14,
+                            ),
                             const SizedBox(width: 4),
                             Text(
-                              shortfallReceiptRecorded ? 'SUDAH DICATAT' : 'MENUNGGU DICATAT',
+                              shortfallReceiptRecorded
+                                  ? 'SUDAH DICATAT'
+                                  : 'MENUNGGU DICATAT',
                               style: TextStyle(
-                                color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                                color: shortfallReceiptRecorded
+                                    ? Colors.green
+                                    : Colors.orange,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1527,7 +1595,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                   Text(
                     'Rp ${formatRupiah((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0)}',
                     style: TextStyle(
-                      color: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                      color: shortfallReceiptRecorded
+                          ? Colors.green
+                          : Colors.orange,
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1536,19 +1606,23 @@ class _FinanceScreenState extends State<FinanceScreen>
                   Text(
                     'Dari Manajemen Papi Kopi',
                     style: TextStyle(
-                      color: shortfallReceiptRecorded ? Colors.green.shade700 : Colors.orange.shade700,
+                      color: shortfallReceiptRecorded
+                          ? Colors.green.shade700
+                          : Colors.orange.shade700,
                       fontSize: 12,
                     ),
                   ),
                 ],
               ),
             ),
-          
+
           const SizedBox(height: 20),
-          
+
           // Total Setoran Card
           // Show if: has value OR both deposit and shortfall are 0
-          if (depositAmount > 0 || (depositAmount == 0 && ((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) == 0))
+          if (depositAmount > 0 ||
+              (depositAmount == 0 &&
+                  ((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) == 0))
             Row(
               children: [
                 Expanded(
@@ -1579,16 +1653,23 @@ class _FinanceScreenState extends State<FinanceScreen>
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
-                                color: statusColor.withOpacity(0.3),
+                                color: statusColor.withValues(alpha: 0.3),
                                 border: Border.all(color: Colors.white),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(statusIcon, color: Colors.white, size: 14),
+                                  Icon(
+                                    statusIcon,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
                                   const SizedBox(width: 4),
                                   Text(
                                     statusText,
@@ -1616,7 +1697,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                         Text(
                           'CASH: ${cashCount}tx | QRIS: ${qrisCount}tx | GRATIS: ${gratisCount}tx',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
+                            color: Colors.white.withValues(alpha: 0.8),
                             fontSize: 12,
                           ),
                         ),
@@ -1626,40 +1707,66 @@ class _FinanceScreenState extends State<FinanceScreen>
                 ),
               ],
             ),
-          
+
           const SizedBox(height: 24),
 
           // Payment Breakdown
           const Text(
             'Rincian Pembayaran Pelanggan',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-          _buildDepositItem('Total Omset', 'Rp ${formatRupiah(totalOmset)}', 'Semua pembayaran'),
-          _buildDepositItem('  ├─ Pembayaran CASH', 'Rp ${formatRupiah(cashAmount)}', '$cashCount transaksi'),
-          _buildDepositItem('  ├─ Pembayaran QRIS', 'Rp ${formatRupiah(qrisAmount)}', '$qrisCount transaksi'),
-          _buildDepositItem('  ├─ Pembayaran GRATIS', 'Rp ${formatRupiah(gratisAmount)}', '$gratisCount transaksi'),
+          _buildDepositItem(
+            'Total Omset',
+            'Rp ${formatRupiah(totalOmset)}',
+            'Semua pembayaran',
+          ),
+          _buildDepositItem(
+            '  ├─ Pembayaran CASH',
+            'Rp ${formatRupiah(cashAmount)}',
+            '$cashCount transaksi',
+          ),
+          _buildDepositItem(
+            '  ├─ Pembayaran QRIS',
+            'Rp ${formatRupiah(qrisAmount)}',
+            '$qrisCount transaksi',
+          ),
+          _buildDepositItem(
+            '  ├─ Pembayaran GRATIS',
+            'Rp ${formatRupiah(gratisAmount)}',
+            '$gratisCount transaksi',
+          ),
           if (otherAmount > 0)
-            _buildDepositItem('  └─ Pembayaran Lainnya', 'Rp ${formatRupiah(otherAmount)}', '$otherCount transaksi'),
-          
+            _buildDepositItem(
+              '  └─ Pembayaran Lainnya',
+              'Rp ${formatRupiah(otherAmount)}',
+              '$otherCount transaksi',
+            ),
+
           const SizedBox(height: 24),
-          
+
           // Detail Setoran
           const Text(
             'Rincian Setoran (CASH - Bonus - Uang Makan)',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
 
-          _buildDepositItem('Pembayaran CASH', 'Rp ${formatRupiah(cashAmount)}', 'Uang tunai diterima'),
-          _buildDepositItem('Bonus (Bertahap)', '-Rp ${formatRupiah(bonus)}', 'Untuk barista'),
-          _buildDepositItem('Uang Makan', '-Rp ${formatRupiah(mealAllowance)}', 'Untuk barista'),
+          _buildDepositItem(
+            'Pembayaran CASH',
+            'Rp ${formatRupiah(cashAmount)}',
+            'Uang tunai diterima',
+          ),
+          _buildDepositItem(
+            'Bonus (Bertahap)',
+            '-Rp ${formatRupiah(bonus)}',
+            'Untuk barista',
+          ),
+          _buildDepositItem(
+            'Uang Makan',
+            '-Rp ${formatRupiah(mealAllowance)}',
+            'Untuk barista',
+          ),
           if (((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) > 0)
             _buildDepositItem(
               '⚠️ Kekurangan yang Harus Dibayar',
@@ -1679,10 +1786,7 @@ class _FinanceScreenState extends State<FinanceScreen>
               children: [
                 const Text(
                   'Total Disetor ke Papi Kopi',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 Text(
                   'Rp ${formatRupiah(depositAmount)}',
@@ -1695,7 +1799,7 @@ class _FinanceScreenState extends State<FinanceScreen>
               ],
             ),
           ),
-          
+
           const SizedBox(height: 24),
 
           // Info
@@ -1724,63 +1828,81 @@ class _FinanceScreenState extends State<FinanceScreen>
               ],
             ),
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Tanda Terima Button (for shortfall if exists)
           if (((cashData['kekuranganUpah'] as num?)?.toDouble() ?? 0) > 0)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: (!shortfallReceiptRecorded && !_isLoadingCashDeposit) ? () {
-                  final kekuranganUpah = (_cashDepositData?['kekuranganUpah'] as num?)?.toDouble() ?? 0;
-                  final handoverDate = _cashDepositData?['handoverDate'] as String?; // Get actual handover date from DB
-                  _showShortfallReceipt(kekuranganUpah, handoverDate);
-                } : null,
+                onPressed: (!shortfallReceiptRecorded && !_isLoadingCashDeposit)
+                    ? () {
+                        final kekuranganUpah =
+                            (_cashDepositData?['kekuranganUpah'] as num?)
+                                ?.toDouble() ??
+                            0;
+                        final handoverDate =
+                            _cashDepositData?['handoverDate']
+                                as String?; // Get actual handover date from DB
+                        _showShortfallReceipt(kekuranganUpah, handoverDate);
+                      }
+                    : null,
                 icon: const Icon(Icons.receipt),
                 label: Text(
                   shortfallReceiptRecorded
-                    ? '✅ Tanda Terima Sudah Dicatat'
-                    : '📋 Catat Tanda Terima Kekurangan Upah',
+                      ? '✅ Tanda Terima Sudah Dicatat'
+                      : '📋 Catat Tanda Terima Kekurangan Upah',
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: shortfallReceiptRecorded ? Colors.green : Colors.orange,
+                  backgroundColor: shortfallReceiptRecorded
+                      ? Colors.green
+                      : Colors.orange,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
             ),
-          
+
           const SizedBox(height: 12),
-          
+
           // Serah Terima Button
           if (depositAmount > 0)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: (handoverStatus == 'pending' && !_isLoadingCashDeposit) ? () {
-                  final kekuranganUpah = (_cashDepositData?['kekuranganUpah'] as num?)?.toDouble() ?? 0;
-                  _submitSerahTerima(
-                    totalOmset: totalOmset,
-                    cashAmount: cashAmount,
-                    qrisAmount: qrisAmount,
-                    bonus: bonus,
-                    mealAllowance: mealAllowance,
-                    depositAmount: depositAmount,
-                    kekuranganUpah: kekuranganUpah,
-                  );
-                } : null,
+                onPressed:
+                    (handoverStatus == 'pending' && !_isLoadingCashDeposit)
+                    ? () {
+                        final kekuranganUpah =
+                            (_cashDepositData?['kekuranganUpah'] as num?)
+                                ?.toDouble() ??
+                            0;
+                        _submitSerahTerima(
+                          totalOmset: totalOmset,
+                          cashAmount: cashAmount,
+                          qrisAmount: qrisAmount,
+                          bonus: bonus,
+                          mealAllowance: mealAllowance,
+                          depositAmount: depositAmount,
+                          kekuranganUpah: kekuranganUpah,
+                        );
+                      }
+                    : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: handoverStatus == 'pending' && !_isLoadingCashDeposit ? Colors.green : Colors.grey,
+                  backgroundColor:
+                      handoverStatus == 'pending' && !_isLoadingCashDeposit
+                      ? Colors.green
+                      : Colors.grey,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: Text(
-                  handoverStatus == 'pending' 
-                    ? '📋 Serah Terima Setoran'
-                    : '✅ ${statusText.toUpperCase()}',
+                  handoverStatus == 'pending'
+                      ? '📋 Serah Terima Setoran'
+                      : '✅ ${statusText.toUpperCase()}',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -1806,17 +1928,19 @@ class _FinanceScreenState extends State<FinanceScreen>
     // Get current user from AuthProvider instead of SupabaseService
     final authProvider = context.read<AuthProvider>();
     final currentUser = authProvider.currentUser;
-    
+
     if (currentUser == null) {
       _showErrorSnackBar('User tidak valid');
       return;
     }
-    
+
     final supabaseService = SupabaseService();
 
     // 🆕 Status options based on role
-    String selectedStatus = currentUser.role == 'manager' ? 'pending' : 'verified by barista';
-    
+    String selectedStatus = currentUser.role == 'manager'
+        ? 'pending'
+        : 'verified by barista';
+
     // Determine available status options based on role
     List<String> availableStatuses = currentUser.role == 'manager'
         ? ['pending', 'approved', 'rejected']
@@ -1926,7 +2050,11 @@ class _FinanceScreenState extends State<FinanceScreen>
                       }
                       return DropdownMenuItem(
                         value: status,
-                        child: Text(label, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          label,
+                          style: const TextStyle(fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       );
                     }).toList(),
                     onChanged: (value) {
@@ -1948,9 +2076,9 @@ class _FinanceScreenState extends State<FinanceScreen>
               onPressed: () async {
                 // Save main screen context before closing dialog
                 final mainScreenContext = context;
-                
+
                 Navigator.pop(dialogContext); // Close dialog first
-                
+
                 // Show loading overlay using OverlayEntry
                 final overlayEntry = OverlayEntry(
                   builder: (overlayContext) => const Positioned(
@@ -1960,79 +2088,82 @@ class _FinanceScreenState extends State<FinanceScreen>
                     bottom: 0,
                     child: Material(
                       color: Colors.black54,
-                      child: Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
                   ),
                 );
-                
+
                 // Track if overlay is still mounted
                 bool overlayMounted = true;
-                
+
                 try {
                   Overlay.of(mainScreenContext).insert(overlayEntry);
                 } catch (e) {
                   overlayMounted = false;
-                  print('DEBUG: Could not insert overlay: $e');
+                  debugPrint('DEBUG: Could not insert overlay: $e');
                 }
-                
+
                 try {
-                  print('DEBUG: Starting submit cash deposit handover');
-                  
+                  debugPrint('DEBUG: Starting submit cash deposit handover');
+
                   // Calculate business day date to match database storage
                   DateTime submitDate = _selectedDate;
                   if (_businessDayStartHour < 12) {
                     // Morning start: business day is tomorrow
                     submitDate = _selectedDate.add(const Duration(days: 1));
                   }
-                  print('DEBUG: Calculated submitDate=$submitDate for businessDayStartHour=$_businessDayStartHour');
-                  
-                  final success = await supabaseService.submitCashDepositHandover(
-                    outletId: _outletId,
-                    baristaId: currentUser.id,
-                    totalOmset: totalOmset,
-                    cashAmount: cashAmount,
-                    qrisAmount: qrisAmount,
-                    bonus: bonus,
-                    mealAllowance: mealAllowance,
-                    depositAmount: depositAmount,
-                    kekuranganUpah: kekuranganUpah,
-                    status: selectedStatus,
-                    date: submitDate,
+                  debugPrint(
+                    'DEBUG: Calculated submitDate=$submitDate for businessDayStartHour=$_businessDayStartHour',
                   );
-                  print('DEBUG: Submit completed, success=$success');
-                  
+
+                  final success = await supabaseService
+                      .submitCashDepositHandover(
+                        outletId: _outletId,
+                        baristaId: currentUser.id,
+                        totalOmset: totalOmset,
+                        cashAmount: cashAmount,
+                        qrisAmount: qrisAmount,
+                        bonus: bonus,
+                        mealAllowance: mealAllowance,
+                        depositAmount: depositAmount,
+                        kekuranganUpah: kekuranganUpah,
+                        status: selectedStatus,
+                        date: submitDate,
+                      );
+                  debugPrint('DEBUG: Submit completed, success=$success');
+
                   // Remove loading overlay
                   if (overlayMounted) {
                     try {
                       overlayEntry.remove();
                       overlayMounted = false;
                     } catch (e) {
-                      print('DEBUG: Error removing overlay: $e');
+                      debugPrint('DEBUG: Error removing overlay: $e');
                     }
                   }
-                  
+
                   // Only update screen state if still mounted
                   // Dialog is already closed, so only update main screen
                   if (!mounted) {
-                    print('DEBUG: Screen not mounted, skipping state updates');
+                    debugPrint(
+                      'DEBUG: Screen not mounted, skipping state updates',
+                    );
                     return;
                   }
-                  
+
                   if (success) {
                     _showSuccessSnackBar('✅ Serah terima berhasil disubmit');
-                    
+
                     // Only update screen state if still mounted
                     if (mounted) {
                       setState(() {
                         _isLoadingCashDeposit = true;
                       });
                     }
-                    
+
                     // Reload data
                     await _reloadCashDepositWithRetry();
-                    
+
                     // Final state update
                     if (mounted) {
                       setState(() {});
@@ -2041,31 +2172,31 @@ class _FinanceScreenState extends State<FinanceScreen>
                     _showErrorSnackBar('Gagal submit serah terima');
                   }
                 } catch (e) {
-                  print('DEBUG: Error in submit: $e');
-                  
+                  debugPrint('DEBUG: Error in submit: $e');
+
                   // Remove loading overlay even on error
                   if (overlayMounted) {
                     try {
                       overlayEntry.remove();
                       overlayMounted = false;
                     } catch (e2) {
-                      print('DEBUG: Error removing overlay on exception: $e2');
+                      debugPrint(
+                        'DEBUG: Error removing overlay on exception: $e2',
+                      );
                     }
                   }
-                  
+
                   if (mounted) {
                     _showErrorSnackBar('Error: $e');
                   }
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               child: const Text('Serah Terima'),
             ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -2150,21 +2281,19 @@ class _FinanceScreenState extends State<FinanceScreen>
             onPressed: () async {
               final notes = noteController.text;
               Navigator.pop(context); // Close dialog
-              
+
               // Create overlay entry for loading
               final overlayEntry = OverlayEntry(
                 builder: (context) => Material(
-                  color: Colors.black.withOpacity(0.3),
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  color: Colors.black.withValues(alpha: 0.3),
+                  child: const Center(child: CircularProgressIndicator()),
                 ),
               );
-              
+
               if (mounted) {
                 Overlay.of(context).insert(overlayEntry);
               }
-              
+
               try {
                 // Parse handoverDate string to DateTime, or use selected date as fallback
                 DateTime recordDate = _selectedDate;
@@ -2172,10 +2301,12 @@ class _FinanceScreenState extends State<FinanceScreen>
                   try {
                     recordDate = DateTime.parse(handoverDate);
                   } catch (e) {
-                    print('DEBUG: Failed to parse handoverDate=$handoverDate, using _selectedDate=$_selectedDate');
+                    debugPrint(
+                      'DEBUG: Failed to parse handoverDate=$handoverDate, using _selectedDate=$_selectedDate',
+                    );
                   }
                 }
-                
+
                 // Record shortfall receipt to database using the actual handover date from DB
                 final success = await SupabaseService().recordShortfallReceipt(
                   outletId: _outletId,
@@ -2184,23 +2315,25 @@ class _FinanceScreenState extends State<FinanceScreen>
                   notes: notes,
                   date: recordDate,
                 );
-                
+
                 if (success) {
-                  _showSuccessSnackBar('✅ Tanda terima kekurangan upah dicatat');
-                  
+                  _showSuccessSnackBar(
+                    '✅ Tanda terima kekurangan upah dicatat',
+                  );
+
                   // Initial delay before first query
                   await Future.delayed(const Duration(milliseconds: 800));
-                  
+
                   // Reload data with retry using the same date we recorded for (important!)
                   if (mounted) {
                     overlayEntry.remove();
-                    
+
                     setState(() {
                       _isLoadingCashDeposit = true;
                     });
                     // Pass recordDate so we reload with the correct business day date
                     await _reloadCashDepositWithRetryForDate(recordDate);
-                    
+
                     // Final force rebuild to ensure UI updates
                     if (mounted) {
                       setState(() {});
@@ -2209,7 +2342,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                 } else {
                   if (mounted) {
                     overlayEntry.remove();
-                    _showErrorSnackBar('Gagal mencatat tanda terima kekurangan upah');
+                    _showErrorSnackBar(
+                      'Gagal mencatat tanda terima kekurangan upah',
+                    );
                   }
                 }
               } catch (e) {
@@ -2219,9 +2354,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 }
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             child: const Text('Catat Tanda Terima'),
           ),
         ],
@@ -2252,10 +2385,7 @@ class _FinanceScreenState extends State<FinanceScreen>
               ),
               Text(
                 note,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -2274,14 +2404,16 @@ class _FinanceScreenState extends State<FinanceScreen>
 
   // ==================== BONUS TAB ====================
   Widget _buildWithdrawTab() {
-    print('DEBUG _buildWithdrawTab - _outletId: $_outletId');
+    debugPrint('DEBUG _buildWithdrawTab - _outletId: $_outletId');
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: SupabaseService().getDailyReceipts(
         outletId: _outletId,
         limit: 30,
       ),
       builder: (context, snapshot) {
-        print('DEBUG _buildWithdrawTab - snapshot state: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, hasError: ${snapshot.hasError}');
+        debugPrint(
+          'DEBUG _buildWithdrawTab - snapshot state: ${snapshot.connectionState}, hasData: ${snapshot.hasData}, hasError: ${snapshot.hasError}',
+        );
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(
             child: Column(
@@ -2291,10 +2423,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 const SizedBox(height: 16),
                 Text(
                   'Memuat data penerimaan...',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                 ),
               ],
             ),
@@ -2302,16 +2431,12 @@ class _FinanceScreenState extends State<FinanceScreen>
         }
 
         if (snapshot.hasError) {
-          print('DEBUG _buildWithdrawTab - Error: ${snapshot.error}');
+          debugPrint('DEBUG _buildWithdrawTab - Error: ${snapshot.error}');
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.error_outline,
-                  color: Colors.red.shade400,
-                  size: 48,
-                ),
+                Icon(Icons.error_outline, color: Colors.red.shade400, size: 48),
                 const SizedBox(height: 16),
                 Text(
                   'Gagal memuat data',
@@ -2325,10 +2450,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 Text(
                   snapshot.error.toString(),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                 ),
               ],
             ),
@@ -2350,10 +2472,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 const SizedBox(height: 16),
                 Text(
                   'Belum ada data penerimaan',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                 ),
               ],
             ),
@@ -2370,12 +2489,15 @@ class _FinanceScreenState extends State<FinanceScreen>
           final dateTime = daily['date'] as DateTime;
           final salesAmount = (daily['salesAmount'] as num).toDouble();
           final depositStatus = daily['depositStatus'] as String;
-          
+
           // Calculate upah using proper bonus calculator
           final isHolidayDate = SupabaseService().isHolidaySync(dateTime);
-          final bonusData = calculateBonus(salesAmount, isHoliday: isHolidayDate);
+          final bonusData = calculateBonus(
+            salesAmount,
+            isHoliday: isHolidayDate,
+          );
           final totalBonus = bonusData.totalBonus;
-          
+
           // Calculate meal allowance
           final mealAllowance = salesAmount >= 300000 ? 34000.0 : 25000.0;
           final totalWage = totalBonus + mealAllowance;
@@ -2419,10 +2541,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                     SizedBox(height: 8),
                     Text(
                       'Daftar upah harian (bonus + uang makan) dengan status persetujuan',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: Colors.white, fontSize: 13),
                     ),
                   ],
                 ),
@@ -2456,10 +2575,7 @@ class _FinanceScreenState extends State<FinanceScreen>
               // Daftar Upah Harian
               const Text(
                 '📋 Daftar Upah Harian',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
 
@@ -2467,43 +2583,79 @@ class _FinanceScreenState extends State<FinanceScreen>
               ...dailyReceipts.map((daily) {
                 final dateTime = daily['date'] as DateTime;
                 final salesAmount = (daily['salesAmount'] as num).toDouble();
-                final depositStatus = (daily['depositStatus'] as String).toLowerCase();
-                
+                final depositStatus = (daily['depositStatus'] as String)
+                    .toLowerCase();
+
                 // Calculate upah using proper bonus calculator
                 final isHolidayDate = SupabaseService().isHolidaySync(dateTime);
-                final bonusData = calculateBonus(salesAmount, isHoliday: isHolidayDate);
+                final bonusData = calculateBonus(
+                  salesAmount,
+                  isHoliday: isHolidayDate,
+                );
                 final totalBonus = bonusData.totalBonus;
-                
+
                 // Calculate meal allowance
                 final mealAllowance = salesAmount >= 300000 ? 34000.0 : 25000.0;
                 final totalWage = totalBonus + mealAllowance;
 
-                final statusColor =
-                    depositStatus == 'approved' ? Colors.green : Colors.orange;
+                final statusColor = depositStatus == 'approved'
+                    ? Colors.green
+                    : Colors.orange;
                 final statusIcon = depositStatus == 'approved'
                     ? Icons.check_circle
                     : Icons.schedule;
 
                 // Format business day range: e.g. "27 Apr 04:00 - 28 Apr 03:59"
-                final businessDayStartHour = 4; // Default, should match outlet settings
-                final startHour = businessDayStartHour.toString().padLeft(2, '0');
-                final endHour = (businessDayStartHour - 1 < 0 
-                    ? 23 
-                    : businessDayStartHour - 1).toString().padLeft(2, '0');
-                
+                final businessDayStartHour =
+                    4; // Default, should match outlet settings
+                final startHour = businessDayStartHour.toString().padLeft(
+                  2,
+                  '0',
+                );
+                final endHour =
+                    (businessDayStartHour - 1 < 0
+                            ? 23
+                            : businessDayStartHour - 1)
+                        .toString()
+                        .padLeft(2, '0');
+
                 // When user selects a date (e.g., May 27), they want to see business day data for that date
                 // Business day: from 04:00 on that date to 03:59 on the next date
                 DateTime businessDayStart;
                 DateTime businessDayEnd;
-                
-                businessDayStart = DateTime(dateTime.year, dateTime.month, dateTime.day, businessDayStartHour);
-                businessDayEnd = DateTime(dateTime.year, dateTime.month, dateTime.day + 1, businessDayStartHour);
-                
-                final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+                businessDayStart = DateTime(
+                  dateTime.year,
+                  dateTime.month,
+                  dateTime.day,
+                  businessDayStartHour,
+                );
+                businessDayEnd = DateTime(
+                  dateTime.year,
+                  dateTime.month,
+                  dateTime.day + 1,
+                  businessDayStartHour,
+                );
+
+                final monthNames = [
+                  'Jan',
+                  'Feb',
+                  'Mar',
+                  'Apr',
+                  'Mei',
+                  'Jun',
+                  'Jul',
+                  'Agu',
+                  'Sep',
+                  'Okt',
+                  'Nov',
+                  'Des',
+                ];
                 final startMonth = monthNames[businessDayStart.month - 1];
                 final endMonth = monthNames[businessDayEnd.month - 1];
-                
-                final dateDisplay = '${businessDayStart.day} $startMonth $startHour:00 - ${businessDayEnd.day} $endMonth $endHour:59';
+
+                final dateDisplay =
+                    '${businessDayStart.day} $startMonth $startHour:00 - ${businessDayEnd.day} $endMonth $endHour:59';
 
                 return _buildWithdrawListItem(
                   date: dateDisplay,
@@ -2513,14 +2665,14 @@ class _FinanceScreenState extends State<FinanceScreen>
                   statusIcon: statusIcon,
                   data: daily,
                 );
-              }).toList(),
+              }),
 
               // Keterangan Status
               const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   border: Border.all(color: AppColors.primary, width: 1),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -2537,11 +2689,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(
-                          Icons.check_circle,
-                          color: Colors.green,
-                          size: 16,
-                        ),
+                        Icon(Icons.check_circle, color: Colors.green, size: 16),
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
@@ -2554,11 +2702,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(
-                          Icons.schedule,
-                          color: Colors.orange,
-                          size: 16,
-                        ),
+                        Icon(Icons.schedule, color: Colors.orange, size: 16),
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
@@ -2587,8 +2731,8 @@ class _FinanceScreenState extends State<FinanceScreen>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        border: Border.all(color: color.withOpacity(0.5)),
+        color: color.withValues(alpha: 0.1),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -2614,10 +2758,7 @@ class _FinanceScreenState extends State<FinanceScreen>
           const SizedBox(height: 4),
           Text(
             amount,
-            style: TextStyle(
-              fontSize: 11,
-              color: color.withOpacity(0.8),
-            ),
+            style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.8)),
           ),
         ],
       ),
@@ -2654,10 +2795,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                 children: [
                   Text(
                     'Hari Bisnis: $date',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -2673,17 +2811,13 @@ class _FinanceScreenState extends State<FinanceScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
+                color: statusColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    statusIcon,
-                    color: statusColor,
-                    size: 16,
-                  ),
+                  Icon(statusIcon, color: statusColor, size: 16),
                   const SizedBox(width: 4),
                   Text(
                     status,
@@ -2706,21 +2840,38 @@ class _FinanceScreenState extends State<FinanceScreen>
     final dateTime = daily['date'] as DateTime;
     final salesAmount = (daily['salesAmount'] as num).toDouble();
     final depositStatus = daily['depositStatus'] as String;
-    
+
     // Calculate upah components
     final isHolidayDate = SupabaseService().isHolidaySync(dateTime);
     final bonusData = calculateBonus(salesAmount, isHoliday: isHolidayDate);
     final totalBonus = bonusData.totalBonus;
     final mealAllowance = salesAmount >= 300000 ? 34000.0 : 25000.0;
     final totalWage = totalBonus + mealAllowance;
-    
+
     // Format date
-    final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    final monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
     final monthName = monthNames[dateTime.month - 1];
     final dateDisplay = '${dateTime.day} $monthName ${dateTime.year}';
-    
-    final statusColor = depositStatus.toLowerCase() == 'approved' ? Colors.green : Colors.orange;
-    final statusText = depositStatus.toLowerCase() == 'approved' ? 'Disetujui' : 'Menunggu Persetujuan';
+
+    final statusColor = depositStatus.toLowerCase() == 'approved'
+        ? Colors.green
+        : Colors.orange;
+    final statusText = depositStatus.toLowerCase() == 'approved'
+        ? 'Disetujui'
+        : 'Menunggu Persetujuan';
 
     showModalBottomSheet(
       context: context,
@@ -2731,7 +2882,12 @@ class _FinanceScreenState extends State<FinanceScreen>
       builder: (context) {
         return SingleChildScrollView(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 80),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              MediaQuery.of(context).viewInsets.bottom + 80,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2747,7 +2903,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Title & Date
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2773,9 +2929,12 @@ class _FinanceScreenState extends State<FinanceScreen>
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: statusColor.withValues(alpha: 0.1),
                         border: Border.all(color: statusColor),
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -2791,7 +2950,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                   ],
                 ),
                 const SizedBox(height: 20),
-                
+
                 // Total Upah Card
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -2827,17 +2986,14 @@ class _FinanceScreenState extends State<FinanceScreen>
                   ),
                 ),
                 const SizedBox(height: 20),
-                
+
                 // Breakdown
                 const Text(
                   'Rincian Perhitungan Upah',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Omset
                 _buildDetailItem(
                   'Omset Penjualan',
@@ -2845,7 +3001,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                   Icons.shopping_cart,
                 ),
                 const SizedBox(height: 8),
-                
+
                 // Holiday indicator
                 if (isHolidayDate)
                   Container(
@@ -2857,12 +3013,19 @@ class _FinanceScreenState extends State<FinanceScreen>
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.celebration, color: Colors.orange, size: 16),
+                        const Icon(
+                          Icons.celebration,
+                          color: Colors.orange,
+                          size: 16,
+                        ),
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
                             'Hari Libur/Istimewa - Bonus x2',
-                            style: TextStyle(fontSize: 12, color: Colors.orange),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange,
+                            ),
                           ),
                         ),
                       ],
@@ -2870,9 +3033,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                   )
                 else
                   const SizedBox(height: 0),
-                
+
                 if (isHolidayDate) const SizedBox(height: 8),
-                
+
                 // Bonus
                 _buildDetailItem(
                   'Bonus Penjualan',
@@ -2880,7 +3043,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                   Icons.trending_up,
                 ),
                 const SizedBox(height: 8),
-                
+
                 // Meal Allowance
                 _buildDetailItem(
                   'Uang Makan',
@@ -2888,11 +3051,11 @@ class _FinanceScreenState extends State<FinanceScreen>
                   Icons.restaurant,
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Total separator
                 Divider(color: Colors.grey.shade300),
                 const SizedBox(height: 12),
-                
+
                 // Total
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2915,17 +3078,14 @@ class _FinanceScreenState extends State<FinanceScreen>
                   ],
                 ),
                 const SizedBox(height: 20),
-                
+
                 // Rincian Setoran Section
                 const Text(
                   'Rincian Setoran (CASH - Bonus - Uang Makan)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Assuming 100% CASH payment for now (would need actual data for breakdown)
                 // For complete solution, would need payment method breakdown from daily data
                 _buildDetailItem(
@@ -2934,27 +3094,30 @@ class _FinanceScreenState extends State<FinanceScreen>
                   Icons.attach_money,
                 ),
                 const SizedBox(height: 8),
-                
+
                 _buildDetailItem(
                   'Bonus (Berkurang)',
                   '-Rp ${formatRupiah(totalBonus)}',
                   Icons.trending_down,
                 ),
                 const SizedBox(height: 8),
-                
+
                 _buildDetailItem(
                   'Uang Makan (Berkurang)',
                   '-Rp ${formatRupiah(mealAllowance)}',
                   Icons.dining,
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Calculate deposit amount and shortfall
                 Builder(
                   builder: (context) {
-                    final depositAmount = salesAmount - totalBonus - mealAllowance;
-                    final shortfall = depositAmount < 0 ? (depositAmount * -1) : 0.0;
-                    
+                    final depositAmount =
+                        salesAmount - totalBonus - mealAllowance;
+                    final shortfall = depositAmount < 0
+                        ? (depositAmount * -1)
+                        : 0.0;
+
                     return Column(
                       children: [
                         if (shortfall > 0)
@@ -2971,7 +3134,8 @@ class _FinanceScreenState extends State<FinanceScreen>
                               children: [
                                 const Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         '⚠️ Kekurangan yang Harus Dibayar',
@@ -3003,7 +3167,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                               ],
                             ),
                           ),
-                        
+
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -3022,9 +3186,9 @@ class _FinanceScreenState extends State<FinanceScreen>
                                 ),
                               ),
                               Text(
-                                depositAmount > 0 
-                                  ? 'Rp ${formatRupiah(depositAmount)}' 
-                                  : 'Rp 0',
+                                depositAmount > 0
+                                    ? 'Rp ${formatRupiah(depositAmount)}'
+                                    : 'Rp 0',
                                 style: TextStyle(
                                   color: Colors.green.shade700,
                                   fontWeight: FontWeight.bold,
@@ -3039,7 +3203,7 @@ class _FinanceScreenState extends State<FinanceScreen>
                   },
                 ),
                 const SizedBox(height: 20),
-                
+
                 // Close button
                 SizedBox(
                   width: double.infinity,
@@ -3074,16 +3238,11 @@ class _FinanceScreenState extends State<FinanceScreen>
         ),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
       ],
     );
   }
-
-
 
   void _handleLogout() {
     showDialog(
@@ -3115,15 +3274,15 @@ class _FinanceScreenState extends State<FinanceScreen>
   }
 
   void _handleProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const ProfileScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const ProfileScreen()));
   }
 
   void _handleSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const SettingsScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
   }
 }
 
@@ -3183,11 +3342,14 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
       final date = DateTime(year, month, day);
       final iso = date.toIso8601String().substring(0, 10);
       final customDesc = _customHolidays[iso];
-      final isWeekend = date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
+      final isWeekend =
+          date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
 
       Color bg = Colors.transparent;
-      if (customDesc != null) bg = Colors.red.withOpacity(0.18);
-      else if (isWeekend) bg = Colors.orange.withOpacity(0.12);
+      if (customDesc != null) {
+        bg = Colors.red.withValues(alpha: 0.18);
+      } else if (isWeekend)
+        bg = Colors.orange.withValues(alpha: 0.12);
 
       return GestureDetector(
         onTap: () {
@@ -3195,10 +3357,15 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
             showDialog(
               context: context,
               builder: (_) => AlertDialog(
-                title: Text('$day ${DateFormat.MMMM().format(_displayMonth)} $year'),
+                title: Text(
+                  '$day ${DateFormat.MMMM().format(_displayMonth)} $year',
+                ),
                 content: Text(customDesc),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Tutup'),
+                  ),
                 ],
               ),
             );
@@ -3211,10 +3378,15 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
               showDialog(
                 context: context,
                 builder: (_) => AlertDialog(
-                  title: Text('$day ${DateFormat.MMMM().format(_displayMonth)} $year'),
+                  title: Text(
+                    '$day ${DateFormat.MMMM().format(_displayMonth)} $year',
+                  ),
                   content: Text(desc),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Tutup'),
+                    ),
                   ],
                 ),
               );
@@ -3236,7 +3408,11 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
                 '$day',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: customDesc != null ? Colors.red.shade700 : isWeekend ? Colors.orange.shade800 : Colors.black87,
+                  color: customDesc != null
+                      ? Colors.red.shade700
+                      : isWeekend
+                      ? Colors.orange.shade800
+                      : Colors.black87,
                 ),
               ),
             ],
@@ -3252,8 +3428,14 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(onPressed: _prevMonth, icon: const Icon(Icons.chevron_left)),
-          IconButton(onPressed: _nextMonth, icon: const Icon(Icons.chevron_right)),
+          IconButton(
+            onPressed: _prevMonth,
+            icon: const Icon(Icons.chevron_left),
+          ),
+          IconButton(
+            onPressed: _nextMonth,
+            icon: const Icon(Icons.chevron_right),
+          ),
         ],
       ),
       body: Padding(
@@ -3263,32 +3445,65 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: const [
-                Expanded(child: Center(child: Text('Min', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('Sen', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('Sel', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('Rab', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('Kam', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('Jum', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('Sab', style: TextStyle(fontSize: 12)))),
+                Expanded(
+                  child: Center(
+                    child: Text('Min', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text('Sen', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text('Sel', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text('Rab', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text('Kam', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text('Jum', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text('Sab', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
             // Fixed height calendar so the holiday description appears directly below
             SizedBox(
               height: 300,
-              child: GridView.count(
-                crossAxisCount: 7,
-                children: cells,
-              ),
+              child: GridView.count(crossAxisCount: 7, children: cells),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                Container(width: 12, height: 12, color: Colors.red.withOpacity(0.18)),
+                Container(
+                  width: 12,
+                  height: 12,
+                  color: Colors.red.withValues(alpha: 0.18),
+                ),
                 const SizedBox(width: 8),
                 const Text('Hari Libur'),
                 const SizedBox(width: 16),
-                Container(width: 12, height: 12, color: Colors.orange.withOpacity(0.12)),
+                Container(
+                  width: 12,
+                  height: 12,
+                  color: Colors.orange.withValues(alpha: 0.12),
+                ),
                 const SizedBox(width: 8),
                 const Text('Weekend (Sabtu/Minggu)'),
               ],
@@ -3308,70 +3523,103 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
                 children: [
                   Text(
                     'Keterangan Hari Libur — ${DateFormat.yMMMM().format(_displayMonth)}',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
                   ),
                   const SizedBox(height: 10),
-                  Builder(builder: (context) {
-                    // Build list of custom holidays for the displayed month
-                    final year = _displayMonth.year;
-                    final month = _displayMonth.month;
-                    final entries = _customHolidays.entries
-                        .map((e) {
-                          try {
-                            final d = DateTime.parse(e.key);
-                            return MapEntry(d, e.value);
-                          } catch (_) {
-                            return null;
-                          }
-                        })
-                        .whereType<MapEntry<DateTime, String>>()
-                        .where((me) => me.key.year == year && me.key.month == month)
-                        .toList()
-                      ..sort((a, b) => a.key.day.compareTo(b.key.day));
+                  Builder(
+                    builder: (context) {
+                      // Build list of custom holidays for the displayed month
+                      final year = _displayMonth.year;
+                      final month = _displayMonth.month;
+                      final entries =
+                          _customHolidays.entries
+                              .map((e) {
+                                try {
+                                  final d = DateTime.parse(e.key);
+                                  return MapEntry(d, e.value);
+                                } catch (_) {
+                                  return null;
+                                }
+                              })
+                              .whereType<MapEntry<DateTime, String>>()
+                              .where(
+                                (me) =>
+                                    me.key.year == year &&
+                                    me.key.month == month,
+                              )
+                              .toList()
+                            ..sort((a, b) => a.key.day.compareTo(b.key.day));
 
-                    if (entries.isEmpty) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Tidak ada hari libur terdaftar untuk bulan ini.',
-                            style: TextStyle(fontSize: 13, color: Color(0xFF7A8B99)),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Hari libur dan weekend barista mendapat bonus 20% per tier',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accentDark),
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Column(
-                      children: entries.map((me) {
-                        final dayLabel = DateFormat('d MMM').format(me.key);
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                  width: 72,
-                                  child: Text(dayLabel, style: const TextStyle(fontWeight: FontWeight.w600))),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                  child: Text(me.value,
-                                      style: const TextStyle(fontSize: 13, color: Color(0xFF485C69)))),
-                            ],
-                          ),
+                      if (entries.isEmpty) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Tidak ada hari libur terdaftar untuk bulan ini.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF7A8B99),
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Hari libur dan weekend barista mendapat bonus 20% per tier',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.accentDark,
+                              ),
+                            ),
+                          ],
                         );
-                      }).toList(),
-                    );
-                  }),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'hari libur dan weekend barista mendapat bonus 20% per tier',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accentDark),
+                      }
+
+                      return Column(
+                        children: entries.map((me) {
+                          final dayLabel = DateFormat('d MMM').format(me.key);
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width: 72,
+                                  child: Text(
+                                    dayLabel,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    me.value,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF485C69),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'hari libur dan weekend barista mendapat bonus 20% per tier',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accentDark,
                     ),
+                  ),
                 ],
               ),
             ),

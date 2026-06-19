@@ -6,9 +6,9 @@ class NewAnnouncementScreen extends StatefulWidget {
   final Function() onAnnouncementCreated;
 
   const NewAnnouncementScreen({
-    Key? key,
+    super.key,
     required this.onAnnouncementCreated,
-  }) : super(key: key);
+  });
 
   @override
   State<NewAnnouncementScreen> createState() => _NewAnnouncementScreenState();

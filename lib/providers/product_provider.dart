@@ -98,21 +98,9 @@ class ProductProvider extends ChangeNotifier {
         // Demo categories
         _categories.clear();
         _categories.addAll([
-          Category(
-            id: 'coffee',
-            name: 'Coffee',
-            createdAt: DateTime.now(),
-          ),
-          Category(
-            id: 'tea',
-            name: 'Tea',
-            createdAt: DateTime.now(),
-          ),
-          Category(
-            id: 'food',
-            name: 'Food',
-            createdAt: DateTime.now(),
-          ),
+          Category(id: 'coffee', name: 'Coffee', createdAt: DateTime.now()),
+          Category(id: 'tea', name: 'Tea', createdAt: DateTime.now()),
+          Category(id: 'food', name: 'Food', createdAt: DateTime.now()),
         ]);
         notifyListeners();
         return;
@@ -207,11 +195,7 @@ class ProductProvider extends ChangeNotifier {
 
       // Get products and stock from Supabase
       final products = await _supabaseService.getProducts();
-      
-      // Use TODAY's date for stock filtering in POS (DateTime.now() in local time)
-      // This must match stock_screen's selectedDate calculation
-      final today = DateTime.now();
-      
+
       // Fetch outlet's business_day_start_hour for proper business day calculation
       // Get it directly from Supabase since Outlet model doesn't have this field yet
       int businessDayStartHour = 4; // Default
@@ -221,29 +205,56 @@ class ProductProvider extends ChangeNotifier {
             .select('business_day_start_hour')
             .eq('id', outletId)
             .single();
-        businessDayStartHour = (outletData['business_day_start_hour'] as int?) ?? 4;
+        businessDayStartHour =
+            (outletData['business_day_start_hour'] as int?) ?? 4;
       } catch (e) {
         // Use default business day start hour
       }
-      
+
+      // Use effective business-day calendar date for stock filtering in POS.
+      // If current local time is before businessDayStartHour, use previous day.
+      final now = DateTime.now();
+      final today = (now.hour < businessDayStartHour)
+          ? DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).subtract(const Duration(days: 1))
+          : DateTime(now.year, now.month, now.day);
 
       // Calculate business day range in LOCAL time (same as stock_screen)
       final year = today.year;
       final month = today.month;
       final day = today.day;
-      
+
       DateTime businessDayEndLocal;
-      
+
       if (businessDayStartHour >= 12) {
         // Afternoon start: business day is from YESTERDAY@startHour to TODAY@startHour
-        businessDayEndLocal = DateTime(year, month, day, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day,
+          businessDayStartHour,
+          0,
+          0,
+        );
       } else {
         // Morning start: business day is from TODAY@startHour to TOMORROW@startHour
-        businessDayEndLocal = DateTime(year, month, day + 1, businessDayStartHour, 0, 0);
+        businessDayEndLocal = DateTime(
+          year,
+          month,
+          day + 1,
+          businessDayStartHour,
+          0,
+          0,
+        );
       }
-      
-      businessDayEndLocal = businessDayEndLocal.subtract(const Duration(milliseconds: 1));
-      
+
+      businessDayEndLocal = businessDayEndLocal.subtract(
+        const Duration(milliseconds: 1),
+      );
+
       final stockMap = await _supabaseService.getProductStock(
         outletId,
         selectedDate: today,
@@ -265,19 +276,21 @@ class ProductProvider extends ChangeNotifier {
       // stock = quantity from showcase_allocations (no deductions)
       // tersedia = sisa after deductions (sold, returned, transfers)
       _products.clear();
-      
 
       for (final product in products) {
-        final quantity = stockMap[product.id] ?? 0;  // Stok allocated in business day
+        final quantity =
+            stockMap[product.id] ?? 0; // Stok allocated in business day
         final sold = soldMap[product.id] ?? 0;
         final returned = returnedMap[product.id] ?? 0;
-        final transfers = transferStats[product.id] ?? {'dikirim': 0, 'diterima': 0};
-        
+        final transfers =
+            transferStats[product.id] ?? {'dikirim': 0, 'diterima': 0};
+
         // Calculate remaining stock (tersedia = sisa after deductions)
         final dikirim = (transfers['dikirim'] ?? 0) as num;
         final diterima = (transfers['diterima'] ?? 0) as num;
-        final sisa = quantity - sold - returned - dikirim.toInt() + diterima.toInt();
-        
+        final sisa =
+            quantity - sold - returned - dikirim.toInt() + diterima.toInt();
+
         // Create product with both stock and tersedia values
         final productWithStock = Product(
           id: product.id,
@@ -287,8 +300,8 @@ class ProductProvider extends ChangeNotifier {
           price: product.price,
           hpp: product.hpp,
           isActive: product.isActive,
-          stock: quantity,  // Quantity from showcase_allocations (no deductions)
-          tersedia: sisa > 0 ? sisa : 0,  // Tersedia after deductions
+          stock: quantity, // Quantity from showcase_allocations (no deductions)
+          tersedia: sisa > 0 ? sisa : 0, // Tersedia after deductions
           createdAt: product.createdAt,
           updatedAt: product.updatedAt,
         );

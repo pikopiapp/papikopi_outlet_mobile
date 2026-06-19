@@ -45,9 +45,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       // Fetch outlet data
       final outlet = await supabaseService.getOutlet(outletId);
 
-      final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day);
-      final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        final now = DateTime.now();
+        final baseDate = (now.hour < 4)
+          ? DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1))
+          : DateTime(now.year, now.month, now.day);
+        // Business day starts at 04:00 local and ends next day at 03:59:59
+        final businessDayStartLocal = DateTime(baseDate.year, baseDate.month, baseDate.day, 4);
+        final businessDayEndLocal = businessDayStartLocal.add(const Duration(days: 1)).subtract(const Duration(seconds: 1));
+        final startOfDay = businessDayStartLocal.toUtc();
+        final endOfDay = businessDayEndLocal.toUtc();
 
       // Fetch leaderboard
       final leaderboard = await supabaseService.getLeaderboard(
@@ -175,7 +181,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: isTop3
-                                  ? AppColors.accentLight.withOpacity(0.2)
+                                  ? AppColors.accentLight.withValues(alpha: 0.2)
                                   : AppColors.surface,
                               border: Border.all(
                                 color: isTop3
@@ -186,7 +192,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                               boxShadow: isTop3
                                   ? [
                                       BoxShadow(
-                                        color: Colors.amber[200]!.withOpacity(0.5),
+                                        color: Colors.amber[200]!.withValues(alpha: 0.5),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       )
