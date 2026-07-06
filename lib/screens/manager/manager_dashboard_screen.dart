@@ -620,11 +620,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: _buildStatCard(
-                              title: 'Rata-rata',
-                              value: totalTransactions == 0
+                              title: 'Rata² omset / outlet',
+                              value: activeOutlets.isEmpty
                                   ? 'Rp 0'
                                   : currencyFormat.format(
-                                      todaySales / totalTransactions,
+                                      todaySales / activeOutlets.length,
                                     ),
                               icon: Icons.calculate,
                               color: Colors.blue,

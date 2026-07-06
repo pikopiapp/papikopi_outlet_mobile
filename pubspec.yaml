@@ -30,7 +30,7 @@ dependencies:
   # Date & Time
   intl: ^0.20.2
   
-  # Mobile Scanner for QR/Barcode
+  # Local Scanner for QR/Barcode
   mobile_scanner: ^7.2.0
 
   # Local Storage
@@ -51,6 +51,7 @@ dependencies:
   uuid: ^3.0.6
 
   flutter_native_splash: any
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

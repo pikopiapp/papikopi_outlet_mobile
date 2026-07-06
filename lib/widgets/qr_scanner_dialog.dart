@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import '../screens/camera_scanner_screen.dart';
 import '../theme/thema.dart';
-import '../screens/qr_camera_screen.dart';
 
 class QRScannerDialog extends StatelessWidget {
   const QRScannerDialog({super.key});
@@ -78,12 +79,12 @@ class QRScannerDialog extends StatelessWidget {
               height: 52,
               child: ElevatedButton.icon(
                 onPressed: () async {
-                  // Open camera scanner
-                  final scannedCode = await Navigator.push<String>(
+                  final scannedCode = await CameraScannerScreen.open(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => const QRCameraScreen(),
-                    ),
+                    cameraFacing: CameraFacing.back,
+                    title: 'Scan QR Code',
+                    subtitle: 'Arahkan kamera ke kode dari dashboard',
+                    showFlashIcon: true,
                   );
 
                   if (scannedCode != null && scannedCode.isNotEmpty) {

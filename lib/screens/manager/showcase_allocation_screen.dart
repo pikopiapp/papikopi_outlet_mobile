@@ -1,11 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../helpers/business_day_helper.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
-import '../qr_camera_screen.dart';
+import '../camera_scanner_screen.dart';
 
 class ShowcaseAllocationScreen extends StatefulWidget {
   const ShowcaseAllocationScreen({super.key});
@@ -512,11 +515,15 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       return;
     }
 
-    final scannedCode = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (context) => const QRCameraScreen()),
+    final scannedCode = await CameraScannerScreen.open(
+      context,
+      cameraFacing: CameraFacing.back,
+      title: 'Scan QR Alokasi',
+      subtitle: 'Arahkan kamera ke kode alokasi',
+      showFlashIcon: true,
     );
 
-    if (scannedCode != null && scannedCode.isNotEmpty) {
+    if (scannedCode != null && scannedCode.isNotEmpty && scannedCode != '-1') {
       await _addProductByQRCode(scannedCode);
     }
   }

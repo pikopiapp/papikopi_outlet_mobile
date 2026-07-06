@@ -1,11 +1,14 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:provider/provider.dart';
 
 import '../models/product.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
+import '../screens/camera_scanner_screen.dart';
 import '../utils/product_image_helper.dart';
 import '../utils/number_formatter.dart';
 import '../widgets/cart_summary.dart';
@@ -14,7 +17,6 @@ import '../theme/thema.dart';
 import 'profile_screen.dart';
 
 import 'transaction_history_screen.dart';
-import 'qr_camera_screen.dart';
 
 class POSScreen extends StatefulWidget {
   const POSScreen({super.key});
@@ -189,11 +191,15 @@ class _POSScreenState extends State<POSScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _handleQRScan() async {
-    final scannedCode = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (context) => const QRCameraScreen()),
+    final scannedCode = await CameraScannerScreen.open(
+      context,
+      cameraFacing: CameraFacing.back,
+      title: 'Scan QR Produk',
+      subtitle: 'Arahkan kamera ke kode produk',
+      showFlashIcon: true,
     );
 
-    if (scannedCode != null && scannedCode.isNotEmpty) {
+    if (scannedCode != null && scannedCode.isNotEmpty && scannedCode != '-1') {
       await _addProductByCode(scannedCode);
     }
   }

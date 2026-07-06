@@ -1,11 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../helpers/business_day_helper.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
-import '../qr_camera_screen.dart';
+import '../camera_scanner_screen.dart';
 
 class ManagerProductReturnsScreen extends StatefulWidget {
   const ManagerProductReturnsScreen({super.key});
@@ -471,11 +474,15 @@ class _ManagerProductReturnsScreenState
       return;
     }
 
-    final scannedCode = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (context) => const QRCameraScreen()),
+    final scannedCode = await CameraScannerScreen.open(
+      context,
+      cameraFacing: CameraFacing.back,
+      title: 'Scan QR Pengembalian',
+      subtitle: 'Arahkan kamera ke kode produk untuk scanning',
+      showFlashIcon: true,
     );
 
-    if (scannedCode != null && mounted) {
+    if (scannedCode != null && mounted && scannedCode != '-1') {
       await _addProductByQRCode(scannedCode);
     }
   }
@@ -847,10 +854,11 @@ class _ManagerProductReturnsScreenState
 
     for (int i = 0; i < _tempReturns.length; i++) {
       final item = _tempReturns[i];
+      final BuildContext dialogContext = context;
 
       // Show reason dialog for each product
       String? selectedReason = await showDialog<String>(
-        context: context,
+        context: dialogContext, // ignore: use_build_context_synchronously
         builder: (context) => AlertDialog(
           title: Text('Alasan: ${item['product_name']}'),
           content: SingleChildScrollView(
@@ -868,15 +876,15 @@ class _ManagerProductReturnsScreenState
         ),
       );
 
+      if (!mounted) return;
+
       if (selectedReason == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Batch submit dibatalkan'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Batch submit dibatalkan'),
+            duration: Duration(seconds: 2),
+          ),
+        );
         return; // Cancel batch submit
       }
 
