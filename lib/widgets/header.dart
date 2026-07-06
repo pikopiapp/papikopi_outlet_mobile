@@ -8,6 +8,7 @@ class PapikopiAppBar extends AppBar {
   final VoidCallback? onRefresh;
   final VoidCallback? onMessages;
   final List<Widget>? additionalActions;
+  final String? titleText;
 
   PapikopiAppBar({
     this.onLogout,
@@ -16,6 +17,7 @@ class PapikopiAppBar extends AppBar {
     this.onRefresh,
     this.onMessages,
     this.additionalActions,
+    this.titleText,
     super.key,
   }) : super(
          backgroundColor: AppColors.primary,
@@ -25,13 +27,13 @@ class PapikopiAppBar extends AppBar {
            children: [
              Image.asset('assets/logo.png', height: 40),
              const SizedBox(width: 8),
-             const Expanded(
+             Expanded(
                child: Text(
-                 'PapiApps Outlets',
+                 titleText ?? 'PapiApps Outlets',
                  overflow: TextOverflow.ellipsis,
                  maxLines: 1,
                  softWrap: false,
-                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                ),
              ),
            ],

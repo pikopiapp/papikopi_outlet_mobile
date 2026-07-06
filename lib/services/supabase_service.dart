@@ -103,6 +103,82 @@ class SupabaseService {
     return todayDate;
   }
 
+  static Map<String, DateTime> buildBusinessDayRange(
+    DateTime date,
+    int startHour,
+  ) {
+    final year = date.year;
+    final month = date.month;
+    final day = date.day;
+    final hour = date.hour;
+
+    late DateTime businessDayStartUtc;
+    late DateTime businessDayEndUtc;
+
+    if (hour >= startHour) {
+      businessDayStartUtc = DateTime.utc(year, month, day, startHour, 0, 0);
+      businessDayEndUtc = DateTime.utc(year, month, day + 1, startHour, 0, 0);
+    } else {
+      businessDayStartUtc = DateTime.utc(year, month, day - 1, startHour, 0, 0);
+      businessDayEndUtc = DateTime.utc(year, month, day, startHour, 0, 0);
+    }
+
+    businessDayEndUtc = businessDayEndUtc.subtract(
+      const Duration(milliseconds: 1),
+    );
+
+    return {
+      'start': businessDayStartUtc,
+      'end': businessDayEndUtc,
+    };
+  }
+
+  DateTime resolveBusinessDayDate(
+    DateTime selectedDate, {
+    required int businessDayStartHour,
+    DateTime? now,
+  }) {
+    final effectiveNow = now ?? DateTime.now();
+    final isDateOnly =
+        selectedDate.hour == 0 &&
+        selectedDate.minute == 0 &&
+        selectedDate.second == 0 &&
+        selectedDate.millisecond == 0 &&
+        selectedDate.microsecond == 0;
+
+    if (isDateOnly) return selectedDate;
+
+    final todayDate = DateTime(
+      effectiveNow.year,
+      effectiveNow.month,
+      effectiveNow.day,
+    );
+
+    if (effectiveNow.hour < businessDayStartHour) {
+      return todayDate.subtract(const Duration(days: 1));
+    }
+
+    return todayDate;
+  }
+
+  DateTime resolveBusinessDayDateForCheckout(
+    DateTime selectedDate, {
+    required int businessDayStartHour,
+    DateTime? now,
+  }) {
+    final resolvedDate = resolveBusinessDayDate(
+      selectedDate,
+      businessDayStartHour: businessDayStartHour,
+      now: now,
+    );
+
+    return DateTime(
+      resolvedDate.year,
+      resolvedDate.month,
+      resolvedDate.day,
+    );
+  }
+
   SupabaseService._internal();
 
   factory SupabaseService() {
@@ -492,6 +568,7 @@ class SupabaseService {
     required double totalBonus,
     required double profit,
     required List<Map<String, dynamic>> items,
+    DateTime? createdAt,
   }) async {
     try {
       await _client.from('sales').insert({
@@ -502,6 +579,7 @@ class SupabaseService {
         'hpp_total': totalHpp,
         'bonus_amount': totalBonus,
         'profit': profit,
+        'created_at': (createdAt ?? DateTime.now()).toIso8601String(),
       });
 
       // Get the ID of the newly created sale by querying the latest one
@@ -538,7 +616,11 @@ class SupabaseService {
     }
   }
 
-  Future<List<Sale>> getSales({String? outletId, String? baristaId}) async {
+  Future<List<Sale>> getSales({
+    String? outletId,
+    String? baristaId,
+    DateTime? selectedDate,
+  }) async {
     var query = _client
         .from('sales')
         .select(
@@ -553,6 +635,30 @@ class SupabaseService {
       query = query.eq('barista_id', baristaId);
     }
 
+    if (selectedDate != null) {
+      final businessDayStartHour = outletId != null
+          ? await getBusinessDayStartHour(outletId: outletId)
+          : 4;
+      final businessDayDate = resolveBusinessDayDate(
+        selectedDate,
+        businessDayStartHour: businessDayStartHour,
+      );
+      final startDateUtc = DateTime(
+        businessDayDate.year,
+        businessDayDate.month,
+        businessDayDate.day,
+      ).toUtc();
+      final endDateUtc = DateTime(
+        businessDayDate.year,
+        businessDayDate.month,
+        businessDayDate.day + 1,
+      ).toUtc();
+
+      query = query
+          .gte('created_at', startDateUtc.toIso8601String())
+          .lt('created_at', endDateUtc.toIso8601String());
+    }
+
     final response = await query.order('created_at', ascending: false);
 
     if ((response as List<dynamic>).isNotEmpty) {
@@ -562,6 +668,34 @@ class SupabaseService {
     return (response as List<dynamic>)
         .map((item) => Sale.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<List<Sale>> getSalesByDateRange({
+    required String outletId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    if (!_isInitialized) {
+      return [];
+    }
+
+    try {
+      final response = await _client
+          .from('sales')
+          .select(
+            'id, outlet_id, barista_id, payment_method, total_amount, hpp_total, bonus_amount, profit, created_at, is_edited, edited_at, sale_items(id, sale_id, product_id, quantity, price, hpp, created_at, products(name))',
+          )
+          .eq('outlet_id', outletId)
+          .gte('created_at', startDate.toIso8601String())
+          .lte('created_at', endDate.toIso8601String())
+          .order('created_at', ascending: false);
+
+      return (response as List<dynamic>)
+          .map((item) => Sale.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      return [];
+    }
   }
 
   /// Get monthly gratis transaction statistics
@@ -610,10 +744,8 @@ class SupabaseService {
   }
 
   /// Get barista assigned to a specific outlet.
-  /// Web logic uses: /api/staff?role=barista then /api/outlets/${outletId}/baristas
-  /// Mobile maps it to users table where role='barista' and outlet assignment column.
-  ///
-  /// NOTE: sesuai info user, kolom assignment outlet pada barista adalah `outlet_assigment`.
+  /// Web logic uses: /api/staff?role=barista and filters by outlet_id.
+  /// This matches the web dashboard behavior exactly.
   Future<List<Map<String, dynamic>>> getBaristasByOutlet({
     required String outletId,
   }) async {
@@ -1297,6 +1429,58 @@ class SupabaseService {
     }
   }
 
+  static Map<String, int> mapReturnedQuantitiesForBusinessDay({
+    required List<dynamic> rows,
+    required DateTime businessDayDate,
+    required int businessDayStartHour,
+  }) {
+    final returnedMap = <String, int>{};
+    final targetBusinessDate = DateTime(
+      businessDayDate.year,
+      businessDayDate.month,
+      businessDayDate.day,
+    );
+
+    for (final item in rows) {
+      final productId = item['product_id'] as String?;
+      if (productId == null) continue;
+
+      final raw = item['return_date'];
+      if (raw == null) continue;
+
+      DateTime parsed;
+      if (raw is DateTime) {
+        parsed = raw;
+      } else {
+        try {
+          parsed = DateTime.parse(raw.toString());
+        } catch (_) {
+          continue;
+        }
+      }
+
+      final local = parsed.toLocal();
+      DateTime returnBusinessDate = DateTime(
+        local.year,
+        local.month,
+        local.day,
+      );
+      if (local.hour < businessDayStartHour) {
+        returnBusinessDate = returnBusinessDate.subtract(
+          const Duration(days: 1),
+        );
+      }
+
+      if (returnBusinessDate.year == targetBusinessDate.year &&
+          returnBusinessDate.month == targetBusinessDate.month &&
+          returnBusinessDate.day == targetBusinessDate.day) {
+        returnedMap[productId] = (returnedMap[productId] ?? 0) + 1;
+      }
+    }
+
+    return returnedMap;
+  }
+
   // Get returned quantity per product for today (based on business day)
   Future<Map<String, int>> getReturnedQuantityToday({
     required String outletId,
@@ -1376,30 +1560,59 @@ class SupabaseService {
         const Duration(milliseconds: 1),
       );
 
-      // Convert to UTC for database query
+      // Convert to UTC for database query.
+      // We also use an expanded window as a fallback because some rows may be
+      // stored near midnight UTC while the outlet business-day is evaluated in local time.
       final dailyStart = businessDayStartLocal.toUtc();
       final dailyEnd = businessDayEndLocal.toUtc();
+      final extendedStart = dailyStart.subtract(const Duration(hours: 12));
+      final extendedEnd = dailyEnd.add(const Duration(hours: 12));
 
-      // Query product_returns for this outlet on this business day
-      final returnsResponse = await _client
+      final initialResponse = await _client
           .from('product_returns')
-          .select('product_id')
+          .select('id, product_id, return_date')
           .eq('outlet_id', outletId)
           .gte('return_date', dailyStart.toIso8601String())
-          .lte('return_date', dailyEnd.toIso8601String());
+          .lte('return_date', dailyEnd.toIso8601String())
+          .order('return_date', ascending: false)
+          .limit(1000);
 
-      if (returnsResponse.isEmpty) {
-        return {};
+      List<dynamic> rows = List<dynamic>.from(initialResponse as List<dynamic>);
+      if (rows.isEmpty) {
+        final extended = await _client
+            .from('product_returns')
+            .select('id, product_id, return_date')
+            .eq('outlet_id', outletId)
+            .gte('return_date', extendedStart.toIso8601String())
+            .lte('return_date', extendedEnd.toIso8601String())
+            .order('return_date', ascending: false)
+            .limit(1000);
+
+        rows = List<dynamic>.from(extended as List<dynamic>);
       }
 
-      // Build returned map - count occurrences of each product_id
-      final returnedMap = <String, int>{};
-      for (final item in returnsResponse) {
-        final productId = item['product_id'] as String?;
+      final returnedMap = mapReturnedQuantitiesForBusinessDay(
+        rows: rows,
+        businessDayDate: baseDate,
+        businessDayStartHour: businessDayStartHour,
+      );
 
-        if (productId != null) {
-          returnedMap[productId] = (returnedMap[productId] ?? 0) + 1;
-        }
+      if (returnedMap.isEmpty) {
+        final extended = await _client
+            .from('product_returns')
+            .select('id, product_id, return_date')
+            .eq('outlet_id', outletId)
+            .gte('return_date', extendedStart.toIso8601String())
+            .lte('return_date', extendedEnd.toIso8601String())
+            .order('return_date', ascending: false)
+            .limit(1000);
+
+        final extendedRows = List<dynamic>.from(extended as List<dynamic>);
+        return mapReturnedQuantitiesForBusinessDay(
+          rows: extendedRows,
+          businessDayDate: baseDate,
+          businessDayStartHour: businessDayStartHour,
+        );
       }
 
       return returnedMap;
@@ -2256,6 +2469,7 @@ class SupabaseService {
       // Create product_returns records (one per unit returned)
       // Condition status must be one of: 'sellable', 'damaged', 'partially_damaged'
       // Default to 'damaged' for returns - can be changed during inspection
+      final nowUtc = DateTime.now().toUtc().toIso8601String();
       final returnData = List.generate(
         quantity,
         (index) => {
@@ -2264,7 +2478,7 @@ class SupabaseService {
           'return_reason': returnReason,
           'condition_status': 'damaged', // Valid constraint value
           'condition_notes': conditionNotes,
-          'return_date': DateTime.now().toIso8601String(),
+          'return_date': nowUtc,
         },
       );
 
@@ -4119,8 +4333,10 @@ class SupabaseService {
     }
 
     try {
-      final startISO = startDate.toIso8601String();
-      final endISO = endDate.toIso8601String();
+      final startUtc = startDate.toUtc();
+      final endUtc = endDate.toUtc();
+      final startISO = startUtc.toIso8601String();
+      final endISO = endUtc.toIso8601String();
 
       print('=== FETCH ASSIGNMENTS START ===');
       print('Outlet: $outletId');
@@ -4128,8 +4344,8 @@ class SupabaseService {
       print('End (UTC): $endISO');
 
       // Convert back to local to show user what range we're querying
-      final startLocal = startDate.toLocal();
-      final endLocal = endDate.toLocal();
+      final startLocal = startUtc.toLocal();
+      final endLocal = endUtc.toLocal();
       print('Start (local): ${startLocal.toIso8601String()}');
       print('End (local): ${endLocal.toIso8601String()}');
 
@@ -4148,7 +4364,7 @@ class SupabaseService {
         print('  Alloc $i: created_at = $createdAt');
       }
 
-      // Now fetch with date filter
+      // Now fetch with date filter, matching web logic exactly.
       print('--- Fetching with DATE FILTER ---');
       final response = await _client
           .from('showcase_allocations')
@@ -4158,17 +4374,12 @@ class SupabaseService {
           .lte('created_at', endISO)
           .order('created_at', ascending: false);
 
-      print('Filtered query result count: ${(response as List).length}');
-      if ((response as List).isEmpty) {
-        print('No allocations found in date range');
-        print('Possible issue: Check if created_at values fall within range');
-      } else {
-        // Show first few results
-        for (int i = 0; i < (response as List).length && i < 3; i++) {
-          final item = response[i];
-          final createdAt = item['created_at'];
-          print('  - Item $i: created_at = $createdAt');
-        }
+      List<dynamic> rows = List<dynamic>.from(response as List<dynamic>);
+      print('Filtered query result count: ${rows.length}');
+      for (int i = 0; i < rows.length && i < 3; i++) {
+        final item = rows[i];
+        final createdAt = item['created_at'];
+        print('  - Item $i: created_at = $createdAt');
       }
 
       // Get showcase products mapping
@@ -4183,7 +4394,7 @@ class SupabaseService {
 
       // Build result with product_name
       final result = <Map<String, dynamic>>[];
-      for (final item in response as List<dynamic>) {
+      for (final item in rows) {
         final showcaseProductId = item['showcase_product_id'] as String?;
         if (showcaseProductId != null &&
             productMap.containsKey(showcaseProductId)) {
@@ -4211,14 +4422,76 @@ class SupabaseService {
     }
   }
 
+  Future<int> getShowcaseAllocatedQuantity(
+    String showcaseProductId, {
+    DateTime? selectedDate,
+    required String outletId,
+  }) async {
+    try {
+      final effectiveDate = selectedDate ?? DateTime.now();
+      final outletData = await _client
+          .from('outlets')
+          .select('business_day_start_hour')
+          .eq('id', outletId)
+          .maybeSingle();
+
+      final businessDayStartHour =
+          (outletData?['business_day_start_hour'] as int?) ?? 4;
+      final range = buildBusinessDayRange(
+        effectiveDate,
+        businessDayStartHour,
+      );
+
+      final allocationsResponse = await _client
+          .from('showcase_allocations')
+          .select('quantity, created_at')
+          .eq('showcase_product_id', showcaseProductId)
+          .gte('created_at', (range['start'] as DateTime).toIso8601String())
+          .lte('created_at', (range['end'] as DateTime).toIso8601String());
+
+      int totalAllocated = 0;
+      for (final row in allocationsResponse as List<dynamic>) {
+        totalAllocated += (row['quantity'] as int? ?? 0);
+      }
+
+      return totalAllocated;
+    } catch (e) {
+      print('Error fetching showcase allocated quantity: $e');
+      return 0;
+    }
+  }
+
+  Future<void> _syncShowcaseProductAllocatedQuantity(
+    String showcaseProductId, {
+    required String outletId,
+  }) async {
+    try {
+      final totalAllocated = await getShowcaseAllocatedQuantity(
+        showcaseProductId,
+        outletId: outletId,
+      );
+      await _client
+          .from('showcase_products')
+          .update({'allocated_quantity': totalAllocated})
+          .eq('id', showcaseProductId);
+    } catch (e) {
+      print('Error syncing showcase product allocation quantity: $e');
+    }
+  }
+
   /// Allocate a showcase product to an outlet
   Future<Map<String, dynamic>> allocateShowcaseProduct({
     required String showcaseProductId,
     required String outletId,
     required int quantity,
+    DateTime? selectedDate,
   }) async {
     if (!_isInitialized) {
       return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    if (quantity <= 0) {
+      return {'success': false, 'message': 'Quantity harus lebih dari 0'};
     }
 
     try {
@@ -4226,6 +4499,29 @@ class SupabaseService {
       print('showcaseProductId: $showcaseProductId');
       print('outletId: $outletId');
       print('quantity: $quantity');
+
+      final productResponse = await _client
+          .from('showcase_products')
+          .select('id, total_quantity')
+          .eq('id', showcaseProductId)
+          .maybeSingle();
+
+      if (productResponse == null) {
+        return {'success': false, 'message': 'Produk showcase tidak ditemukan'};
+      }
+
+      final totalQuantity = (productResponse['total_quantity'] as int? ?? 0);
+      final currentAllocated = await getShowcaseAllocatedQuantity(
+        showcaseProductId,
+        outletId: outletId,
+        selectedDate: selectedDate,
+      );
+      if (currentAllocated + quantity > totalQuantity) {
+        return {
+          'success': false,
+          'message': 'Jumlah alokasi melebihi total showcase',
+        };
+      }
 
       // Insert directly into showcase_allocations table
       // IMPORTANT: Store created_at in UTC to match the business day range queries
@@ -4238,6 +4534,11 @@ class SupabaseService {
         'quantity': quantity,
         'created_at': createdAtUtc,
       });
+
+      await _syncShowcaseProductAllocatedQuantity(
+        showcaseProductId,
+        outletId: outletId,
+      );
 
       print('Insert response: $response');
       print('=== ALLOCATE END (success) ===');
@@ -4263,10 +4564,30 @@ class SupabaseService {
     }
 
     try {
+      final allocationResponse = await _client
+          .from('showcase_allocations')
+          .select('showcase_product_id, outlet_id')
+          .eq('id', allocationId)
+          .maybeSingle();
+
       await _client
           .from('showcase_allocations')
           .delete()
           .eq('id', allocationId);
+
+      if (allocationResponse != null) {
+        final showcaseProductId = allocationResponse['showcase_product_id'] as String?;
+        final allocationOutletId = allocationResponse['outlet_id'] as String?;
+        if (showcaseProductId != null &&
+            showcaseProductId.isNotEmpty &&
+            allocationOutletId != null &&
+            allocationOutletId.isNotEmpty) {
+          await _syncShowcaseProductAllocatedQuantity(
+            showcaseProductId,
+            outletId: allocationOutletId,
+          );
+        }
+      }
 
       return {'success': true, 'message': 'Alokasi berhasil dihapus'};
     } catch (e) {
@@ -4276,6 +4597,13 @@ class SupabaseService {
   }
 
   /// Fetch product returns for an outlet and date range
+  ///
+  /// This implementation always fetches an expanded timestamp window and maps
+  /// each `return_date` to the outlet's business-day in LOCAL time. It then
+  /// filters returns to only those that belong to the selected business-day
+  /// represented by `startDate` (which should be the business-day start
+  /// in UTC when callers pass UTC start/end). This makes the client resilient
+  /// to returns stored as midnight UTC or with timezone skew.
   Future<List<Map<String, dynamic>>> fetchProductReturnsForOutlet({
     required String outletId,
     required DateTime startDate,
@@ -4286,52 +4614,96 @@ class SupabaseService {
     }
 
     try {
-      final startISO = startDate.toIso8601String().split('T')[0];
-      final endISO = endDate.toIso8601String().split('T')[0];
-
       print('=== FETCH PRODUCT RETURNS START ===');
       print('Outlet: $outletId');
-      print('Start (Date): $startISO');
-      print('End (Date): $endISO');
+      print('Requested Start (UTC): ${startDate.toIso8601String()}');
+      print('Requested End   (UTC): ${endDate.toIso8601String()}');
 
-      // Fetch all product returns for this outlet within the date range
-      final response = await _client
+      // Determine the selected business-day in LOCAL time from the provided startDate
+      final selectedBusinessDate = DateTime(
+        startDate.toLocal().year,
+        startDate.toLocal().month,
+        startDate.toLocal().day,
+      );
+
+      // Expand range a bit to capture returns stored at midnight UTC or with timezone skew
+      final extendedStart = startDate.subtract(const Duration(hours: 12));
+      final extendedEnd = endDate.add(const Duration(hours: 12));
+
+      final allReturns = await _client
           .from('product_returns')
-          .select('*')
+          .select('id, product_id, outlet_id, return_reason, condition_status, resolution_status, return_date')
           .eq('outlet_id', outletId)
-          .gte('return_date', startISO)
-          .lte('return_date', endISO)
-          .order('return_date', ascending: false);
+          .gte('return_date', extendedStart.toIso8601String())
+          .lte('return_date', extendedEnd.toIso8601String())
+          .order('return_date', ascending: false)
+          .limit(1000);
 
-      print('Query result count: ${(response as List).length}');
+      print('Extended returns fetch count: ${(allReturns as List).length}');
 
-      // Get products mapping
+      // Get outlet business day start hour (fallback to 4)
+      int businessDayStartHour = 4;
+      try {
+        businessDayStartHour = await getBusinessDayStartHour(outletId: outletId);
+      } catch (_) {
+        // keep default
+      }
+
+      // Build map of products for naming
       final productsResp = await _client.from('products').select('id, name');
-
       final productMap = <String, String>{};
       for (final p in productsResp as List<dynamic>) {
         productMap[p['id']] = p['name'] as String;
       }
 
-      // Build result with product_name
+      // Filter by business-day computed from each return's local timestamp
       final result = <Map<String, dynamic>>[];
-      for (final item in response as List<dynamic>) {
-        final productId = item['product_id'] as String?;
-        if (productId != null && productMap.containsKey(productId)) {
-          result.add({
-            'id': item['id'],
-            'product_id': productId,
-            'product_name': productMap[productId],
-            'quantity': 1, // Each row represents one return instance
-            'return_reason': item['return_reason'] ?? '',
-            'condition_status': item['condition_status'] ?? 'good',
-            'resolution_status': item['resolution_status'] ?? 'pending',
-            'return_date': item['return_date'],
-          });
+      for (final row in allReturns as List<dynamic>) {
+        final raw = row['return_date'];
+        if (raw == null) continue;
+
+        DateTime parsed;
+        try {
+          parsed = DateTime.parse(raw.toString());
+        } catch (e) {
+          continue;
+        }
+
+        final local = parsed.toLocal();
+        DateTime returnBusinessDate = DateTime(local.year, local.month, local.day);
+        if (local.hour < businessDayStartHour) {
+          returnBusinessDate = returnBusinessDate.subtract(const Duration(days: 1));
+        }
+
+        // Targeted verbose logging for a specific outlet to help debugging
+        if (outletId == '46bac30c-133a-4f38-ae4d-db404f1feee0') {
+          print('[DEBUG_RETURN_ROW] id=${row['id']} product_id=${row['product_id']} raw=$raw parsed=$parsed local=$local businessDay=$returnBusinessDate');
+        }
+
+        if (returnBusinessDate.year == selectedBusinessDate.year &&
+            returnBusinessDate.month == selectedBusinessDate.month &&
+            returnBusinessDate.day == selectedBusinessDate.day) {
+          final productId = row['product_id'] as String?;
+          if (productId != null && productMap.containsKey(productId)) {
+            result.add({
+              'id': row['id'],
+              'product_id': productId,
+              'product_name': productMap[productId],
+              'quantity': 1,
+              'return_reason': row['return_reason'] ?? '',
+              'condition_status': row['condition_status'] ?? 'good',
+              'resolution_status': row['resolution_status'] ?? 'pending',
+              'return_date': row['return_date'],
+            });
+          }
+        } else {
+          if (outletId == '46bac30c-133a-4f38-ae4d-db404f1feee0') {
+            print('[DEBUG_RETURN_EXCLUDED] id=${row['id']} product_id=${row['product_id']} maps_to=$returnBusinessDate not_selected=$selectedBusinessDate');
+          }
         }
       }
 
-      print('Final result: ${result.length} returns');
+      print('Final mapped returns count: ${result.length}');
       print('=== FETCH PRODUCT RETURNS END ===');
       return result;
     } catch (e) {
@@ -4361,7 +4733,7 @@ class SupabaseService {
       // Insert into product_returns table with actual schema columns
       // Schema: product_id, outlet_id, return_reason, condition_status, resolution_status, return_date
       // Insert one record per unit (quantity) since the table tracks individual items
-      final today = DateTime.now().toUtc().toIso8601String().split('T')[0];
+      final nowUtc = DateTime.now().toUtc().toIso8601String();
 
       for (int i = 0; i < quantity; i++) {
         await _client.from('product_returns').insert({
@@ -4370,7 +4742,7 @@ class SupabaseService {
           'return_reason': returnReason,
           'condition_status': 'sellable',
           'resolution_status': 'pending',
-          'return_date': today,
+          'return_date': nowUtc,
         });
       }
 

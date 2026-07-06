@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
+import '../services/supabase_service.dart';
 import '../theme/thema.dart';
 import '../utils/number_formatter.dart';
 
@@ -15,6 +16,7 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+  final SupabaseService _supabase = SupabaseService();
   late DateTime _selectedDate;
   String _paymentMethod = 'CASH';
   Product? _selectedDrink;
@@ -26,13 +28,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _selectedDate = (now.hour < 4)
-        ? DateTime(
-            now.year,
-            now.month,
-            now.day,
-          ).subtract(const Duration(days: 1))
-        : DateTime(now.year, now.month, now.day);
+    _selectedDate = _supabase.resolveBusinessDayDateForCheckout(
+      now,
+      businessDayStartHour: 4,
+    );
   }
 
   @override
@@ -125,9 +124,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         initialDate: _selectedDate,
                         firstDate: DateTime(2020),
                         lastDate: DateTime(2030),
+                        locale: const Locale('id', 'ID'),
                       );
                       if (picked != null) {
-                        setState(() => _selectedDate = picked);
+                        setState(() => _selectedDate = DateTime(
+                              picked.year,
+                              picked.month,
+                              picked.day,
+                            ));
                       }
                     },
                     child: Padding(

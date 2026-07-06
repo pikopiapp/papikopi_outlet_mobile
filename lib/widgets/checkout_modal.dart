@@ -205,12 +205,19 @@ class _CheckoutModalState extends State<CheckoutModal> {
 
       // Capture outletId early to avoid using BuildContext after awaits
       final outletId = authProvider.currentUser!.outletId;
+      final businessDayStartHour = await supabaseService.getBusinessDayStartHour(
+        outletId: outletId,
+      );
+      final businessDayDate = supabaseService.resolveBusinessDayDateForCheckout(
+        DateTime.now(),
+        businessDayStartHour: businessDayStartHour,
+      );
 
       // Create sale in POS system
       if (_selectedPaymentMethod == 'GRATIS') {}
 
       await supabaseService.createSale(
-        outletId: authProvider.currentUser!.outletId,
+        outletId: outletId,
         baristaId: authProvider.currentUser!.id,
         paymentMethod: _selectedPaymentMethod,
         totalAmount: totalAmount,
@@ -218,6 +225,7 @@ class _CheckoutModalState extends State<CheckoutModal> {
         totalBonus: totalBonus,
         profit: profit,
         items: items,
+        createdAt: businessDayDate,
       );
 
       // Record sales to warehouse system (sales_records table)
@@ -253,9 +261,9 @@ class _CheckoutModalState extends State<CheckoutModal> {
 
               await supabaseService.recordSaleToWarehouse(
                 batchId: matchingBatch['id'] as String,
-                outletId: authProvider.currentUser!.outletId,
+                outletId: outletId,
                 quantitySold: cartItem.quantity,
-                saleDate: DateTime.now(),
+                saleDate: businessDayDate,
                 notes: notes,
               );
 

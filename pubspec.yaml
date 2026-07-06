@@ -11,6 +11,9 @@ dependencies:
   flutter:
     sdk: flutter
 
+  flutter_localizations:
+    sdk: flutter
+
   # Supabase - latest version
   supabase_flutter: ^2.0.0
   
@@ -25,7 +28,7 @@ dependencies:
   
   
   # Date & Time
-  intl: ^0.19.0
+  intl: ^0.20.2
   
   # Mobile Scanner for QR/Barcode
   mobile_scanner: ^7.2.0

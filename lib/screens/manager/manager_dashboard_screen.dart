@@ -24,6 +24,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   late DateTime selectedDate;
   double todaySales = 0;
   int totalTransactions = 0;
+  List<Map<String, dynamic>> activeOutlets = [];
   List<Map<String, dynamic>> recentTransactions = [];
   List<Map<String, dynamic>> topOutlets = [];
 
@@ -80,6 +81,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         _loadDateSales(),
         _loadDateTransactions(),
         _loadDateTopOutlets(),
+        _loadDateActiveOutlets(),
       ]);
       setState(() => isLoading = false);
     } catch (e) {
@@ -89,6 +91,46 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+    }
+  }
+
+  Future<void> _loadDateActiveOutlets() async {
+    try {
+      final selectedLocal = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        4,
+      );
+      final startOfDayUtc = selectedLocal.subtract(const Duration(hours: 7)).toUtc();
+      final endOfDayUtc = startOfDayUtc.add(const Duration(days: 1));
+
+      final response = await supabaseService.client
+          .from('sales')
+          .select('outlet_id, outlets(name)')
+          .gte('created_at', startOfDayUtc.toIso8601String())
+          .lt('created_at', endOfDayUtc.toIso8601String());
+
+      final Map<String, String> outletNames = {};
+      for (var sale in response) {
+        final outletId = sale['outlet_id'] as String?;
+        final outletName = sale['outlets']?['name'] as String? ?? 'Unknown';
+        if (outletId != null && outletId.isNotEmpty) {
+          outletNames[outletId] = outletName;
+        }
+      }
+
+      final outlets = outletNames.entries
+          .map((entry) => {
+                'id': entry.key,
+                'name': entry.value,
+              })
+          .toList();
+
+      setState(() => activeOutlets = outlets);
+    } catch (e) {
+      debugPrint('Error loading active outlets: $e');
+      setState(() => activeOutlets = []);
     }
   }
 
@@ -569,9 +611,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         children: [
                           Expanded(
                             child: _buildStatCard(
-                              title: 'Transaksi',
-                              value: totalTransactions.toString(),
-                              icon: Icons.receipt,
+                              title: 'Outlet Aktif',
+                              value: activeOutlets.length.toString(),
+                              icon: Icons.storefront,
                               color: AppColors.success,
                             ),
                           ),
@@ -679,21 +721,20 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                                 recentTransactions.length,
                                 (index) {
                                   final tx = recentTransactions[index];
-                                  // `tx['time']` is already a formatted string (HH:mm)
                                   final timeString = tx['time'] as String;
 
                                   return Padding(
                                     padding: EdgeInsets.only(
-                                      bottom:
-                                          index < recentTransactions.length - 1
+                                      bottom: index < recentTransactions.length - 1
                                           ? 12
                                           : 0,
                                     ),
                                     child: _buildTransactionCard(
-                                      outlet: tx['outlet'],
-                                      amount: tx['amount'],
+                                      outlet: tx['outlet'] as String,
+                                      amount: tx['amount'] as double,
                                       time: timeString,
-                                      paymentMethod: tx['payment_method'] ?? '',
+                                      paymentMethod:
+                                          tx['payment_method'] as String,
                                       currencyFormat: currencyFormat,
                                     ),
                                   );
@@ -712,6 +753,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   Widget _buildStatCard({
     required String title,
     required String value,
+    String? subtitle,
     required IconData icon,
     required Color color,
   }) {
@@ -745,6 +787,108 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionCard({
+    required String outlet,
+    required double amount,
+    required String time,
+    required String paymentMethod,
+    required NumberFormat currencyFormat,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Color(0xFFE8E8E8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.check_circle, color: AppColors.success, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  outlet,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: Color(0xFF1F1F1F),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  time,
+                  style: const TextStyle(
+                    color: Color(0xFF999999),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (paymentMethod.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.altSurface),
+              ),
+              child: Text(
+                paymentMethod.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF666666),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Text(
+            currencyFormat.format(amount),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: AppColors.success,
+            ),
           ),
         ],
       ),
@@ -827,99 +971,4 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     );
   }
 
-  Widget _buildTransactionCard({
-    required String outlet,
-    required double amount,
-    required String time,
-    required String paymentMethod,
-    required NumberFormat currencyFormat,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Color(0xFFE8E8E8)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.success.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.check_circle, color: AppColors.success, size: 24),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  outlet,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Color(0xFF1F1F1F),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      time,
-                      style: const TextStyle(
-                        color: Color(0xFF999999),
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (paymentMethod.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.altSurface),
-                        ),
-                        child: Text(
-                          paymentMethod.toString().toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF666666),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Text(
-            currencyFormat.format(amount),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: AppColors.success,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

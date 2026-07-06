@@ -8,6 +8,16 @@ library;
 /// - DateTime: 2026-05-10 03:00, startHour: 4 => 2026-05-09 (previous day)
 /// - DateTime: 2026-05-10 05:00, startHour: 4 => 2026-05-10 (current day)
 DateTime getBusinessDayDate(DateTime timestamp, int businessDayStartHour) {
+  final isDateOnly = timestamp.hour == 0 &&
+      timestamp.minute == 0 &&
+      timestamp.second == 0 &&
+      timestamp.millisecond == 0 &&
+      timestamp.microsecond == 0;
+
+  if (isDateOnly) {
+    return DateTime(timestamp.year, timestamp.month, timestamp.day);
+  }
+
   if (timestamp.hour < businessDayStartHour) {
     // Before business day start, so it belongs to previous day's business day
     return DateTime(timestamp.year, timestamp.month, timestamp.day - 1);
@@ -53,13 +63,45 @@ DateTime getBusinessDayEnd(DateTime date, int businessDayStartHour) {
 /// - Date: 2026-05-10, startHour: 4
 /// - start: 2026-05-10 04:00:00
 /// - end: 2026-05-11 03:59:59.999
+Map<String, DateTime> buildBusinessDayRangeForSelection(
+  DateTime date,
+  int businessDayStartHour,
+) {
+  final isDateOnly = date.hour == 0 &&
+      date.minute == 0 &&
+      date.second == 0 &&
+      date.millisecond == 0 &&
+      date.microsecond == 0;
+
+  final businessDayDate = isDateOnly
+      ? DateTime(date.year, date.month, date.day)
+      : getBusinessDayDate(date, businessDayStartHour);
+
+  final start = DateTime(
+    businessDayDate.year,
+    businessDayDate.month,
+    businessDayDate.day,
+    businessDayStartHour,
+    0,
+    0,
+  );
+  final end = DateTime(
+    businessDayDate.year,
+    businessDayDate.month,
+    businessDayDate.day + 1,
+    businessDayStartHour,
+    0,
+    0,
+  ).subtract(const Duration(milliseconds: 1));
+
+  return {'start': start, 'end': end};
+}
+
 Map<String, DateTime> getBusinessDayRange(
   DateTime date,
   int businessDayStartHour,
 ) {
-  final start = getBusinessDayStart(date, businessDayStartHour);
-  final end = getBusinessDayEnd(date, businessDayStartHour);
-  return {'start': start, 'end': end};
+  return buildBusinessDayRangeForSelection(date, businessDayStartHour);
 }
 
 /// Check if timestamp is within a business day

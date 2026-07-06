@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/outlet.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
+import '../../widgets/header.dart';
 
 class ManagerOutletDetailScreen extends StatefulWidget {
   final String outletId;
@@ -17,7 +18,6 @@ class ManagerOutletDetailScreen extends StatefulWidget {
 class _ManagerOutletDetailScreenState extends State<ManagerOutletDetailScreen> {
   // Palette hardcode untuk memenuhi permintaan desain
   static const _hitam = Color(0xFF212121);
-  static const _netralGrey = Color(0xFF757575);
 
   final _supabase = SupabaseService();
 
@@ -45,6 +45,14 @@ class _ManagerOutletDetailScreenState extends State<ManagerOutletDetailScreen> {
     try {
       if (!_supabase.isInitialized) {
         await _supabase.initialize();
+      }
+
+      if (!_supabase.isInitialized) {
+        setState(() {
+          _error = 'Gagal terhubung ke database';
+          _loading = false;
+        });
+        return;
       }
 
       final outlet = await _supabase.getOutlet(widget.outletId);
@@ -145,8 +153,9 @@ class _ManagerOutletDetailScreenState extends State<ManagerOutletDetailScreen> {
       r,
     ) {
       final method = (r['payment_method'] as String?)?.toUpperCase() ?? '';
-      if (method == 'CASH')
+      if (method == 'CASH') {
         return acc + ((r['total_amount'] as num?)?.toDouble() ?? 0.0);
+      }
       return acc;
     });
 
@@ -155,8 +164,9 @@ class _ManagerOutletDetailScreenState extends State<ManagerOutletDetailScreen> {
       r,
     ) {
       final method = (r['payment_method'] as String?)?.toUpperCase() ?? '';
-      if (method == 'QRIS')
+      if (method == 'QRIS') {
         return acc + ((r['total_amount'] as num?)?.toDouble() ?? 0.0);
+      }
       return acc;
     });
 
@@ -189,15 +199,27 @@ class _ManagerOutletDetailScreenState extends State<ManagerOutletDetailScreen> {
 
     if (saleIds.isEmpty) return const [];
 
-    // Fetch sale items and products
-    final items = await _supabase.client
-        .from('sale_items')
-        .select('product_id, quantity, price, products(name)')
-        .inFilter('sale_id', saleIds);
+    // Fetch sale items and products in batches to avoid PostgREST 400 responses
+    // when the ID list becomes too large.
+    const batchLimit = 100;
+    final items = <dynamic>[];
+    for (var offset = 0; offset < saleIds.length; offset += batchLimit) {
+      final end = offset + batchLimit > saleIds.length
+          ? saleIds.length
+          : offset + batchLimit;
+      final batchSaleIds = saleIds.sublist(offset, end);
+
+      final batchItems = await _supabase.client
+          .from('sale_items')
+          .select('product_id, quantity, price, products(name)')
+          .inFilter('sale_id', batchSaleIds);
+
+      items.addAll(batchItems as List<dynamic>);
+    }
 
     // Aggregate by product_id
     final agg = <String, Map<String, dynamic>>{};
-    for (final row in items as List<dynamic>) {
+    for (final row in items) {
       final productId = row['product_id'] as String?;
       if (productId == null) continue;
 
@@ -240,40 +262,11 @@ class _ManagerOutletDetailScreenState extends State<ManagerOutletDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final title = _outlet?.name ?? 'Outlet';
+    final appBarTitle = _outlet != null ? 'Detil Outlet $title' : 'Detil Outlet';
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.amber,
-        foregroundColor: Colors.black,
-
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'SiAGA',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-                letterSpacing: 2,
-              ),
-            ),
-            Text(
-              'Sistem Aplikasi Pedagang Pasar',
-              style: TextStyle(
-                fontSize: 12,
-                color: _netralGrey,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
+      appBar: PapikopiAppBar(
+        titleText: appBarTitle,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -302,12 +295,11 @@ class _ManagerOutletDetailScreenState extends State<ManagerOutletDetailScreen> {
                       color: AppColors.neutralGrey,
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  _outletInfoSection(),
                   const SizedBox(height: 16),
 
                   _salesSummarySection(),
-                  const SizedBox(height: 16),
-
-                  _baristaSection(),
                   const SizedBox(height: 16),
 
                   _productBatchesSection(),
@@ -418,8 +410,27 @@ class _ManagerOutletDetailScreenState extends State<ManagerOutletDetailScreen> {
     );
   }
 
-  Widget _baristaSection() {
-    final barista = _baristas.isNotEmpty ? _baristas.first : null;
+  Widget _outletInfoSection() {
+    if (_outlet == null) {
+      return const SizedBox.shrink();
+    }
+
+    final type = _outlet!.type.toString();
+    final status = _outlet!.isActive ? 'Aktif' : 'Nonaktif';
+    final contact = [
+      if (_outlet!.phone != null && _outlet!.phone!.isNotEmpty)
+        'Telp: ${_outlet!.phone}',
+      if (_outlet!.whatsapp != null && _outlet!.whatsapp!.isNotEmpty)
+        'WA: ${_outlet!.whatsapp}',
+    ].join(' • ');
+    final baristaNames = _baristas
+        .map((item) => (item['name'] as String?) ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList();
+    final baristaLabel = baristaNames.isEmpty
+        ? 'Belum ter-assign'
+        : baristaNames.join(', ');
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       elevation: 0,
@@ -429,36 +440,49 @@ class _ManagerOutletDetailScreenState extends State<ManagerOutletDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Barista',
+              'Outlet Info',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            if (barista == null)
-              Text(
-                'Barista belum ter-assign',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppColors.neutralGrey),
-              )
-            else
-              Row(
-                children: [
-                  Icon(Icons.person, color: AppColors.hijau),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      barista['name']?.toString() ?? 'Barista',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.hitam,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            _detailRow('Tipe', type),
+            const SizedBox(height: 8),
+            _detailRow('Status', status),
+            if (contact.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _detailRow('Kontak', contact),
+            ],
+            const SizedBox(height: 8),
+            _detailRow('Barista', baristaLabel),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(
+            '$label:',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.neutralGrey,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.hitam,
+                ),
+          ),
+        ),
+      ],
     );
   }
 

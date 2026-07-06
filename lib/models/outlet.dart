@@ -26,12 +26,12 @@ class Outlet {
       id: json['id'] as String,
       name: json['name'] as String,
       type: json['type'] as String,
-      location: json['location'] as String,
+      location: (json['location'] as String?) ?? (json['address'] as String?) ?? '',
       phone: json['phone'] as String?,
       whatsapp: json['whatsapp'] as String?,
       isActive: json['is_active'] as bool? ?? true,
-        createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
-        updatedAt: json['updated_at'] != null
+      createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
+      updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String).toUtc()
           : null,
     );

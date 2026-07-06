@@ -23,6 +23,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
   final SupabaseService _supabase = SupabaseService();
   List<Sale> _transactions = [];
   bool _isLoading = true;
+  late DateTime _selectedDate;
 
   @override
   bool get wantKeepAlive => true;
@@ -30,6 +31,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
   @override
   void initState() {
     super.initState();
+    _selectedDate = _supabase.resolveBusinessDayDate(
+      DateTime.now(),
+      businessDayStartHour: 4,
+    );
     _loadTransactions();
   }
 
@@ -38,10 +43,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
 
     try {
       final auth = context.read<AuthProvider>();
-      // Load sales for current outlet only (not filtered by barista)
-      // This ensures all sales from the outlet are visible regardless of who made them
+      // Load sales for current outlet only and default to the selected date.
       final sales = await _supabase.getSales(
         outletId: auth.currentUser!.outletId,
+        selectedDate: _selectedDate,
       );
 
       setState(() {
@@ -49,6 +54,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(
@@ -104,48 +110,76 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
           ),
         ],
       ),
-      body: _isLoading
-          ? const ScreenSkeleton(lineCount: 8, showTitle: false)
-          : _transactions.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.receipt_long_outlined,
-                    size: 48,
-                    color: Colors.grey[400],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Tanggal: ${DateFormat('dd MMM yyyy', 'id_ID').format(_selectedDate)}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Tidak ada pesanan',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: _transactions.length,
-              addAutomaticKeepAlives:
-                  false, // Disable keep alive to force rebuild
-              addRepaintBoundaries:
-                  false, // Disable repaint boundaries for full rebuild
-              itemBuilder: (context, index) {
-                final transaction = _transactions[index];
-                final itemCountStr = transaction.items.length.toString();
-                // Special tracking for target transaction
-                return TransactionCard(
-                  key: ValueKey(
-                    '${transaction.id}-${transaction.totalAmount}-$itemCountStr-${transaction.isEdited}',
-                  ), // Include all data in key
-                  transaction: transaction,
-                  onTap: () => _showTransactionDetail(transaction),
-                  onDelete: () => _confirmDelete(transaction),
-                  canEdit: _isEditAllowedByRole(transaction),
-                );
-              },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.calendar_today),
+                  tooltip: 'Pilih tanggal',
+                  onPressed: _pickDate,
+                ),
+              ],
             ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const ScreenSkeleton(lineCount: 8, showTitle: false)
+                : _transactions.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.receipt_long_outlined,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Tidak ada pesanan',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: _transactions.length,
+                        addAutomaticKeepAlives:
+                            false, // Disable keep alive to force rebuild
+                        addRepaintBoundaries:
+                            false, // Disable repaint boundaries for full rebuild
+                        itemBuilder: (context, index) {
+                          final transaction = _transactions[index];
+                          final itemCountStr =
+                              transaction.items.length.toString();
+                          // Special tracking for target transaction
+                          return TransactionCard(
+                            key: ValueKey(
+                              '${transaction.id}-${transaction.totalAmount}-$itemCountStr-${transaction.isEdited}',
+                            ), // Include all data in key
+                            transaction: transaction,
+                            onTap: () => _showTransactionDetail(transaction),
+                            onDelete: () => _confirmDelete(transaction),
+                            canEdit: _isEditAllowedByRole(transaction),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -175,12 +209,15 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
       builder: (context) => _TransactionEditDialog(
         transaction: transaction,
         onSave: (editedTransaction) async {
+          final navigator = Navigator.of(context);
+
           // Update transaction in database
           await _updateTransaction(editedTransaction);
 
           // Close dialog only after update is done
-          if (mounted && Navigator.canPop(context)) {
-            Navigator.pop(context);
+          if (!mounted) return;
+          if (navigator.canPop()) {
+            navigator.pop();
           }
         },
       ),
@@ -264,6 +301,23 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
     }
   }
 
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      locale: const Locale('id', 'ID'),
+    );
+
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+      await _loadTransactions();
+    }
+  }
+
   Future<void> _confirmDelete(Sale transaction) async {
     // Guard delete for barista role
     if (!_isEditAllowedByRole(transaction)) {
@@ -318,15 +372,15 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
           .eq('sale_id', transaction.id);
       await _supabase.client.from('sales').delete().eq('id', transaction.id);
       await _loadTransactions();
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('✅ Pesanan dihapus')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('✅ Pesanan dihapus')));
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error menghapus: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error menghapus: $e')));
     }
   }
 }
@@ -454,9 +508,50 @@ class TransactionCard extends StatelessWidget {
               );
             }),
             const SizedBox(height: 8),
-            // Bottom row: aligned to right with Edit and Delete
             Row(
               children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: transaction.paymentMethod.toUpperCase() == 'GRATIS'
+                        ? Colors.orange.shade100
+                        : transaction.paymentMethod.toUpperCase() == 'QRIS'
+                        ? Colors.blue.shade100
+                        : Colors.green.shade100,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        transaction.paymentMethod.toUpperCase() == 'GRATIS'
+                            ? Icons.card_giftcard
+                            : transaction.paymentMethod.toUpperCase() == 'QRIS'
+                            ? Icons.qr_code_scanner
+                            : Icons.money,
+                        size: 14,
+                        color: transaction.paymentMethod.toUpperCase() == 'GRATIS'
+                            ? Colors.orange.shade800
+                            : transaction.paymentMethod.toUpperCase() == 'QRIS'
+                            ? Colors.blue.shade800
+                            : Colors.green.shade800,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Metode: ${transaction.paymentMethod.toUpperCase() == 'GRATIS' ? 'Gratis' : transaction.paymentMethod.toUpperCase() == 'QRIS' ? 'QRIS' : 'Cash'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: transaction.paymentMethod.toUpperCase() == 'GRATIS'
+                              ? Colors.orange.shade800
+                              : transaction.paymentMethod.toUpperCase() == 'QRIS'
+                              ? Colors.blue.shade800
+                              : Colors.green.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const Spacer(),
                 SizedBox(
                   width: 44,
@@ -643,8 +738,12 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
             .toDouble();
         _itemHppByProduct[originalProductName] = (newProduct.hpp ?? 0)
             .toDouble();
-      } catch (e) {}
-    } catch (e) {}
+      } catch (e) {
+        debugPrint('Failed to update product price: $e');
+      }
+    } catch (e) {
+      debugPrint('Failed to update product price: $e');
+    }
   }
 
   // 🆕 Check monthly gratis limit
@@ -690,7 +789,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
               'Gratis: ${gratisPercentage.toStringAsFixed(1)}% dari 3% limit';
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Failed to check gratis limit: $e');
+    }
   }
 
   // 🆕 Add new product to transaction
@@ -895,13 +996,15 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                     if (value != null) {
                       // If changing to GRATIS, check limit first
                       if (value == 'GRATIS') {
+                        final dialogContext = context;
                         await _checkMonthlyGratisLimit();
 
                         // If limit reached, show confirmation dialog
                         if (_gratisLimitReached) {
                           if (!mounted) return;
+                          if (!dialogContext.mounted) return;
                           final confirmed = await showDialog<bool>(
-                            context: context,
+                            context: dialogContext,
                             builder: (context) => AlertDialog(
                               title: const Text('⚠️ Limit Gratis'),
                               content: Text(_gratisLimitMessage),
@@ -919,8 +1022,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                             ),
                           );
 
-                          if (confirmed != true)
+                          if (confirmed != true) {
                             return; // Don't change payment method
+                          }
                         }
                       }
 
@@ -1294,6 +1398,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () async {
+                    final scaffoldMessenger = ScaffoldMessenger.of(context);
+                    final productProvider = context.read<ProductProvider>();
+
                     // 🆕 Validate GRATIS payment method for limit check
                     if (_paymentMethod == 'GRATIS') {
                       // Check limit one more time at save
@@ -1301,7 +1408,7 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
 
                       if (_gratisLimitReached) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        scaffoldMessenger.showSnackBar(
                           SnackBar(
                             content: Text(_gratisLimitMessage),
                             backgroundColor: Colors.red,
@@ -1310,9 +1417,6 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                         return; // Don't save
                       }
                     }
-
-                    // Get product provider to lookup product IDs
-                    final productProvider = context.read<ProductProvider>();
 
                     // Create updated items with new quantities and product names
                     final updatedItems = <SaleItem>[];
@@ -1349,7 +1453,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                           final newProduct = productProvider.products
                               .firstWhere((p) => p.name == newProductName);
                           newProductId = newProduct.id;
-                        } catch (e) {}
+                        } catch (e) {
+                          debugPrint('Failed to resolve updated product: $e');
+                        }
                       }
 
                       // Create new item with updated quantity and product info

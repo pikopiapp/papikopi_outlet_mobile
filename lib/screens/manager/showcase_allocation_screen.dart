@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../helpers/business_day_helper.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../qr_camera_screen.dart';
@@ -20,6 +21,8 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
   List<Map<String, dynamic>> _outlets = [];
   List<Map<String, dynamic>> _showcaseProducts = [];
   List<Map<String, dynamic>> _assignments = [];
+  Map<String, int> _soldQuantities = {};
+  Map<String, int> _returnedQuantities = {};
 
   String? _selectedOutletId;
   late DateTime _selectedDate;
@@ -67,6 +70,11 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
 
     // Load saved outlet selection
     await _loadSelectedOutlet();
+
+    // Load showcase products and assignments for the selected outlet immediately
+    if (_selectedOutletId != null) {
+      await _fetchProductsAndAssignments();
+    }
   }
 
   Future<void> _loadSelectedOutlet() async {
@@ -230,38 +238,79 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
 
       // Fetch assignments with business day filter
       debugPrint('[ShowcaseAllocationScreen] Current date: $_selectedDate');
-      debugPrint(
-        '[ShowcaseAllocationScreen] Business day start hour: $_businessDayStartHour',
-      );
 
-      final range = _getBusinessDayRange(_selectedDate, _businessDayStartHour);
+      // Prefer per-outlet business_day_start_hour when available to keep
+      // assignments/sold/returned calculations consistent with DB mapping.
+      final selectedOutlet = _outlets.firstWhere(
+        (o) => o['id'] == _selectedOutletId,
+        orElse: () => {},
+      );
+      final outletStartHour = (selectedOutlet['business_day_start_hour'] as int?) ?? _businessDayStartHour;
+      debugPrint('[ShowcaseAllocationScreen] Business day start hour: $outletStartHour');
+
+      final range = getBusinessDayRange(_selectedDate, outletStartHour);
+      final startDate = (range['start'] as DateTime).toUtc();
+      final endDate = (range['end'] as DateTime).toUtc();
+
       debugPrint('[ShowcaseAllocationScreen] Business day range:');
       debugPrint(
-        '  Start (UTC): ${(range['start'] as DateTime).toIso8601String()}',
+        '  Start (UTC): ${startDate.toIso8601String()}',
       );
       debugPrint(
-        '  Start (local): ${(range['start'] as DateTime).toLocal().toIso8601String()}',
+        '  Start (local): ${startDate.toLocal().toIso8601String()}',
       );
       debugPrint(
-        '  End (UTC): ${(range['end'] as DateTime).toIso8601String()}',
+        '  End (UTC): ${endDate.toIso8601String()}',
       );
       debugPrint(
-        '  End (local): ${(range['end'] as DateTime).toLocal().toIso8601String()}',
+        '  End (local): ${endDate.toLocal().toIso8601String()}',
       );
 
       final assignments = await _supabaseService.fetchAssignmentsForOutlet(
         outletId: _selectedOutletId!,
-        startDate: range['start'] as DateTime,
-        endDate: range['end'] as DateTime,
+        startDate: startDate,
+        endDate: endDate,
+      );
+
+      final soldMap = await _supabaseService.getSoldQuantityToday(
+        outletId: _selectedOutletId!,
+        selectedDate: _selectedDate,
+      );
+
+      final returnedMap = await _supabaseService.getReturnedQuantityToday(
+        outletId: _selectedOutletId!,
+        selectedDate: _selectedDate,
       );
 
       debugPrint(
         '[ShowcaseAllocationScreen] Fetched ${assignments.length} assignments',
       );
+      debugPrint(
+        '[ShowcaseAllocationScreen] Sold total: ${soldMap.values.fold(0, (sum, value) => sum + value)}',
+      );
+      debugPrint(
+        '[ShowcaseAllocationScreen] Returned total: ${returnedMap.values.fold(0, (sum, value) => sum + value)}',
+      );
+
+      // Detailed debug output (limit to first 20 items)
+      for (int i = 0; i < assignments.length && i < 20; i++) {
+        final a = assignments[i];
+        debugPrint('[ShowcaseAllocationScreen][ASSIGN] ${i + 1}: ${a['product_name']} qty=${a['quantity']} created_at=${a['created_at']}');
+      }
+
+      soldMap.forEach((k, v) {
+        debugPrint('[ShowcaseAllocationScreen][SOLD] product_id=$k qty=$v');
+      });
+
+      returnedMap.forEach((k, v) {
+        debugPrint('[ShowcaseAllocationScreen][RETURN] product_id=$k qty=$v');
+      });
 
       setState(() {
         _showcaseProducts = productsData;
         _assignments = assignments;
+        _soldQuantities = soldMap;
+        _returnedQuantities = returnedMap;
         _isLoading = false;
       });
     } catch (e) {
@@ -272,39 +321,23 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
     }
   }
 
-  Map<String, DateTime> _getBusinessDayRange(DateTime date, int startHour) {
-    final year = date.year;
-    final month = date.month;
-    final day = date.day;
-    final hour = date.hour;
 
-    late DateTime businessDayStartLocal;
-    late DateTime businessDayEndLocal;
+  int get _allocatedCupsTotal {
+    return _assignments.fold<int>(0, (sum, assignment) {
+      return sum + (assignment['quantity'] as int? ?? 0);
+    });
+  }
 
-    // Check if current hour is before or after business day start hour
-    if (hour >= startHour) {
-      // Current time is at or after business day start hour
-      // So we're in TODAY's business day (start@hour today, end@hour tomorrow)
-      businessDayStartLocal = DateTime(year, month, day, startHour, 0, 0);
-      businessDayEndLocal = DateTime(year, month, day + 1, startHour, 0, 0);
-    } else {
-      // Current time is before business day start hour
-      // So we're in YESTERDAY's business day (start@hour yesterday, end@hour today)
-      businessDayStartLocal = DateTime(year, month, day - 1, startHour, 0, 0);
-      businessDayEndLocal = DateTime(year, month, day, startHour, 0, 0);
-    }
+  int get _soldCupsTotal {
+    return _soldQuantities.values.fold<int>(0, (sum, quantity) => sum + quantity);
+  }
 
-    // Subtract 1 millisecond from end to exclude the exact end time
-    businessDayEndLocal = businessDayEndLocal.subtract(
-      const Duration(milliseconds: 1),
-    );
+  int get _returnedCupsTotal {
+    return _returnedQuantities.values.fold<int>(0, (sum, quantity) => sum + quantity);
+  }
 
-    // Convert to UTC for database query
-    // This matches supabase_service.dart's getProductStockAtDate() logic
-    final businessDayStartUtc = businessDayStartLocal.toUtc();
-    final businessDayEndUtc = businessDayEndLocal.toUtc();
-
-    return {'start': businessDayStartUtc, 'end': businessDayEndUtc};
+  int get _currentCarriedCups {
+    return _allocatedCupsTotal - _soldCupsTotal - _returnedCupsTotal;
   }
 
   Future<void> _allocateProduct(String showcaseProductId) async {
@@ -347,6 +380,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         showcaseProductId: showcaseProductId,
         outletId: _selectedOutletId!,
         quantity: quantity,
+        selectedDate: _selectedDate,
       );
 
       debugPrint('[ShowcaseAllocationScreen] Allocation result: $result');
@@ -356,6 +390,15 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           '[ShowcaseAllocationScreen] Allocation successful, refreshing data...',
         );
         _quantityControllers[showcaseProductId]?.clear();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Alokasi berhasil'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
         setState(() {
           _successMessage = result['message'] ?? 'Alokasi berhasil';
           _isSubmitting = false;
@@ -372,6 +415,15 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           }
         });
       } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Error saat alokasi'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
         setState(() {
           _error = result['message'] ?? 'Error saat alokasi';
           _isSubmitting = false;
@@ -510,7 +562,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           '  - ${p['product_name']} (id: ${p['id']}, product_id: ${p['product_id']})',
         );
       }
-      print(
+      debugPrint(
         '[ShowcaseAllocationScreen] Looking for product - ID: $searchId, Name: $productName',
       );
 
@@ -585,7 +637,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('❌ $allocProductName tidak ada sisa'),
+              content: Text('❌ $allocProductName tidak tersedia'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 2),
             ),
@@ -595,39 +647,41 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       }
 
       // Add to temporary allocations buffer (batch processing)
-      if (mounted) {
-        setState(() {
-          final existingIndex = _tempAllocations.indexWhere(
-            (a) => a['showcase_product_id'] == productId,
-          );
+      if (!mounted) return;
 
-          if (existingIndex >= 0) {
-            // Product already in buffer, increment quantity
-            _tempAllocations[existingIndex]['quantity'] =
-                (_tempAllocations[existingIndex]['quantity'] as int) + 1;
-          } else {
-            // Add new product to buffer
-            _tempAllocations.add({
-              'showcase_product_id': productId,
-              'product_name': allocProductName,
-              'quantity': 1,
-            });
-          }
-        });
-
-        // Save to persistent storage
-        await _saveTempAllocations();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '✓ $allocProductName ditambahkan (Queue: ${_tempAllocations.length})',
-            ),
-            backgroundColor: Colors.blue,
-            duration: const Duration(seconds: 1),
-          ),
+      setState(() {
+        final existingIndex = _tempAllocations.indexWhere(
+          (a) => a['showcase_product_id'] == productId,
         );
-      }
+
+        if (existingIndex >= 0) {
+          // Product already in buffer, increment quantity
+          _tempAllocations[existingIndex]['quantity'] =
+              (_tempAllocations[existingIndex]['quantity'] as int) + 1;
+        } else {
+          // Add new product to buffer
+          _tempAllocations.add({
+            'showcase_product_id': productId,
+            'product_name': allocProductName,
+            'quantity': 1,
+          });
+        }
+      });
+
+      // Save to persistent storage
+      await _saveTempAllocations();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '✓ $allocProductName ditambahkan (Queue: ${_tempAllocations.length})',
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 1),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -810,6 +864,7 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
             showcaseProductId: showcaseProductId,
             outletId: _selectedOutletId!,
             quantity: quantity,
+            selectedDate: _selectedDate,
           );
 
           if (result['success'] == true) {
@@ -920,7 +975,10 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Total:', style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                'Stock Showcase:',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               Text(
                 totalQuantity.toString(),
                 style: Theme.of(
@@ -949,7 +1007,10 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Sisa:', style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                'Tersedia:',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               Text(
                 remaining.toString(),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1448,41 +1509,74 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            // Summary Statistics Cards
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: AppColors.background,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildAllocationStatCard(
-                      label: 'Total Dialokasikan',
-                      value: '${_assignments.length}',
-                      icon: Icons.inventory_2,
-                      color: AppColors.primary,
-                    ),
+            // Summary Statistics Card
+            Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.altSurface),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildAllocationStatCard(
-                      label: 'Sisa Tersedia',
-                      value:
-                          '${_showcaseProducts.length - _assignments.length}',
-                      icon: Icons.coffee,
-                      color: Colors.green,
-                    ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.coffee, color: AppColors.primary, size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Cup Dibawa',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                                fontSize: 16,
+                              ),
+                        ),
+                      ),
+                      Text(
+                        '$_currentCarriedCups',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 22,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildAllocationStatCard(
-                      label: 'Total Produk',
-                      value: '${_showcaseProducts.length}',
-                      icon: Icons.dashboard,
-                      color: AppColors.accent,
-                    ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.altSurface),
                   ),
-                ],
-              ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildAllocationSummaryRow(
+                        label: 'Awal Alokasi',
+                        value: '$_allocatedCupsTotal',
+                        color: Colors.green,
+                      ),
+                      const SizedBox(height: 6),
+                      _buildAllocationSummaryRow(
+                        label: 'Total Terjual',
+                        value: '$_soldCupsTotal',
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(height: 6),
+                      _buildAllocationSummaryRow(
+                        label: 'Total Pengembalian',
+                        value: '$_returnedCupsTotal',
+                        color: AppColors.accent,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Text(
@@ -1630,40 +1724,30 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
     );
   }
 
-  Widget _buildAllocationStatCard({
+  Widget _buildAllocationSummaryRow({
     required String label,
     required String value,
-    required IconData icon,
     required Color color,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.altSurface),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: color,
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppColors.textSecondary,
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: color,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

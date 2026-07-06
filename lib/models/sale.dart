@@ -99,7 +99,7 @@ class Sale {
       totalBonus: (json['bonus_amount'] as num).toDouble(),
       profit: (json['profit'] as num).toDouble(),
       items: itemsList,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
       isEdited: json['is_edited'] as bool? ?? false, // 🔧 NEW
         editedAt: json['edited_at'] != null
           ? DateTime.parse(json['edited_at'] as String).toUtc()
@@ -117,7 +117,7 @@ class Sale {
       'total_hpp': totalHpp,
       'total_bonus': totalBonus,
       'profit': profit,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
       'is_edited': isEdited, // 🔧 NEW
       'edited_at': editedAt?.toIso8601String(), // 🔧 NEW
     };

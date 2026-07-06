@@ -5,6 +5,7 @@ import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../../widgets/header.dart';
 import '../../widgets/screen_skeleton.dart';
+import 'manager_outlet_detail_screen.dart';
 
 class ManagerOutletScreen extends StatefulWidget {
   const ManagerOutletScreen({super.key});
@@ -18,6 +19,7 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
   bool _isLoading = true;
   String? _error;
   List<Outlet> _outlets = const [];
+  Map<String, String> _outletBaristaNameMap = {};
 
   @override
   void initState() {
@@ -100,8 +102,27 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
         );
       }).toList();
 
+      // Fetch first barista name for each outlet to display in the outlet list.
+      final baristaEntries = await Future.wait(parsed.map((outlet) async {
+        try {
+          final baristas = await _supabase.getBaristasByOutlet(
+            outletId: outlet.id,
+          );
+          final name = baristas.isNotEmpty
+              ? (baristas.first['name'] as String?) ?? 'Unknown barista'
+              : 'Belum ada barista';
+          return MapEntry(outlet.id, name);
+        } catch (_) {
+          return const MapEntry('', 'Belum ada barista');
+        }
+      }));
+      final baristaMap = Map<String, String>.fromEntries(
+        baristaEntries.where((entry) => entry.key.isNotEmpty),
+      );
+
       setState(() {
         _outlets = parsed;
+        _outletBaristaNameMap = baristaMap;
         _isLoading = false;
       });
     } catch (e) {
@@ -274,7 +295,7 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          'Barista: (data belum tersedia)',
+                                          'Barista: ${_outletBaristaNameMap[outlet.id] ?? 'Belum ada barista'}',
                                           style: Theme.of(context)
                                               .textTheme
                                               .bodySmall
@@ -289,12 +310,11 @@ class _ManagerOutletScreenState extends State<ManagerOutletScreen> {
                                   ),
                                   IconButton(
                                     onPressed: () {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Belum ada halaman detail outlet',
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              ManagerOutletDetailScreen(
+                                            outletId: outlet.id,
                                           ),
                                         ),
                                       );

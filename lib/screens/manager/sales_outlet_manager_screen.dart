@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../models/sale.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../../utils/holiday_detector.dart';
@@ -135,6 +136,7 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
       Map<String, String> productNames = {}; // productId -> productName
       Map<String, int> baristaItemCount = {};
       Map<String, double> baristaRevenue = {}; // Track revenue per barista
+      final List<Sale> salesForDate = [];
 
       // Payment breakdown per barista
       Map<String, double> baristaCashRevenue = {}; // baristaId -> cash amount
@@ -145,6 +147,7 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
       for (final sale in salesList) {
         if (sale.createdAt.isAfter(startDate) &&
             sale.createdAt.isBefore(endDate)) {
+          salesForDate.add(sale);
           for (final item in sale.items) {
             totalItems += item.quantity;
             totalRevenue += item.unitPrice * item.quantity;
@@ -201,6 +204,7 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
           'barista_cash': baristaCashRevenue,
           'barista_qris': baristaQrisRevenue,
           'barista_free': baristaFreeCount,
+          'sales_for_date': salesForDate,
         };
         // Build barista name map for quick lookup
         _baristaNameMap = {};
@@ -388,19 +392,8 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                 'Rp${NumberFormat('#,##0', 'id_ID').format(_selectedOutletSales['total_revenue'] ?? 0)}',
               ),
               const SizedBox(height: 12),
-              // Top products
-              if ((_selectedOutletSales['product_count'] as Map? ?? {})
-                  .isNotEmpty) ...[
-                Text(
-                  'Produk Terlaris',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ..._buildTopProducts(),
-              ],
+              // Daftar Transaksi
+              ..._buildSalesForDateList(),
             ] else
               Text(
                 'Tap untuk detail penjualan',
@@ -414,49 +407,194 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
     );
   }
 
-  List<Widget> _buildTopProducts() {
-    final products = (_selectedOutletSales['product_count'] as Map? ?? {});
-    final productNames = (_selectedOutletSales['product_names'] as Map? ?? {});
-    if (products.isEmpty) return [];
-
-    final sorted = products.entries.toList()
-      ..sort((a, b) => (b.value as int).compareTo(a.value as int));
-
-    return sorted.take(3).map((entry) {
-      final productId = entry.key as String;
-      final quantity = entry.value as int;
-      final productName = productNames[productId] ?? productId;
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                productName,
-                style: Theme.of(context).textTheme.bodySmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+  List<Widget> _buildSalesForDateList() {
+    final salesForDate = (_selectedOutletSales['sales_for_date'] as List<Sale>?) ?? [];
+    if (salesForDate.isEmpty) {
+      return [
+        Text(
+          'Belum ada transaksi untuk tanggal ini.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
               ),
+        ),
+      ];
+    }
+
+    return [
+      Text(
+        'Daftar Transaksi',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textSecondary,
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                '${quantity}x',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.bold,
+      ),
+      const SizedBox(height: 8),
+      ...salesForDate.map(_buildSaleSummaryRow),
+    ];
+  }
+
+  Widget _buildSaleSummaryRow(Sale sale) {
+    final saleTime = DateFormat('HH:mm').format(sale.createdAt.add(const Duration(hours: 7)));
+    final paymentLabel = sale.paymentMethod.toUpperCase() == 'GRATIS'
+        ? 'GRATIS'
+        : sale.paymentMethod.toUpperCase() == 'QRIS'
+            ? 'QRIS'
+            : 'CASH';
+    final productCountLabel = sale.items.length == 1
+        ? '1 jenis produk'
+        : '${sale.items.length} jenis produk';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.altSurface),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$saleTime • $productCountLabel',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
+              Text(
+                NumberFormat('#,##0', 'id_ID').format(sale.totalAmount),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                flex: 4,
+                child: Text(
+                  'Produk',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 1,
+                child: Text(
+                  'Qty',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Bayar',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Nominal',
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...sale.items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Text(
+                      item.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Text(
+                      '${item.quantity}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      paymentLabel,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      NumberFormat('#,##0', 'id_ID')
+                          .format(item.unitPrice * item.quantity),
+                      textAlign: TextAlign.right,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-      );
-    }).toList();
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Spacer(flex: 4),
+              const Spacer(flex: 1),
+              const Spacer(flex: 2),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  NumberFormat('#,##0', 'id_ID').format(sale.totalAmount),
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSalesStat(String label, String value) {

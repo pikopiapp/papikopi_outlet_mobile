@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'providers/auth_provider.dart';
@@ -43,6 +44,16 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'PapiApps Outlets',
         debugShowCheckedModeBanner: false,
+        locale: const Locale('id', 'ID'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('id', 'ID'),
+          Locale('en', 'US'),
+        ],
         theme: AppTheme.light(),
         home: _InitialScreen(),
         routes: {

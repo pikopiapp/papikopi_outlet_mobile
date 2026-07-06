@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../helpers/business_day_helper.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../qr_camera_screen.dart';
@@ -134,6 +135,21 @@ class _ManagerProductReturnsScreenState
         debugPrint(
           '[ManagerProductReturnsScreen] Loaded selected outlet: $savedOutletId',
         );
+      } else if (_outlets.isNotEmpty) {
+        final defaultOutletId = _outlets.first['id'] as String?;
+        if (defaultOutletId != null && defaultOutletId.isNotEmpty) {
+          setState(() {
+            _selectedOutletId = defaultOutletId;
+          });
+          await _saveSelectedOutlet(_selectedOutletId);
+          debugPrint(
+            '[ManagerProductReturnsScreen] Defaulted selected outlet to: $defaultOutletId',
+          );
+        }
+      }
+
+      if (_selectedOutletId != null) {
+        await _fetchProductsAndReturns();
       }
     } catch (e) {
       debugPrint(
@@ -206,40 +222,37 @@ class _ManagerProductReturnsScreenState
         _error = null;
       });
 
-      // Fetch allocations FOR THIS OUTLET (what was allocated to it)
-      // Convert local date to UTC range for database query
-      final startOfDayUTC = DateTime.utc(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
+      final selectedOutlet = _outlets.firstWhere(
+        (o) => o['id'] == _selectedOutletId,
+        orElse: () => {},
       );
-      final endOfDayUTC = startOfDayUTC.add(const Duration(days: 1));
+      final businessDayStartHour =
+          (selectedOutlet['business_day_start_hour'] as int?) ?? 4;
+      final localRange = getBusinessDayRange(
+        _selectedDate,
+        businessDayStartHour,
+      );
+      final startDate = (localRange['start'] as DateTime).toUtc();
+      final endDate = (localRange['end'] as DateTime).toUtc();
 
       final allocationsData = await _supabaseService.fetchAssignmentsForOutlet(
         outletId: _selectedOutletId!,
-        startDate: startOfDayUTC,
-        endDate: endOfDayUTC,
+        startDate: startDate,
+        endDate: endDate,
       );
 
-      // Fetch sales FOR THIS OUTLET on this date
-      final salesList = await _supabaseService.getSales(
+      // Fetch sales FOR THIS OUTLET on this business day range
+      final salesList = await _supabaseService.getSalesByDateRange(
         outletId: _selectedOutletId!,
+        startDate: startDate,
+        endDate: endDate,
       );
-      // Convert sales to map of product_id -> sold_quantity and filter by date
-      final startDate = DateTime.utc(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-      );
-      final endDate = startDate.add(const Duration(days: 1));
+
       final soldMap = <String, int>{};
       for (final sale in salesList) {
-        if (sale.createdAt.isAfter(startDate) &&
-            sale.createdAt.isBefore(endDate)) {
-          for (final item in sale.items) {
-            soldMap[item.productId] =
-                (soldMap[item.productId] ?? 0) + item.quantity;
-          }
+        for (final item in sale.items) {
+          soldMap[item.productId] =
+              (soldMap[item.productId] ?? 0) + item.quantity;
         }
       }
 
@@ -259,6 +272,21 @@ class _ManagerProductReturnsScreenState
       debugPrint(
         '[ManagerProductReturnsScreen] Fetched ${returnsData.length} returns from outlet',
       );
+
+      // Detailed debug output (limit to first 20 items)
+      for (int i = 0; i < allocationsData.length && i < 20; i++) {
+        final a = allocationsData[i];
+        debugPrint('[ManagerProductReturnsScreen][ALLOC] ${i + 1}: ${a['product_name']} qty=${a['quantity']} created_at=${a['created_at']}');
+      }
+
+      soldMap.forEach((productId, qty) {
+        debugPrint('[ManagerProductReturnsScreen][SOLD] product_id=$productId qty=$qty');
+      });
+
+      for (int i = 0; i < returnsData.length && i < 20; i++) {
+        final r = returnsData[i];
+        debugPrint('[ManagerProductReturnsScreen][RETURN] ${i + 1}: ${r['product_name']} product_id=${r['product_id']} qty=${r['quantity']} return_date=${r['return_date']}');
+      }
 
       // Get unique product IDs from allocations (only show products allocated to this outlet)
       final allocatedProductIds = allocationsData
@@ -316,6 +344,22 @@ class _ManagerProductReturnsScreenState
     if (_selectedOutletId == null) {
       setState(() {
         _error = 'Pilih outlet terlebih dahulu';
+      });
+      return;
+    }
+
+    final allocatedToOutlet = _allocations
+        .where((a) => a['showcase_product_id'] == showcaseProductId)
+        .fold<int>(0, (sum, a) => sum + (a['quantity'] as int? ?? 0));
+    final soldFromOutlet = _soldMap[productId] ?? 0;
+    final returnedFromOutlet = _returns
+        .where((r) => r['product_id'] == productId)
+        .fold<int>(0, (sum, r) => sum + (r['quantity'] as int? ?? 0));
+
+    final availableToReturn = allocatedToOutlet - soldFromOutlet - returnedFromOutlet;
+    if (quantity > availableToReturn) {
+      setState(() {
+        _error = 'Qty lebih besar dari yang tersedia';
       });
       return;
     }
@@ -411,39 +455,6 @@ class _ManagerProductReturnsScreenState
         _error = 'Error: $e';
         _isSubmitting = false;
       });
-    }
-  }
-
-  Future<void> _deleteReturn(String returnId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hapus Pengembalian'),
-        content: const Text('Yakin ingin menghapus pengembalian ini?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Hapus', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      await _supabaseService.deleteProductReturn(returnId);
-      await _fetchProductsAndReturns();
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Error menghapus: $e';
-        });
-      }
     }
   }
 
@@ -1331,7 +1342,7 @@ class _ManagerProductReturnsScreenState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Total Alokasi:',
+                'Awal Alokasi:',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               Text(
@@ -1375,7 +1386,7 @@ class _ManagerProductReturnsScreenState
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Sisa:', style: Theme.of(context).textTheme.bodySmall),
+              Text('Tersedia:', style: Theme.of(context).textTheme.bodySmall),
               Text(
                 remaining.toString(),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1509,57 +1520,73 @@ class _ManagerProductReturnsScreenState
             ),
             const SizedBox(height: 12),
             // Summary Statistics Cards
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: AppColors.background,
-              child: Column(
-                children: [
-                  Row(
+            Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.altSurface),
+                  ),
+                  child: Row(
                     children: [
+                      Icon(Icons.coffee, color: AppColors.primary, size: 22),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: _buildReturnStatCard(
-                          label: 'Total Alokasi',
-                          value: '${_getTotalAllocated()}',
-                          icon: Icons.inventory_2,
+                        child: Text(
+                          'Cup Dibawa',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                                fontSize: 16,
+                              ),
+                        ),
+                      ),
+                      Text(
+                        '${_getTotalAllocated() - _getTotalSold() - _getTotalReturned()}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 22,
                           color: AppColors.primary,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildReturnStatCard(
-                          label: 'Terjual',
-                          value: '${_getTotalSold()}',
-                          icon: Icons.shopping_cart,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildReturnStatCard(
-                          label: 'Dikembalikan',
-                          value: '${_getTotalReturned()}',
-                          icon: Icons.assignment_return,
-                          color: AppColors.accent,
-                        ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Row(
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.altSurface),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: _buildReturnStatCard(
-                          label: 'Sisa Tersedia',
-                          value:
-                              '${_getTotalAllocated() - _getTotalSold() - _getTotalReturned()}',
-                          icon: Icons.coffee,
-                          color: Colors.green,
-                        ),
+                      _buildReturnSummaryRow(
+                        label: 'Awal Alokasi',
+                        value: '${_getTotalAllocated()}',
+                        color: Colors.green,
+                      ),
+                      const SizedBox(height: 6),
+                      _buildReturnSummaryRow(
+                        label: 'Total Terjual',
+                        value: '${_getTotalSold()}',
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(height: 6),
+                      _buildReturnSummaryRow(
+                        label: 'Total Pengembalian',
+                        value: '${_getTotalReturned()}',
+                        color: AppColors.accent,
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Text(
@@ -1591,8 +1618,16 @@ class _ManagerProductReturnsScreenState
               const SizedBox(height: 8),
               Column(
                 children: [
-                  for (final return_ in _returns)
-                    _buildReturnItem(context, return_),
+                  for (final item in _getReturnBatchGroups())
+                    _buildGroupedReturnItem(
+                      context,
+                      item['product_name'] as String,
+                      item['quantity'] as int,
+                      item['reason'] as String,
+                      item['batch_date'] as String,
+                      item['raw_batch_date'] as String,
+                      List<String>.from(item['ids'] as List<dynamic>),
+                    ),
                 ],
               ),
             ] else
@@ -1617,39 +1652,83 @@ class _ManagerProductReturnsScreenState
     );
   }
 
-  Widget _buildReturnItem(BuildContext context, Map<String, dynamic> return_) {
-    final productName = return_['product_name'] as String? ?? 'Unknown';
-    final quantity = return_['quantity'] as int? ?? 0;
+  int _getTotalAllocated() {
+    return _allocations.fold<int>(
+      0,
+      (sum, a) => sum + (a['quantity'] as int? ?? 0),
+    );
+  }
 
-    // Handle id which could be String or int
-    final idValue = return_['id'];
-    final id = idValue is String
-        ? idValue
-        : (idValue is int ? idValue.toString() : '');
+  int _getTotalSold() {
+    return _soldMap.values.fold<int>(0, (sum, qty) => sum + qty);
+  }
 
-    // Handle return_date which could be String or int
-    String returnDateStr = '';
-    final returnDateValue = return_['return_date'];
-    if (returnDateValue is String) {
-      returnDateStr = returnDateValue;
-    } else if (returnDateValue is int) {
-      returnDateStr = DateTime.fromMillisecondsSinceEpoch(
-        returnDateValue,
-      ).toIso8601String();
-    }
+  int _getTotalReturned() {
+    return _returns.fold<int>(
+      0,
+      (sum, r) => sum + (r['quantity'] as int? ?? 0),
+    );
+  }
 
-    // Parse and format the return_date
-    String formattedDate = '';
-    if (returnDateStr.isNotEmpty) {
-      try {
-        final dateTime = DateTime.parse(returnDateStr);
-        final formatter = DateFormat('dd/MM/yyyy');
-        formattedDate = formatter.format(dateTime);
-      } catch (e) {
-        formattedDate = returnDateStr;
+  List<Map<String, dynamic>> _getReturnBatchGroups() {
+    final grouped = <String, Map<String, dynamic>>{};
+    for (final return_ in _returns) {
+      final productId = return_['product_id'] as String? ?? '';
+      final productName = return_['product_name'] as String? ?? 'Unknown';
+      final reason = (return_['return_reason'] as String?)?.trim().isNotEmpty == true
+          ? return_['return_reason'] as String
+          : 'Tanpa alasan';
+      final quantity = return_['quantity'] as int? ?? 0;
+      final returnDateValue = return_['return_date'];
+      String displayBatchDate = 'Tanggal tidak diketahui';
+      String rawBatchDate = '';
+
+      if (returnDateValue is String && returnDateValue.isNotEmpty) {
+        rawBatchDate = returnDateValue;
+        try {
+          final parsed = DateTime.parse(returnDateValue);
+          displayBatchDate = DateFormat('dd/MM/yyyy HH:mm').format(parsed);
+        } catch (_) {
+          displayBatchDate = returnDateValue;
+        }
+      } else if (returnDateValue is int) {
+        rawBatchDate = returnDateValue.toString();
+        displayBatchDate = DateFormat('dd/MM/yyyy HH:mm').format(
+          DateTime.fromMillisecondsSinceEpoch(returnDateValue),
+        );
+      }
+
+      final key = '$productId|$reason|$rawBatchDate';
+
+      if (grouped.containsKey(key)) {
+        grouped[key]!['quantity'] = (grouped[key]!['quantity'] as int) + quantity;
+        (grouped[key]!['ids'] as List<String>).add(
+          (return_['id'] ?? '').toString(),
+        );
+      } else {
+        grouped[key] = {
+          'product_id': productId,
+          'product_name': productName,
+          'reason': reason,
+          'quantity': quantity,
+          'batch_date': displayBatchDate,
+          'raw_batch_date': rawBatchDate,
+          'ids': [(return_['id'] ?? '').toString()],
+        };
       }
     }
+    return grouped.values.toList();
+  }
 
+  Widget _buildGroupedReturnItem(
+    BuildContext context,
+    String productName,
+    int quantity,
+    String reason,
+    String batchDate,
+    String rawBatchDate,
+    List<String> ids,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -1670,47 +1749,44 @@ class _ManagerProductReturnsScreenState
                   ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Qty: $quantity',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        batchDate,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
-                  ),
+                    Text(
+                      'Qty: $quantity',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 Text(
-                  'Tanggal: $formattedDate',
+                  'Alasan: $reason',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
-                    fontSize: 11,
+                    fontSize: 12,
                   ),
                 ),
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () => _deleteReturn(id),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(
-                Icons.delete_outline,
-                color: Colors.red,
-                size: 20,
-              ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            tooltip: 'Hapus batch pengembalian',
+            onPressed: () => _confirmDeleteReturnBatch(
+              productName,
+              reason,
+              ids,
             ),
           ),
         ],
@@ -1718,22 +1794,69 @@ class _ManagerProductReturnsScreenState
     );
   }
 
-  int _getTotalAllocated() {
-    return _allocations.fold<int>(
-      0,
-      (sum, a) => sum + (a['quantity'] as int? ?? 0),
+  Future<void> _confirmDeleteReturnBatch(
+    String productName,
+    String reason,
+    List<String> ids,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Batch Pengembalian'),
+        content: Text(
+          'Hapus semua pengembalian $productName dengan alasan "$reason"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
-  }
 
-  int _getTotalSold() {
-    return _soldMap.values.fold<int>(0, (sum, qty) => sum + qty);
-  }
+    if (confirmed != true) return;
 
-  int _getTotalReturned() {
-    return _returns.fold<int>(
-      0,
-      (sum, r) => sum + (r['quantity'] as int? ?? 0),
-    );
+    try {
+      setState(() {
+        _isSubmitting = true;
+      });
+
+      for (final id in ids) {
+        await _supabaseService.deleteProductReturn(id);
+      }
+
+      await _fetchProductsAndReturns();
+      await _saveTempReturns();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Batch pengembalian $productName dihapus'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error menghapus batch: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   Widget _buildProductSummary() {
@@ -1800,40 +1923,30 @@ class _ManagerProductReturnsScreenState
     );
   }
 
-  Widget _buildReturnStatCard({
+  Widget _buildReturnSummaryRow({
     required String label,
     required String value,
-    required IconData icon,
     required Color color,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border.all(color: AppColors.altSurface),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: color,
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppColors.textSecondary,
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: color,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
