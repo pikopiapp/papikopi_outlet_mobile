@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../widgets/bonus_calculator_widget.dart';
-import '../theme/thema.dart';
+import '../../widgets/bonus_calculator_widget.dart';
+import '../../theme/thema.dart';
 
 class BonusCalculatorScreen extends StatelessWidget {
   const BonusCalculatorScreen({super.key});

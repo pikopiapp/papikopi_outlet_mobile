@@ -6,9 +6,9 @@ import '../../services/auth_service.dart';
 import '../../providers/product_provider.dart';
 import '../../theme/thema.dart';
 import '../../widgets/header.dart';
-import 'profile_screen.dart';
+import '../shared/profile_screen.dart';
 
-import 'settings_screen.dart';
+import '../shared/settings_screen.dart';
 
 // Format currency helper
 String formatCurrency(num value) {

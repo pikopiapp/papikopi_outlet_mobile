@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/thema.dart';
-import '../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../services/supabase_service.dart';
 
 class NewAnnouncementScreen extends StatefulWidget {
   final Function() onAnnouncementCreated;

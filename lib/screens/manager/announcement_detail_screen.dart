@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../theme/thema.dart';
-import '../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../services/supabase_service.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import '../../providers/auth_provider.dart';
 
 class AnnouncementDetailScreen extends StatefulWidget {
   final String announcementId;

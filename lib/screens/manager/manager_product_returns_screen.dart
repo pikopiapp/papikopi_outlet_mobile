@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../helpers/business_day_helper.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
-import '../camera_scanner_screen.dart';
+import '../barista/camera_scanner_screen.dart';
 
 class ManagerProductReturnsScreen extends StatefulWidget {
   const ManagerProductReturnsScreen({super.key});

@@ -7,7 +7,7 @@ import 'manager_dashboard_screen.dart';
 import 'showcase_allocation_screen.dart';
 import 'manager_product_returns_screen.dart';
 import 'sales_outlet_manager_screen.dart';
-import '../private_messages_screen.dart';
+import '../chat/private_messages_screen.dart';
 
 class ManagerShellScreen extends StatefulWidget {
   const ManagerShellScreen({super.key});

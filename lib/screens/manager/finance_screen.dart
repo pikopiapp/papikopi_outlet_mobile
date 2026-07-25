@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
-import '../services/supabase_service.dart';
-import '../theme/thema.dart';
-import '../widgets/header.dart';
-import '../widgets/daily_bonus_card.dart';
-import '../utils/bonus_calculator.dart';
-import '../utils/holiday_detector.dart';
-import 'profile_screen.dart';
-import 'settings_screen.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../widgets/header.dart';
+import '../../widgets/daily_bonus_card.dart';
+import '../../utils/bonus_calculator.dart';
+import '../../utils/holiday_detector.dart';
+import '../shared/profile_screen.dart';
+import '../shared/settings_screen.dart';
 import 'approval_screen.dart';
 import 'bonus_calculator_screen.dart';
 

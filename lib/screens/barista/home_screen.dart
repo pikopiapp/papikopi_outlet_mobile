@@ -8,9 +8,9 @@ import '../../theme/thema.dart';
 import '../../widgets/animated_card.dart';
 import '../../widgets/screen_skeleton.dart';
 import '../../utils/timezone_formatter.dart';
-import 'profile_screen.dart';
-import 'settings_screen.dart';
-import 'private_messages_screen.dart';
+import '../shared/profile_screen.dart';
+import '../shared/settings_screen.dart';
+import '../chat/private_messages_screen.dart';
 import 'pos_screen.dart';
 import 'stock_screen.dart';
 
