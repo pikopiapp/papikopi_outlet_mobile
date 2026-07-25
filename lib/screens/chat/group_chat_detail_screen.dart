@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../theme/thema.dart';
-import '../providers/auth_provider.dart';
-import '../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/supabase_service.dart';
 import 'edit_group_chat_screen.dart';
 
 class GroupChatDetailScreen extends StatefulWidget {

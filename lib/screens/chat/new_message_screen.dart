@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../theme/thema.dart';
-import '../providers/auth_provider.dart';
-import '../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/supabase_service.dart';
 import 'private_messages_detail_screen.dart';
 
 class NewMessageScreen extends StatefulWidget {

@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
-import '../providers/product_provider.dart';
-import '../services/supabase_service.dart';
-import '../theme/thema.dart';
-import '../utils/number_formatter.dart';
-import '../utils/holiday_detector.dart';
-import '../models/sale.dart';
-import '../widgets/screen_skeleton.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/product_provider.dart';
+import '../../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../utils/number_formatter.dart';
+import '../../utils/holiday_detector.dart';
+import '../../utils/timezone_formatter.dart';
+import '../../models/sale.dart';
+import '../../widgets/screen_skeleton.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -75,19 +76,14 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
       // Only restrict barista role. Managers/admins can edit/delete.
       if (user.role != 'barista') return true;
 
-      // Normalize times similarly to UI (app uses +7 display offset)
-      const tzOffset = Duration(hours: 7);
-      final txDate = transaction.createdAt.add(tzOffset);
-      final now = DateTime.now().add(tzOffset);
+      final txDate = toJakartaDate(transaction.createdAt);
+      final now = toJakartaDate(DateTime.now());
 
       final isSameDay = txDate.year == now.year &&
           txDate.month == now.month &&
           txDate.day == now.day;
 
-      // Business day check: today should not be a holiday/weekend
-      final todayIsHoliday = isHoliday(DateTime(now.year, now.month, now.day));
-
-      return isSameDay && !todayIsHoliday;
+      return isSameDay;
     } catch (e) {
       return false;
     }
@@ -422,10 +418,10 @@ class TransactionCard extends StatelessWidget {
             // Tanggal (kolom 1) - expand to take remaining space so amount sits at right
             Expanded(
               child: Text(
-                DateFormat(
-                  'dd MMM yyyy',
-                  'id_ID',
-                ).format(transaction.createdAt.add(const Duration(hours: 7))),
+                formatTimestampForJakartaDisplay(
+                  transaction.createdAt,
+                  pattern: 'dd MMM yyyy',
+                ),
                 style: const TextStyle(fontWeight: FontWeight.bold),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
@@ -458,10 +454,10 @@ class TransactionCard extends StatelessWidget {
             const SizedBox(height: 4),
             // show time under the date heading
             Text(
-              DateFormat(
-                'HH:mm',
-                'id_ID',
-              ).format(transaction.createdAt.add(const Duration(hours: 7))),
+              formatTimestampForJakartaDisplay(
+                transaction.createdAt,
+                pattern: 'HH:mm',
+              ),
               style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 6),
@@ -957,10 +953,9 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
                       ),
                     ),
                     Text(
-                      DateFormat('dd MMM yyyy HH:mm', 'id_ID').format(
-                        widget.transaction.createdAt.add(
-                          const Duration(hours: 7),
-                        ),
+                      formatTimestampForJakartaDisplay(
+                        widget.transaction.createdAt,
+                        pattern: 'dd MMM yyyy HH:mm',
                       ),
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),

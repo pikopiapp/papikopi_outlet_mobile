@@ -208,10 +208,7 @@ class _CheckoutModalState extends State<CheckoutModal> {
       final businessDayStartHour = await supabaseService.getBusinessDayStartHour(
         outletId: outletId,
       );
-      final businessDayDate = supabaseService.resolveBusinessDayDateForCheckout(
-        DateTime.now(),
-        businessDayStartHour: businessDayStartHour,
-      );
+      final checkoutTimestamp = supabaseService.resolveCheckoutTimestamp();
 
       // Create sale in POS system
       if (_selectedPaymentMethod == 'GRATIS') {}
@@ -225,7 +222,7 @@ class _CheckoutModalState extends State<CheckoutModal> {
         totalBonus: totalBonus,
         profit: profit,
         items: items,
-        createdAt: businessDayDate,
+        createdAt: checkoutTimestamp,
       );
 
       // Record sales to warehouse system (sales_records table)
@@ -263,7 +260,7 @@ class _CheckoutModalState extends State<CheckoutModal> {
                 batchId: matchingBatch['id'] as String,
                 outletId: outletId,
                 quantitySold: cartItem.quantity,
-                saleDate: businessDayDate,
+                saleDate: checkoutTimestamp,
                 notes: notes,
               );
 

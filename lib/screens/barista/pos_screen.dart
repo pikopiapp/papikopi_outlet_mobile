@@ -1,22 +1,131 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
-import '../models/product.dart';
-import '../providers/auth_provider.dart';
-import '../providers/cart_provider.dart';
-import '../providers/product_provider.dart';
-import '../screens/camera_scanner_screen.dart';
-import '../utils/product_image_helper.dart';
-import '../utils/number_formatter.dart';
-import '../widgets/cart_summary.dart';
-import '../widgets/header.dart';
-import '../theme/thema.dart';
-import 'profile_screen.dart';
+import '../../models/product.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/cart_provider.dart';
+import '../../providers/product_provider.dart';
+import 'camera_scanner_screen.dart';
+import '../../utils/number_formatter.dart';
+import '../../widgets/cart_summary.dart';
+import '../../widgets/header.dart';
+import '../../theme/thema.dart';
+import '../shared/profile_screen.dart';
 
 import 'transaction_history_screen.dart';
+
+class _ProductImageWidget extends StatefulWidget {
+  const _ProductImageWidget({
+    required this.imageUrl,
+    required this.isOutOfStock,
+    required this.fallbackBuilder,
+  });
+
+  final String imageUrl;
+  final bool isOutOfStock;
+  final Widget Function(String imageUrl, bool isOutOfStock) fallbackBuilder;
+
+  @override
+  State<_ProductImageWidget> createState() => _ProductImageWidgetState();
+}
+
+class _ProductImageWidgetState extends State<_ProductImageWidget> {
+  late final ImageProvider _imageProvider;
+  late final ImageStreamListener _listener;
+  late final ImageStream _imageStream;
+  bool _hasLoaded = false;
+  bool _hasError = false;
+  bool _timedOut = false;
+  Timer? _timeoutTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageProvider = NetworkImage(
+      widget.imageUrl,
+      headers: const {'Cache-Control': 'max-age=300'},
+    );
+    _listener = ImageStreamListener(
+      (_, __) {
+        if (!mounted) return;
+        setState(() => _hasLoaded = true);
+      },
+      onError: (exception, stackTrace) {
+        if (!mounted) return;
+        setState(() => _hasError = true);
+      },
+    );
+    _imageStream = _imageProvider.resolve(const ImageConfiguration());
+    _imageStream.addListener(_listener);
+    _timeoutTimer = Timer(const Duration(seconds: 6), () {
+      if (!mounted) return;
+      if (!_hasLoaded && !_hasError) {
+        setState(() => _timedOut = true);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProductImageWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _imageStream.removeListener(_listener);
+      _timeoutTimer?.cancel();
+      _hasLoaded = false;
+      _hasError = false;
+      _timedOut = false;
+      _imageProvider.evict();
+      _imageProvider.resolve(const ImageConfiguration());
+      _imageProvider = NetworkImage(
+        widget.imageUrl,
+        headers: const {'Cache-Control': 'max-age=300'},
+      );
+      _imageStream = _imageProvider.resolve(const ImageConfiguration());
+      _imageStream.addListener(_listener);
+      _timeoutTimer = Timer(const Duration(seconds: 6), () {
+        if (!mounted) return;
+        if (!_hasLoaded && !_hasError) {
+          setState(() => _timedOut = true);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timeoutTimer?.cancel();
+    _imageStream.removeListener(_listener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError || _timedOut) {
+      return widget.fallbackBuilder(widget.imageUrl, widget.isOutOfStock);
+    }
+
+    if (_hasLoaded) {
+      return Image(
+        image: _imageProvider,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+      );
+    }
+
+    return Center(
+      child: SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+    );
+  }
+}
 
 class POSScreen extends StatefulWidget {
   const POSScreen({super.key});
@@ -970,21 +1079,18 @@ class _POSScreenState extends State<POSScreen> with TickerProviderStateMixin {
 
   // Helper to build product image
   Widget _buildProductImage(Product product, bool isOutOfStock) {
-    // Get image path from product name using helper
-    final imagePath =
-        product.imageUrl ??
-        ProductImageHelper.getProductImagePath(product.name);
+    final imageUrl = product.imageUrl;
 
-    // Try to load image from assets
-    if (imagePath != null && imagePath.isNotEmpty) {
+    if (imageUrl != null && imageUrl.isNotEmpty) {
       return Stack(
         children: [
-          Image.asset(
-            imagePath,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return _buildFallbackImage(product);
-            },
+          _ProductImageWidget(
+            imageUrl: imageUrl,
+            isOutOfStock: isOutOfStock,
+            fallbackBuilder: (url, outOfStock) => _buildFallbackImage(
+              product,
+              outOfStock,
+            ),
           ),
           if (isOutOfStock)
             Container(

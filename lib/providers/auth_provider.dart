@@ -66,6 +66,20 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshCurrentUser() async {
+    if (_currentUser == null) return;
+
+    try {
+      final freshUser = await _supabaseService.getUserProfile(_currentUser!.id);
+      _currentUser = freshUser;
+      await _authService.saveUser(freshUser);
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
   Future<void> signOut() async {
     try {
       await _supabaseService.signOut();

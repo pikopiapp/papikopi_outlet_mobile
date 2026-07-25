@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/thema.dart';
-import '../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../services/supabase_service.dart';
 import 'package:intl/intl.dart';
 
 class PrivateMessagesDetailScreen extends StatefulWidget {

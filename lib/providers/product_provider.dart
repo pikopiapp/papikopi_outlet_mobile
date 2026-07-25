@@ -291,7 +291,8 @@ class ProductProvider extends ChangeNotifier {
         final sisa =
             quantity - sold - returned - dikirim.toInt() + diterima.toInt();
 
-        // Create product with both stock and tersedia values
+        // Create product with both stock and tersedia values while preserving
+        // image URLs fetched from Supabase so POS cards can display database images.
         final productWithStock = Product(
           id: product.id,
           categoryId: product.categoryId,
@@ -302,6 +303,7 @@ class ProductProvider extends ChangeNotifier {
           isActive: product.isActive,
           stock: quantity, // Quantity from showcase_allocations (no deductions)
           tersedia: sisa > 0 ? sisa : 0, // Tersedia after deductions
+          imageUrl: product.imageUrl,
           createdAt: product.createdAt,
           updatedAt: product.updatedAt,
         );

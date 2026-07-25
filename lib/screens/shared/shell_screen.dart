@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
-import 'pos_screen.dart';
-import 'stock_screen.dart';
-import 'finance_screen.dart';
-import '../theme/thema.dart';
+import '../barista/home_screen.dart';
+import '../barista/pos_screen.dart';
+import '../barista/stock_screen.dart';
+import '../manager/finance_screen.dart';
+import '../../theme/thema.dart';
 
 class ShellScreen extends StatefulWidget {
   const ShellScreen({super.key});

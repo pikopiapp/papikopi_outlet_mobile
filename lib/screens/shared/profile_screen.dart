@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import '../models/user.dart';
-import '../providers/auth_provider.dart';
-import '../services/supabase_service.dart';
-import '../theme/thema.dart';
-import '../widgets/header.dart';
+import '../../models/user.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../widgets/header.dart';
 import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<User> _userFuture;
   final supabaseService = SupabaseService();
+  bool _isUploadingPhoto = false;
 
   @override
   void initState() {
@@ -74,6 +76,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const SettingsScreen()),
     );
+  }
+
+  Future<void> _pickAndUploadPhoto() async {
+    try {
+      final picker = ImagePicker();
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Pilih dari galeri'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Ambil dari kamera'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (source == null) return;
+
+      final pickedFile = await picker.pickImage(source: source, imageQuality: 85);
+      if (pickedFile == null) return;
+
+      if (!mounted) return;
+      setState(() => _isUploadingPhoto = true);
+
+      final authProvider = context.read<AuthProvider>();
+      final userId = authProvider.currentUser?.id;
+      if (userId == null) {
+        throw Exception('User tidak ditemukan');
+      }
+
+      await supabaseService.uploadProfilePhoto(
+        userId: userId,
+        imageFile: pickedFile,
+      );
+
+      await authProvider.refreshCurrentUser();
+      await Future.delayed(const Duration(milliseconds: 300));
+      _loadUserProfile();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Foto profil berhasil diperbarui')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengunggah foto profil: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+      }
+    }
   }
 
   @override
@@ -134,24 +198,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     children: [
                       // Avatar
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.2),
-                          border: Border.all(color: Colors.white, width: 3),
-                        ),
-                        child: Center(
-                          child: Text(
-                            user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                            style: const TextStyle(
-                              fontSize: 48,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                      Stack(
+                        children: [
+                          InkWell(
+                            onTap: _pickAndUploadPhoto,
+                            child: Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.2),
+                                border: Border.all(color: Colors.white, width: 3),
+                                image: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                                    ? DecorationImage(
+                                        image: NetworkImage(user.avatarUrl!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: user.avatarUrl == null || user.avatarUrl!.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                        user.name.isNotEmpty
+                                            ? user.name[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                          fontSize: 48,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
                             ),
                           ),
-                        ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: _isUploadingPhoto
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.camera_alt,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       // Name

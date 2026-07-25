@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:papikopi/services/supabase_service.dart';
+import 'package:papikopi/utils/timezone_formatter.dart';
 
 void main() {
   group('SupabaseService business-day resolution', () {
@@ -58,24 +59,35 @@ void main() {
         now: DateTime(2026, 7, 6, 3, 30),
       );
 
-      expect(result, DateTime(2026, 7, 5));
+      expect(result, DateTime(2026, 7, 5, 4, 0, 0));
     });
 
-    test('filters allocation rows to the selected business day', () {
-      final rows = [
-        {'id': 'a', 'created_at': '2026-07-06T20:30:00'},
-        {'id': 'b', 'created_at': '2026-07-06T21:30:00'},
-        {'id': 'c', 'created_at': '2026-07-06T23:00:00'},
-      ];
+    test('uses the current time for checkout timestamps', () {
+      final now = DateTime.parse('2026-07-15T10:42:00+07:00');
+      final result = service.resolveCheckoutTimestamp(now: now);
 
-      final filtered = SupabaseService.filterAllocationsByBusinessDay(
-        rows: rows,
-        targetBusinessDate: DateTime(2026, 7, 6),
-        businessDayStartHour: 21,
+      expect(result, DateTime.parse('2026-07-15T03:42:00Z'));
+    });
+
+    test('parses timezone-naive timestamps as UTC for consistent display', () {
+      final result = parseTimestampAssumeUTC('2026-07-15T10:42:00');
+
+      expect(result, DateTime.utc(2026, 7, 15, 10, 42));
+    });
+
+    test('formats timestamps in Jakarta time for mobile history screens', () {
+      final result = formatTimestampForJakartaDisplay(
+        DateTime.utc(2026, 7, 15, 3, 42),
       );
 
-      expect(filtered.length, 2);
-      expect(filtered.map((e) => e['id']), containsAll(['b', 'c']));
+      expect(result, '10:42');
     });
+
+    test('coerces malformed timestamp fragments into a valid UTC instant', () {
+      final result = parseTimestampAssumeUTC('2026-07-15T05:52:03\$1Z');
+
+      expect(result, DateTime.utc(2026, 7, 15, 5, 52, 3));
+    });
+
   });
 }

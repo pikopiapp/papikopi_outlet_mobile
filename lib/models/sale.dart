@@ -1,3 +1,5 @@
+import '../utils/timezone_formatter.dart';
+
 class SaleItem {
   final String id;
   final String saleId;
@@ -44,7 +46,7 @@ class SaleItem {
       quantity: json['quantity'] as int,
       unitPrice: (json['price'] as num).toDouble(),
       hpp: (json['hpp'] as num).toDouble(),
-      createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
+      createdAt: parseTimestampAssumeUTC(json['created_at'] as String),
     );
   }
 
@@ -99,10 +101,10 @@ class Sale {
       totalBonus: (json['bonus_amount'] as num).toDouble(),
       profit: (json['profit'] as num).toDouble(),
       items: itemsList,
-      createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
+      createdAt: parseTimestampAssumeUTC(json['created_at'] as String),
       isEdited: json['is_edited'] as bool? ?? false, // 🔧 NEW
         editedAt: json['edited_at'] != null
-          ? DateTime.parse(json['edited_at'] as String).toUtc()
+          ? parseTimestampAssumeUTC(json['edited_at'] as String)
           : null, // 🔧 NEW
     );
   }

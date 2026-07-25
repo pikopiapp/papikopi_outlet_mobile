@@ -51,6 +51,24 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
+    final String? rawImageUrl = (json['image_url'] as String?)
+        ?? (json['image'] as String?)
+        ?? (json['photo_url'] as String?)
+        ?? (json['imageUrl'] as String?);
+
+    String? imageUrl;
+    if (rawImageUrl != null) {
+      final trimmed = rawImageUrl.trim();
+      if (trimmed.isNotEmpty) {
+        final uri = Uri.tryParse(trimmed);
+        if (uri != null &&
+            (uri.scheme == 'http' || uri.scheme == 'https') &&
+            uri.host.isNotEmpty) {
+          imageUrl = trimmed;
+        }
+      }
+    }
+
     return Product(
       id: json['id'] as String,
       categoryId: json['category_id'] as String,
@@ -61,10 +79,10 @@ class Product {
       isActive: json['is_active'] as bool? ?? true,
       stock: (json['stock'] as num?)?.toInt() ?? 0,
       tersedia: (json['tersedia'] as num?)?.toInt() ?? 0,
-      imageUrl: json['image_url'] as String?,
-        createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
-        updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at'] as String).toUtc() 
+      imageUrl: imageUrl,
+      createdAt: DateTime.parse(json['created_at'] as String).toUtc(),
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String).toUtc()
           : null,
     );
   }

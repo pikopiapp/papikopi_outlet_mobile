@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../theme/thema.dart';
+import '../../theme/thema.dart';
 
 class CameraScannerScreen extends StatefulWidget {
   const CameraScannerScreen({

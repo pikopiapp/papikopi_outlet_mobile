@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import 'dart:async';
 import 'dart:io';
 import '../models/user.dart' as user_model;
@@ -7,6 +8,7 @@ import '../models/outlet.dart';
 import '../models/sale.dart';
 import '../models/stock.dart';
 import '../utils/bonus_calculator.dart';
+import 'package:image_picker/image_picker.dart';
 
 // ignore_for_file: avoid_print, empty_catches, unused_catch_stack
 class SupabaseService {
@@ -176,7 +178,14 @@ class SupabaseService {
       resolvedDate.year,
       resolvedDate.month,
       resolvedDate.day,
+      businessDayStartHour,
+      0,
+      0,
     );
+  }
+
+  DateTime resolveCheckoutTimestamp({DateTime? now}) {
+    return (now ?? DateTime.now()).toUtc();
   }
 
   SupabaseService._internal();
@@ -571,7 +580,15 @@ class SupabaseService {
     DateTime? createdAt,
   }) async {
     try {
+      // 🔧 FIX: Generate UUID locally for reliable sale ID
+      // This ensures sale_items will always link to the correct sale
+      const uuid = Uuid();
+      final saleId = uuid.v4();
+
+      final normalizedCreatedAt = (createdAt ?? DateTime.now()).toUtc();
+
       await _client.from('sales').insert({
+        'id': saleId, // 🔧 Include generated ID in insert
         'outlet_id': outletId,
         'barista_id': baristaId,
         'payment_method': paymentMethod.toUpperCase(),
@@ -579,30 +596,16 @@ class SupabaseService {
         'hpp_total': totalHpp,
         'bonus_amount': totalBonus,
         'profit': profit,
-        'created_at': (createdAt ?? DateTime.now()).toIso8601String(),
+        'created_at': normalizedCreatedAt.toIso8601String(),
       });
 
-      // Get the ID of the newly created sale by querying the latest one
-      final latestSale = await _client
-          .from('sales')
-          .select('id')
-          .eq('outlet_id', outletId)
-          .order('created_at', ascending: false)
-          .limit(1);
-
-      if (latestSale.isEmpty) {
-        throw Exception('Could not retrieve created sale ID');
-      }
-
-      final saleId = latestSale[0]['id'] as String;
-
-      // Insert sale items
+      // Insert sale items with guaranteed correct sale_id
       for (final item in items) {
         final price = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
         final hpp = (item['hpp'] as num?)?.toDouble() ?? 0.0;
 
         await _client.from('sale_items').insert({
-          'sale_id': saleId,
+          'sale_id': saleId, // 🔧 Use generated saleId directly
           'product_id': item['product_id'],
           'quantity': item['quantity'],
           'price': price,
@@ -1797,6 +1800,92 @@ class SupabaseService {
           .toList();
     } catch (e) {
       return [];
+    }
+  }
+
+  Future<void> _saveAvatarUrlToUser(String userId, String publicUrl) async {
+    final columnCandidates = <String>['avatar_url', 'photo_url', 'profile_image_url'];
+
+    Object? lastError;
+    for (final column in columnCandidates) {
+      try {
+        await _client.from('users').update({column: publicUrl}).eq('id', userId);
+        return;
+      } catch (e) {
+        lastError = e;
+        final message = e.toString().toLowerCase();
+        final isMissingColumnError = message.contains('column') &&
+            (message.contains('does not exist') || message.contains('not exist') || message.contains('undefined column'));
+        if (!isMissingColumnError || column == columnCandidates.last) {
+          rethrow;
+        }
+      }
+    }
+
+    throw lastError ?? Exception('Gagal menyimpan URL avatar');
+  }
+
+  Future<String> uploadProfilePhoto({
+    required String userId,
+    required XFile imageFile,
+  }) async {
+    if (!_isInitialized) {
+      throw Exception('SupabaseService not initialized');
+    }
+
+    try {
+      final bytes = await imageFile.readAsBytes();
+      final fileName = 'users/$userId/${DateTime.now().millisecondsSinceEpoch}_${imageFile.name}';
+      await _client.storage.from('avatars').uploadBinary(
+        fileName,
+        bytes,
+        fileOptions: const FileOptions(cacheControl: '3600', upsert: true),
+      );
+
+      final publicUrl = _client.storage.from('avatars').getPublicUrl(fileName);
+      await _saveAvatarUrlToUser(userId, publicUrl);
+      return publicUrl;
+    } catch (e) {
+      final message = e.toString().toLowerCase();
+      if (e is PostgrestException) {
+        final detail = e.message.toLowerCase();
+        if (detail.contains('row-level security') || detail.contains('policy')) {
+          throw Exception(
+            'Upload diblokir oleh RLS Supabase. Pastikan user sudah login dengan sesi auth yang valid dan policy bucket avatars sudah mengizinkan write.',
+          );
+        }
+        if (e.toString().contains('401') || e.toString().contains('403')) {
+          throw Exception(
+            'Autentikasi Supabase tidak valid untuk upload storage. Login ulang dan pastikan sesi auth aktif.',
+          );
+        }
+      }
+
+      if (message.contains('bucket') && message.contains('not found')) {
+        throw Exception(
+          'Bucket Supabase Storage "avatars" belum dibuat. Buat bucket bernama "avatars" di dashboard Supabase lalu coba lagi.',
+        );
+      }
+
+      if (message.contains('not found') && message.contains('object')) {
+        throw Exception(
+          'File upload gagal karena objek/akses storage tidak tersedia. Periksa konfigurasi bucket dan RLS Supabase.',
+        );
+      }
+
+      if (message.contains('policy') || message.contains('row-level security') || message.contains('permission denied')) {
+        throw Exception(
+          'Upload diblokir oleh RLS Supabase. Pastikan user sudah login dengan sesi auth yang valid dan policy bucket avatars sudah mengizinkan write.',
+        );
+      }
+
+      if (message.contains('tls') || message.contains('ssl') || message.contains('handshake') || message.contains('certificate')) {
+        throw Exception(
+          'Koneksi ke Supabase Storage gagal karena masalah TLS/SSL. Periksa jaringan, proxy, atau pengaturan HTTPS pada perangkat.',
+        );
+      }
+
+      throw Exception('Gagal mengunggah foto profil: $e');
     }
   }
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../screens/camera_scanner_screen.dart';
+import '../screens/barista/camera_scanner_screen.dart';
 import '../theme/thema.dart';
 
 class QRScannerDialog extends StatelessWidget {

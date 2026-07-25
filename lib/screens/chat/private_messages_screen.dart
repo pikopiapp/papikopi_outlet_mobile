@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../theme/thema.dart';
-import '../providers/auth_provider.dart';
-import '../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/supabase_service.dart';
 import 'private_messages_detail_screen.dart';
 import 'new_message_screen.dart';
 import 'group_chats_list_screen.dart';
-import 'announcement_detail_screen.dart';
-import 'new_announcement_screen.dart';
+import '../manager/announcement_detail_screen.dart';
+import '../manager/new_announcement_screen.dart';
 import 'package:intl/intl.dart';
 
 class PrivateMessagesScreen extends StatefulWidget {

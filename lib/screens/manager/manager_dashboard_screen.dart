@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../theme/thema.dart';
 import '../../services/supabase_service.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/timezone_formatter.dart';
 import 'manager_outlet_screen.dart';
 import 'expense_management_screen.dart';
 import 'barista_payment_screen.dart';
@@ -214,8 +215,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
       final transactions = top5.map((sale) {
         final oid = sale.outletId;
-        final displayTime = DateFormat('HH:mm', 'id_ID')
-            .format(sale.createdAt.add(const Duration(hours: 7)));
+        final displayTime = formatTimestampForJakartaDisplay(
+          sale.createdAt,
+          pattern: 'HH:mm',
+        );
         return {
           'id': sale.id,
           'amount': sale.totalAmount,

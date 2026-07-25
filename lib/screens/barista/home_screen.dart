@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../providers/auth_provider.dart';
-import '../services/supabase_service.dart';
-import '../widgets/header.dart';
-import '../theme/thema.dart';
-import '../widgets/animated_card.dart';
-import '../widgets/screen_skeleton.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/supabase_service.dart';
+import '../../widgets/header.dart';
+import '../../theme/thema.dart';
+import '../../widgets/animated_card.dart';
+import '../../widgets/screen_skeleton.dart';
+import '../../utils/timezone_formatter.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'private_messages_screen.dart';
@@ -218,13 +219,9 @@ class _HomeScreenState extends State<HomeScreen>
     return 'Rp${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (match) => '.')}';
   }
 
-  /// Format transaction time considering business day (default 4 AM)
-  /// Converts from UTC to Jakarta timezone (WIB = UTC+7)
-  /// Shows time in HH:MM format
+  /// Format transaction time using Jakarta wall-clock time, matching the web app.
   String _formatTransactionTime(DateTime timestamp) {
-    // Convert UTC to Jakarta timezone (WIB = UTC+7)
-    final jakartaTime = timestamp.add(const Duration(hours: 7));
-    return '${jakartaTime.hour.toString().padLeft(2, '0')}:${jakartaTime.minute.toString().padLeft(2, '0')}';
+    return formatTimestampForJakartaDisplay(timestamp, pattern: 'HH:mm');
   }
 
   /// Format business day hours
@@ -702,7 +699,7 @@ class _HomeScreenState extends State<HomeScreen>
                   (transaction['total_amount'] as num?)?.toInt() ?? 0;
               final method = transaction['payment_method'] ?? 'Unknown';
                 final createdAt = transaction['created_at'] != null
-                  ? DateTime.parse(transaction['created_at'].toString()).toUtc()
+                  ? parseTimestampAssumeUTC(transaction['created_at'].toString())
                   : null;
 
               return Column(
@@ -735,14 +732,32 @@ class _HomeScreenState extends State<HomeScreen>
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              Text(
-                                createdAt != null
-                                    ? _formatTransactionTime(createdAt)
-                                    : 'Unknown time',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary,
-                                ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    createdAt != null
+                                        ? formatTimestampForJakartaDisplay(
+                                            createdAt,
+                                            pattern: 'dd MMM yyyy',
+                                          )
+                                        : 'Unknown date',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    createdAt != null
+                                        ? _formatTransactionTime(createdAt)
+                                        : 'Unknown time',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -1355,13 +1370,12 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  /// Format announcement date
+  /// Format announcement date using the stored timestamp directly.
   String _formatAnnouncementDate(dynamic dateStr) {
     try {
       final date = DateTime.parse(dateStr.toString());
-      // Convert UTC to Jakarta timezone
-      final jakartaTime = date.add(const Duration(hours: 7));
-      return '${jakartaTime.day}/${jakartaTime.month}/${jakartaTime.year} ${jakartaTime.hour.toString().padLeft(2, '0')}:${jakartaTime.minute.toString().padLeft(2, '0')}';
+      final localDate = date.toLocal();
+      return '${localDate.day}/${localDate.month}/${localDate.year} ${localDate.hour.toString().padLeft(2, '0')}:${localDate.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return 'Tanggal tidak diketahui';
     }

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../models/product.dart';
-import '../providers/cart_provider.dart';
-import '../providers/product_provider.dart';
-import '../services/supabase_service.dart';
-import '../theme/thema.dart';
-import '../utils/number_formatter.dart';
+import '../../models/product.dart';
+import '../../providers/cart_provider.dart';
+import '../../providers/product_provider.dart';
+import '../../services/supabase_service.dart';
+import '../../theme/thema.dart';
+import '../../utils/number_formatter.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});

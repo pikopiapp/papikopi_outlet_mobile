@@ -4,6 +4,7 @@ import '../../models/sale.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../../utils/holiday_detector.dart';
+import '../../utils/timezone_formatter.dart';
 
 class SalesOutletManagerScreen extends StatefulWidget {
   const SalesOutletManagerScreen({super.key});
@@ -434,7 +435,10 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
   }
 
   Widget _buildSaleSummaryRow(Sale sale) {
-    final saleTime = DateFormat('HH:mm').format(sale.createdAt.add(const Duration(hours: 7)));
+    final saleTime = formatTimestampForJakartaDisplay(
+      sale.createdAt,
+      pattern: 'HH:mm',
+    );
     final paymentLabel = sale.paymentMethod.toUpperCase() == 'GRATIS'
         ? 'GRATIS'
         : sale.paymentMethod.toUpperCase() == 'QRIS'

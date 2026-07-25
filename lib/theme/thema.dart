@@ -55,11 +55,19 @@ class AppTheme {
         backgroundColor: AppColors.primaryDark,
         foregroundColor: Colors.white,
         elevation: 0,
+        titleTextStyle: TextStyle(
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+        ),
       ),
 
       cardTheme: CardThemeData(
         color: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: 2,
+        shadowColor: AppColors.primary.withValues(alpha: 0.15),
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -67,18 +75,100 @@ class AppTheme {
           backgroundColor: AppColors.accent,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          elevation: 0,
+          shadowColor: AppColors.accent.withValues(alpha: 0.3),
         ),
       ),
 
       textTheme: const TextTheme(
+        displayLarge: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 32,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
+          height: 1.2,
+        ),
         headlineMedium: TextStyle(
           color: AppColors.textPrimary,
-          fontWeight: FontWeight.bold,
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+          height: 1.3,
         ),
-        bodyMedium: TextStyle(color: AppColors.textSecondary),
+        headlineSmall: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0,
+          height: 1.4,
+        ),
+        titleLarge: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+          height: 1.5,
+        ),
+        titleMedium: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.3,
+          height: 1.5,
+        ),
+        bodyLarge: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.normal,
+          letterSpacing: 0.5,
+          height: 1.6,
+        ),
+        bodyMedium: TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 14,
+          fontWeight: FontWeight.normal,
+          letterSpacing: 0.3,
+          height: 1.6,
+        ),
+        bodySmall: TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w400,
+          letterSpacing: 0.4,
+          height: 1.5,
+        ),
+      ),
+
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.altSurface, width: 1.5),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.altSurface, width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        hintStyle: TextStyle(
+          color: AppColors.textSecondary.withValues(alpha: 0.6),
+          fontSize: 14,
+        ),
+      ),
+
+      dividerTheme: const DividerThemeData(
+        color: AppColors.altSurface,
+        thickness: 1,
+        indent: 16,
+        endIndent: 16,
       ),
     );
   }
