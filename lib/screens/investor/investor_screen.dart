@@ -6,10 +6,10 @@ import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../../widgets/header.dart';
 import 'investor_home_screen.dart';
+import 'investor_notification_screen.dart';
 import 'investor_profile_screen.dart';
 import 'investor_revenue_screen.dart';
 import 'investor_report_outlet_screen.dart';
-import 'investor_notification_screen.dart';
 import 'investor_withdrawal_screen.dart';
 
 class InvestorScreen extends StatefulWidget {
@@ -25,7 +25,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
 
   late final Future<void> _supabaseInitFuture;
 
-  // 0: Home, 1: Revenue, 2: Report Outlet, 3: Withdrawal, 4: Notification
+  // 0: Home, 1: Revenue, 2: Report Outlet, 3: Withdrawal
   late final List<Widget> _screens;
 
   @override
@@ -40,7 +40,6 @@ class _InvestorScreenState extends State<InvestorScreen> {
       const InvestorRevenueScreen(),
       const InvestorReportOutletScreen(),
       const InvestorWithdrawalScreen(),
-      const InvestorNotificationScreen(),
     ];
   }
 
@@ -75,9 +74,9 @@ class _InvestorScreenState extends State<InvestorScreen> {
   }
 
   void _handleMessage() {
-    setState(() {
-      _selectedIndex = 3; // Navigate to Message/Notification screen
-    });
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const InvestorNotificationScreen()),
+    );
   }
 
   @override
@@ -110,7 +109,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
         },
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex < 4 ? _selectedIndex : 0,
+        currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         backgroundColor: AppColors.surface,
         selectedItemColor: AppColors.primary,
@@ -144,23 +143,38 @@ class _ErrorBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.altSurface),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.error.withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.error,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
           ),
           const SizedBox(height: 8),
-          Text(value),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
         ],
       ),
     );
@@ -226,25 +240,49 @@ class _InvestorProfilePlaceholderState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Selamat Datang, ${user?.name ?? "Investor"}! 👋',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Kelola investasi Anda dan pantau performa outlet',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Outlet yang diinvestasikan',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
+               Text(
+                 'Selamat Datang, ${user?.name ?? "Investor"}! 👋',
+                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                   color: AppColors.textPrimary,
+                   fontWeight: FontWeight.w700,
+                   letterSpacing: -0.2,
+                 ),
+               ),
+               const SizedBox(height: 10),
+               Text(
+                 'Kelola investasi Anda dan pantau performa outlet',
+                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                   color: AppColors.textSecondary,
+                   height: 1.6,
+                 ),
+               ),
+               const SizedBox(height: 28),
+               Row(
+                 children: [
+                   Container(
+                     width: 22,
+                     height: 22,
+                     decoration: BoxDecoration(
+                       color: AppColors.primary.withValues(alpha: 0.12),
+                       borderRadius: BorderRadius.circular(7),
+                     ),
+                     child: Icon(
+                       Icons.storefront_rounded,
+                       size: 14,
+                       color: AppColors.primary,
+                     ),
+                   ),
+                   const SizedBox(width: 10),
+                   Text(
+                     'Outlet yang diinvestasikan',
+                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                       color: AppColors.textPrimary,
+                       fontWeight: FontWeight.w700,
+                       letterSpacing: 0.2,
+                     ),
+                   ),
+                 ],
+               ),
               const SizedBox(height: 12),
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: _resolveInvestorOutlets(),

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../providers/auth_provider.dart';
-import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
+import 'shared/investor_widgets.dart';
+import 'shared/investor_data_mixin.dart';
 
 class InvestorReportOutletScreen extends StatefulWidget {
   const InvestorReportOutletScreen({super.key});
@@ -13,64 +12,8 @@ class InvestorReportOutletScreen extends StatefulWidget {
       _InvestorReportOutletScreenState();
 }
 
-class _InvestorReportOutletScreenState
-    extends State<InvestorReportOutletScreen> {
-  final _supabaseService = SupabaseService();
-
-  Future<List<Map<String, dynamic>>> _resolveInvestorOutlets() async {
-    final authProvider = context.read<AuthProvider>();
-    final user = authProvider.currentUser;
-    if (user == null) return [];
-
-    try {
-      return await _supabaseService.getInvestorAssignments(investorId: user.id);
-    } catch (e) {
-      return [];
-    }
-  }
-
-  /// Get monthly HPP data for ROI calculation
-  Future<double> _fetchActualMonthlyRevenue(String outletId) async {
-    try {
-      final now = DateTime.now();
-
-      final revenueData = await _supabaseService.getRevenueData(
-        outletId: outletId,
-        selectedDate: now,
-      );
-
-      // Extract monthly revenue from aggregated data
-      final monthlyAmount =
-          (revenueData['monthly']?['amount'] as num?)?.toDouble() ?? 0.0;
-      return monthlyAmount;
-    } catch (e) {
-      return 0.0;
-    }
-  }
-
-  double _calculateAnnualROI(
-    double investmentAmount,
-    double marginPercentage,
-    double actualMonthlyRevenue,
-  ) {
-    // Use actual monthly revenue if available, otherwise fallback to estimation
-    final monthlyRevenue = actualMonthlyRevenue > 0
-        ? actualMonthlyRevenue
-        : investmentAmount * 1.5;
-    final monthlyProfit = monthlyRevenue * (marginPercentage / 100);
-    final annualProfit = monthlyProfit * 12;
-    return (annualProfit / investmentAmount) * 100;
-  }
-
-  String _formatCurrency(double amount) {
-    return amount
-        .toStringAsFixed(0)
-        .replaceAllMapped(
-          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-          (match) => '${match.group(1)}.',
-        );
-  }
-
+class _InvestorReportOutletScreenState extends State<InvestorReportOutletScreen>
+    with InvestorDataMixin {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -80,15 +23,43 @@ class _InvestorReportOutletScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Report Outlet',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Icon(
+                      Icons.analytics_rounded,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Report Outlet',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
-              const Text('Ringkasan outlet yang diinvestasikan.'),
-              const SizedBox(height: 16),
+              Text(
+                'Ringkasan outlet yang diinvestasikan.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 24),
               FutureBuilder<List<Map<String, dynamic>>>(
-                future: _resolveInvestorOutlets(),
+                future: resolveInvestorOutlets(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
@@ -97,7 +68,7 @@ class _InvestorReportOutletScreenState
                     );
                   }
                   if (snapshot.hasError) {
-                    return _InfoBox(
+                    return InfoBox(
                       title: 'Error',
                       value: 'Gagal memuat outlets investor: ${snapshot.error}',
                     );
@@ -105,7 +76,7 @@ class _InvestorReportOutletScreenState
 
                   final outlets = snapshot.data ?? [];
                   if (outlets.isEmpty) {
-                    return const _InfoBox(
+                    return const InfoBox(
                       title: 'Outlet investor',
                       value: 'Belum ada outlet yang diinvestasikan.',
                     );
@@ -125,140 +96,39 @@ class _InvestorReportOutletScreenState
 
                   return Column(
                     children: [
-                      // Summary Cards
-                      Row(
+                      // Mixed Layout: 2-col + full width for odd number of cards
+                      Column(
                         children: [
-                          Expanded(
-                            child: Card(
-                              elevation: 1,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.blue.shade50,
-                                      Colors.blue.shade100,
-                                    ],
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Total Outlet',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey[600],
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '$totalOutlets',
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue,
-                                      ),
-                                    ),
-                                  ],
+                          // Row 1: Card 1 + Card 2 (2 columns)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SummaryCard(
+                                  label: 'Total Outlet',
+                                  value: '$totalOutlets',
+                                  bgColor: Colors.blue,
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: SummaryCard(
+                                  label: 'Outlet Aktif',
+                                  value: '$activeOutlets',
+                                  bgColor: Colors.green,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Card(
-                              elevation: 1,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.green.shade50,
-                                      Colors.green.shade100,
-                                    ],
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Outlet Aktif',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey[600],
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '$activeOutlets',
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Card(
-                              elevation: 1,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.orange.shade50,
-                                      Colors.orange.shade100,
-                                    ],
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Total Investasi',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey[600],
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Rp${_formatCurrency(totalInvestment)}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.orange,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                          const SizedBox(height: 10),
+                          // Row 2: Card 3 (full width)
+                          SummaryCard(
+                            label: 'Total Investasi',
+                            value: 'Rp${formatCurrency(totalInvestment)}',
+                            bgColor: Colors.orange,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 20),
                       // Outlet List
                       ListView.builder(
                         shrinkWrap: true,
@@ -282,51 +152,51 @@ class _InvestorReportOutletScreenState
                               (outlet['status'] as String?) ?? 'unknown';
 
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.only(bottom: 12),
                             child: Card(
                               elevation: 2,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Colors.indigo.shade50,
-                                      Colors.indigo.shade100,
-                                    ],
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: AppColors.primary.withValues(alpha: 0.15),
                                   ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary.withValues(alpha: 0.08),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
                                 ),
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.all(16),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Header: Outlet Name + Status Badge
                                     Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
                                                 outletName,
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.bold,
+                                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                                  color: AppColors.textPrimary,
+                                                  fontWeight: FontWeight.w700,
                                                 ),
                                               ),
-                                              const SizedBox(height: 2),
+                                              const SizedBox(height: 4),
                                               Text(
-                                                outletType,
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.grey[600],
+                                                outletType.replaceAll('_', ' ').toUpperCase(),
+                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                  color: AppColors.textSecondary,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.8,
                                                 ),
                                               ),
                                             ],
@@ -334,59 +204,57 @@ class _InvestorReportOutletScreenState
                                         ),
                                         Container(
                                           padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
+                                            horizontal: 12,
+                                            vertical: 6,
                                           ),
                                           decoration: BoxDecoration(
                                             color: status == 'active'
-                                                ? Colors.green.shade100
-                                                : Colors.orange.shade100,
-                                            borderRadius: BorderRadius.circular(
-                                              4,
+                                                ? AppColors.success.withValues(alpha: 0.15)
+                                                : AppColors.accent.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: status == 'active'
+                                                  ? AppColors.success.withValues(alpha: 0.4)
+                                                  : AppColors.accent.withValues(alpha: 0.4),
+                                              width: 1.2,
                                             ),
                                           ),
                                           child: Text(
                                             status.toUpperCase(),
                                             style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
                                               color: status == 'active'
-                                                  ? Colors.green[700]
-                                                  : Colors.orange[700],
+                                                  ? AppColors.hijau
+                                                  : AppColors.accentDark,
                                             ),
                                           ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      height: 1,
-                                      color: Colors.indigo[200],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    // Investment Details
+                                    const SizedBox(height: 14),
+                                    Container(height: 1, color: AppColors.altSurface),
+                                    const SizedBox(height: 14),
                                     Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                'Investasi',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey[600],
+                                                'Modal Investasi',
+                                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                                  color: AppColors.textSecondary,
+                                                  fontWeight: FontWeight.w500,
+                                                  letterSpacing: 0.4,
                                                 ),
                                               ),
-                                              const SizedBox(height: 2),
+                                              const SizedBox(height: 5),
                                               Text(
-                                                'Rp${_formatCurrency(investmentAmount)}',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
+                                                'Rp${formatCurrency(investmentAmount)}',
+                                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.textPrimary,
                                                 ),
                                               ),
                                             ],
@@ -394,112 +262,28 @@ class _InvestorReportOutletScreenState
                                         ),
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                            crossAxisAlignment: CrossAxisAlignment.end,
                                             children: [
                                               Text(
                                                 'Margin Profit',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey[600],
+                                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                                  color: AppColors.textSecondary,
+                                                  fontWeight: FontWeight.w500,
+                                                  letterSpacing: 0.4,
                                                 ),
                                               ),
-                                              const SizedBox(height: 2),
+                                              const SizedBox(height: 5),
                                               Text(
-                                                '$marginPercentage%',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.green,
+                                                '${marginPercentage.toStringAsFixed(1)}%',
+                                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.success,
                                                 ),
                                               ),
                                             ],
                                           ),
                                         ),
                                       ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    // ROI Estimate - Fetch Real Revenue
-                                    FutureBuilder<double>(
-                                      future: _fetchActualMonthlyRevenue(
-                                        outlet['outlet_id'] as String? ?? '',
-                                      ),
-                                      builder: (context, revenuSnapshot) {
-                                        final actualMonthlyRevenue =
-                                            revenuSnapshot.data ?? 0.0;
-                                        final roiValue = _calculateAnnualROI(
-                                          investmentAmount,
-                                          marginPercentage,
-                                          actualMonthlyRevenue,
-                                        );
-
-                                        return Container(
-                                          padding: const EdgeInsets.all(10),
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue.shade50,
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.blue.shade200,
-                                            ),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                'Estimasi ROI Tahunan',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey[600],
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              if (revenuSnapshot
-                                                      .connectionState ==
-                                                  ConnectionState.waiting)
-                                                const SizedBox(
-                                                  height: 16,
-                                                  child: Center(
-                                                    child: SizedBox(
-                                                      width: 14,
-                                                      height: 14,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                )
-                                              else
-                                                Text(
-                                                  '${roiValue.toStringAsFixed(1)}%',
-                                                  style: const TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.blue,
-                                                  ),
-                                                ),
-                                              if (actualMonthlyRevenue > 0)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                        top: 4,
-                                                      ),
-                                                  child: Text(
-                                                    'Revenue: Rp ${_formatCurrency(actualMonthlyRevenue)}',
-                                                    style: TextStyle(
-                                                      fontSize: 9,
-                                                      color: Colors.grey[500],
-                                                    ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        );
-                                      },
                                     ),
                                   ],
                                 ),
@@ -515,39 +299,6 @@ class _InvestorReportOutletScreenState
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _InfoBox extends StatelessWidget {
-  final String title;
-  final String value;
-
-  const _InfoBox({required this.title, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.altSurface),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          Text(value),
-        ],
       ),
     );
   }

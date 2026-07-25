@@ -3,8 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../../providers/auth_provider.dart';
-import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
+import 'shared/investor_widgets.dart';
+import 'shared/investor_data_mixin.dart';
 
 class InvestorHomeScreen extends StatefulWidget {
   const InvestorHomeScreen({super.key, this.onNavigate});
@@ -15,18 +16,8 @@ class InvestorHomeScreen extends StatefulWidget {
   State<InvestorHomeScreen> createState() => _InvestorHomeScreenState();
 }
 
-class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
-  final _supabaseService = SupabaseService();
+class _InvestorHomeScreenState extends State<InvestorHomeScreen> with InvestorDataMixin {
   String _chartPeriod = 'daily'; // 'daily' or 'monthly'
-
-  Future<List<Map<String, dynamic>>> _resolveInvestorOutlets() async {
-    final authProvider = context.read<AuthProvider>();
-    final user = authProvider.currentUser;
-    if (user == null) {
-      return [];
-    }
-    return _supabaseService.getInvestorAssignments(investorId: user.id);
-  }
 
   /// Fetch daily profit trend for last 30 days
   Future<List<FlSpot>> _fetchDailyChartData() async {
@@ -35,7 +26,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
       final user = authProvider.currentUser;
       if (user == null) return [];
 
-      final outlets = await _supabaseService.getInvestorAssignments(
+      final outlets = await supabaseService.getInvestorAssignments(
         investorId: user.id,
       );
       if (outlets.isEmpty) return [];
@@ -62,7 +53,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
           final margin =
               (outlet['margin_percentage'] as num?)?.toDouble() ?? 0.0;
 
-          final hppData = await _supabaseService.getHppSummary(
+          final hppData = await supabaseService.getHppSummary(
             outletId: outletId,
             startDate: startOfDay,
             endDate: endOfDay,
@@ -89,7 +80,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
       final user = authProvider.currentUser;
       if (user == null) return [];
 
-      final outlets = await _supabaseService.getInvestorAssignments(
+      final outlets = await supabaseService.getInvestorAssignments(
         investorId: user.id,
       );
       if (outlets.isEmpty) return [];
@@ -116,7 +107,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
           final margin =
               (outlet['margin_percentage'] as num?)?.toDouble() ?? 0.0;
 
-          final hppData = await _supabaseService.getHppSummary(
+          final hppData = await supabaseService.getHppSummary(
             outletId: outletId,
             startDate: startOfMonth,
             endDate: endOfMonth,
@@ -150,26 +141,47 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
             children: [
               Text(
                 'Selamat Datang, ${user?.name ?? "Investor"}! 👋',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
                 'Pantau performa investasi Anda',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.6,
+                ),
               ),
               const SizedBox(height: 24),
               // Chart Header
-              Text(
-                'Tren Profit ${_chartPeriod == 'daily' ? '30 Hari Terakhir' : '12 Bulan Terakhir'}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Icon(
+                      Icons.trending_up_rounded,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Tren Profit ${_chartPeriod == 'daily' ? '30 Hari Terakhir' : '12 Bulan Terakhir'}',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               // Period Selection
@@ -432,7 +444,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
               const SizedBox(height: 24),
               // 3 Summary Cards
               FutureBuilder<List<Map<String, dynamic>>>(
-                future: _resolveInvestorOutlets(),
+                future: resolveInvestorOutlets(),
                 builder: (context, snap) {
                   if (snap.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
@@ -482,153 +494,40 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen> {
                         (match) => '${match.group(1)}.',
                       );
 
-                  return Column(
-                    children: [
-                      // Card 1: Total Investment - Full Width, Bigger, Center Aligned
-                      SizedBox(
-                        width: double.infinity,
-                        child: Card(
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.orange.shade50,
-                                  Colors.orange.shade100,
-                                ],
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'Total Investasi',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Rp $formattedTotal',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.orange,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Row 2: Profit Estimasi & Outlet Terbaik (2 columns)
-                      Row(
-                        children: [
-                          // Card 2: Average Monthly Profit
-                          Expanded(
-                            child: Card(
-                              elevation: 1,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.green.shade50,
-                                      Colors.green.shade100,
-                                    ],
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Profit Estimasi/Bulan',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Rp $formattedProfit',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Card 3: Best Performing Outlet
-                          Expanded(
-                            child: Card(
-                              elevation: 1,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.blue.shade50,
-                                      Colors.blue.shade100,
-                                    ],
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Outlet Terbaik',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      bestPerformer,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '$bestMargin% profit',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                   return Column(
+                     children: [
+                       // Mixed Layout: 2-col + full width for odd number of cards
+                       Column(
+                         children: [
+                           // Row 1: Card 1 + Card 2 (2 columns)
+                           Row(
+                             children: [
+                               Expanded(
+                                 child: SummaryCard(
+                                   label: 'Total Investasi',
+                                   value: 'Rp $formattedTotal',
+                                   bgColor: Colors.orange,
+                                 ),
+                               ),
+                               const SizedBox(width: 10),
+                               Expanded(
+                                 child: SummaryCard(
+                                   label: 'Profit Estimasi/Bulan',
+                                   value: 'Rp $formattedProfit',
+                                   bgColor: Colors.green,
+                                 ),
+                               ),
+                             ],
+                           ),
+                           const SizedBox(height: 10),
+                           // Row 2: Card 3 (full width)
+                           SummaryCard(
+                             label: 'Outlet Terbaik',
+                             value: '$bestPerformer ($bestMargin%)',
+                             bgColor: Colors.blue,
+                           ),
+                         ],
+                       ),
                       const SizedBox(height: 24),
                       // Quick Links
                       const Text(

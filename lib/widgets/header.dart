@@ -68,8 +68,8 @@ class PapikopiAppBar extends AppBar {
       actions.add(
         IconButton(
           onPressed: onMessages,
-          icon: const Icon(Icons.mail),
-          tooltip: 'Pesan',
+          icon: const Icon(Icons.notifications),
+          tooltip: 'Notifikasi',
         ),
       );
     }
