@@ -5020,7 +5020,7 @@ class SupabaseService {
       final response = await _client
           .from('sales')
           .select(
-            'id, total_amount, hpp_total, bonus_amount, created_at, payment_method',
+            'id, total_amount, hpp_total, bonus_amount, profit, created_at, payment_method',
           )
           .eq('outlet_id', outletId)
           .gte('created_at', startDate.toIso8601String())
@@ -5039,37 +5039,206 @@ class SupabaseService {
     required String outletId,
     required DateTime startDate,
     required DateTime endDate,
+    String? assignmentStartDate,
   }) async {
     if (!_isInitialized) {
       return {'totalSales': 0.0, 'totalHpp': 0.0, 'totalBonus': 0.0};
     }
 
     try {
+      var effectiveStartDate = startDate;
+      if (assignmentStartDate != null) {
+        final parsedStart = DateTime.tryParse(assignmentStartDate);
+        if (parsedStart != null) {
+          final assignmentStart =
+              RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(assignmentStartDate)
+              ? DateTime.utc(
+                  parsedStart.year,
+                  parsedStart.month,
+                  parsedStart.day,
+                ).subtract(const Duration(hours: 7))
+              : parsedStart.toUtc();
+          if (assignmentStart.isAfter(effectiveStartDate)) {
+            effectiveStartDate = assignmentStart;
+          }
+        }
+      }
+
       final sales = await getSalesWithHpp(
         outletId: outletId,
-        startDate: startDate,
+        startDate: effectiveStartDate,
         endDate: endDate,
       );
 
       double totalSales = 0;
       double totalHpp = 0;
       double totalBonus = 0;
+      double totalProfit = 0;
 
       for (final sale in sales) {
         totalSales += (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
         totalHpp += (sale['hpp_total'] as num?)?.toDouble() ?? 0.0;
         totalBonus += (sale['bonus_amount'] as num?)?.toDouble() ?? 0.0;
+        totalProfit += (sale['profit'] as num?)?.toDouble() ?? 0.0;
       }
 
       return {
         'totalSales': totalSales,
         'totalHpp': totalHpp,
         'totalBonus': totalBonus,
+        'totalProfit': totalProfit,
         'transactionCount': sales.length,
       };
     } catch (e) {
       return {'totalSales': 0.0, 'totalHpp': 0.0, 'totalBonus': 0.0};
     }
+  }
+
+  /// Calculate bonus from active baristas' non-free sales and meal allowance
+  /// from outlet sales, grouped by business day or calendar day.
+  Future<Map<String, double>> getInvestorBaristaCostSummary({
+    required String outletId,
+    required DateTime startBusinessDate,
+    required DateTime endBusinessDate,
+    String? assignmentStartDate,
+    bool calendarDays = false,
+  }) async {
+    if (!_isInitialized) {
+      throw StateError('SupabaseService belum diinisialisasi');
+    }
+
+    var effectiveStartDate = DateTime(
+      startBusinessDate.year,
+      startBusinessDate.month,
+      startBusinessDate.day,
+    );
+    if (assignmentStartDate != null) {
+      final parsedStart = DateTime.tryParse(assignmentStartDate);
+      if (parsedStart != null) {
+        final assignmentDay = DateTime(
+          parsedStart.year,
+          parsedStart.month,
+          parsedStart.day,
+        );
+        if (assignmentDay.isAfter(effectiveStartDate)) {
+          effectiveStartDate = assignmentDay;
+        }
+      }
+    }
+    if (effectiveStartDate.isAfter(endBusinessDate)) {
+      return {
+        'bonus': 0.0,
+        'mealAllowance': 0.0,
+        'mealAllowance25Count': 0.0,
+        'mealAllowance34Count': 0.0,
+      };
+    }
+
+    final baristaResponse = await _client
+        .from('users')
+        .select('id')
+        .eq('role', 'barista')
+        .eq('outlet_id', outletId)
+        .eq('is_active', true);
+    final baristaIds = List<Map<String, dynamic>>.from(
+      baristaResponse,
+    ).map((barista) => barista['id'] as String?).whereType<String>().toList();
+    if (baristaIds.isEmpty && !calendarDays) {
+      return {
+        'bonus': 0.0,
+        'mealAllowance': 0.0,
+        'mealAllowance25Count': 0.0,
+        'mealAllowance34Count': 0.0,
+      };
+    }
+
+    final startUtc = DateTime.utc(
+      effectiveStartDate.year,
+      effectiveStartDate.month,
+      effectiveStartDate.day,
+      calendarDays ? 0 : 4,
+    ).subtract(const Duration(hours: 7));
+    final endUtcExclusive = DateTime.utc(
+      endBusinessDate.year,
+      endBusinessDate.month,
+      endBusinessDate.day + 1,
+      calendarDays ? 0 : 4,
+    ).subtract(const Duration(hours: 7));
+    var salesQuery = _client
+        .from('sales')
+        .select('barista_id, total_amount, payment_method, created_at')
+        .eq('outlet_id', outletId)
+        .gte('created_at', startUtc.toIso8601String())
+        .lt('created_at', endUtcExclusive.toIso8601String());
+    if (!calendarDays) {
+      salesQuery = salesQuery.inFilter('barista_id', baristaIds);
+    }
+    final salesResponse = await salesQuery;
+    final activeBaristaIds = baristaIds.toSet();
+
+    final salesByBaristaAndDay = <String, double>{};
+    final salesByOutletAndDay = <String, double>{};
+    for (final sale in List<Map<String, dynamic>>.from(salesResponse)) {
+      if ((sale['payment_method'] as String?)?.toUpperCase() == 'GRATIS') {
+        continue;
+      }
+      final baristaId = sale['barista_id'] as String?;
+      final createdAt = DateTime.tryParse(sale['created_at'] as String? ?? '');
+      if (createdAt == null) continue;
+
+      var reportDay = createdAt.toUtc().add(const Duration(hours: 7));
+      if (!calendarDays && reportDay.hour < 4) {
+        reportDay = reportDay.subtract(const Duration(days: 1));
+      }
+      final dayKey =
+          '${reportDay.year.toString().padLeft(4, '0')}-'
+          '${reportDay.month.toString().padLeft(2, '0')}-'
+          '${reportDay.day.toString().padLeft(2, '0')}';
+      final amount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+      salesByOutletAndDay.update(
+        dayKey,
+        (total) => total + amount,
+        ifAbsent: () => amount,
+      );
+      if (baristaId != null && activeBaristaIds.contains(baristaId)) {
+        salesByBaristaAndDay.update(
+          '$baristaId|$dayKey',
+          (total) => total + amount,
+          ifAbsent: () => amount,
+        );
+      }
+    }
+
+    var bonus = 0.0;
+    for (final entry in salesByBaristaAndDay.entries) {
+      if (entry.value <= 0) continue;
+      final businessDay = DateTime.parse(entry.key.split('|').last);
+      bonus += calculateBonus(
+        entry.value,
+        isHoliday: isHolidaySync(businessDay),
+      ).totalBonus;
+    }
+
+    var mealAllowance = 0.0;
+    var mealAllowance25Count = 0;
+    var mealAllowance34Count = 0;
+    for (final omset in salesByOutletAndDay.values) {
+      final dailyAllowance = calculateMealAllowance(omset);
+      mealAllowance += dailyAllowance;
+      if (dailyAllowance == MealAllowance.defaultAllowance.belowThreshold) {
+        mealAllowance25Count++;
+      } else if (dailyAllowance ==
+          MealAllowance.defaultAllowance.aboveThreshold) {
+        mealAllowance34Count++;
+      }
+    }
+
+    return {
+      'bonus': bonus,
+      'mealAllowance': mealAllowance,
+      'mealAllowance25Count': mealAllowance25Count.toDouble(),
+      'mealAllowance34Count': mealAllowance34Count.toDouble(),
+    };
   }
 
   // ========== WITHDRAWAL MANAGEMENT ==========
