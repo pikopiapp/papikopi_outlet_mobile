@@ -13,7 +13,6 @@ class GroupChatScreen extends StatefulWidget {
   State<GroupChatScreen> createState() => _GroupChatScreenState();
 }
 
-
 class _GroupChatScreenState extends State<GroupChatScreen> {
   late SupabaseService supabaseService;
   List<Map<String, dynamic>> messages = [];
@@ -45,7 +44,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           .limit(1);
 
       String groupChatId;
-      
+
       if (groupChatResponse.isEmpty) {
         // Create group chat if it doesn't exist
         final createResponse = await supabaseService.client
@@ -55,7 +54,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               'description': 'Team communication for all outlets',
             })
             .select('id');
-        
+
         if (createResponse.isEmpty) {
           setState(() => isLoading = false);
           return;
@@ -72,19 +71,17 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           .eq('group_chat_id', groupChatId)
           .order('created_at', ascending: true);
 
-      if (messagesResponse.isNotEmpty) {
-      }
-      
+      if (messagesResponse.isNotEmpty) {}
+
       // Fetch sender info separately if needed
       List<Map<String, dynamic>> messagesWithSenders = [];
       Set<String> senderIds = {};
-      
+
       // Collect all unique sender IDs first
       for (var msg in messagesResponse) {
         senderIds.add(msg['sender_id']);
       }
-      
-      
+
       // Fetch all senders in one query
       Map<String, Map<String, dynamic>> senderMap = {};
       if (senderIds.isNotEmpty) {
@@ -93,25 +90,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               .from('users')
               .select('id, name, role')
               .inFilter('id', senderIds.toList());
-          
+
           for (var sender in sendersResponse) {
             senderMap[sender['id']] = sender;
           }
         } catch (e) {
+          // Ignore sender lookup failures and keep conversation UI usable.
         }
       }
-      
+
       // Combine messages with sender info
       for (var msg in messagesResponse) {
         final sender = senderMap[msg['sender_id']];
-        messagesWithSenders.add({
-          ...msg,
-          'sender': sender,
-          'users': sender,
-        });
+        messagesWithSenders.add({...msg, 'sender': sender, 'users': sender});
       }
 
-      
       setState(() {
         messages = messagesWithSenders;
         isLoading = false;
@@ -121,9 +114,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -147,7 +140,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           .limit(1);
 
       String groupChatId;
-      
+
       if (groupChatResponse.isEmpty) {
         // Create group chat if it doesn't exist
         final createResponse = await supabaseService.client
@@ -157,7 +150,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               'description': 'Team communication for all outlets',
             })
             .select('id');
-        
+
         if (createResponse.isEmpty) {
           throw Exception('Failed to create group chat');
         }
@@ -166,7 +159,6 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         groupChatId = groupChatResponse[0]['id'];
       }
 
-      
       // Send message
       await supabaseService.client.from('group_chat_messages').insert({
         'group_chat_id': groupChatId,
@@ -174,14 +166,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         'message': messageText,
       });
 
-      
       // Reload messages
       await _loadMessages();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -207,9 +198,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: AppColors.altSurface),
-              ),
+              border: Border(bottom: BorderSide(color: AppColors.altSurface)),
             ),
             child: Row(
               children: [
@@ -235,148 +224,153 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             child: isLoading
                 ? const ScreenSkeleton(lineCount: 10, showTitle: false)
                 : messages.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.chat_bubble_outline,
-                                size: 48, color: AppColors.textSecondary),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Belum ada pesan',
-                              style: TextStyle(color: AppColors.textSecondary),
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          size: 48,
+                          color: AppColors.textSecondary,
                         ),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: messages.length,
-                        itemBuilder: (context, index) {
-                          final message = messages[index];
-                          // Get sender info from either field
-                          final sender = (message['sender'] ?? message['users']) as Map<String, dynamic>?;
-                          final senderName = sender?['name'] ?? 'Unknown';
-                          final senderRole = sender?['role'] ?? '';
-                          final messageText = message['message'] ?? '';
-                          final timestamp =
-                              DateTime.parse(message['created_at']);
-                          final timeString =
-                              DateFormat('HH:mm', 'id_ID').format(timestamp);
-                          
+                        const SizedBox(height: 12),
+                        Text(
+                          'Belum ada pesan',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    controller: scrollController,
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final message = messages[index];
+                      // Get sender info from either field
+                      final sender =
+                          (message['sender'] ?? message['users'])
+                              as Map<String, dynamic>?;
+                      final senderName = sender?['name'] ?? 'Unknown';
+                      final senderRole = sender?['role'] ?? '';
+                      final messageText = message['message'] ?? '';
+                      final timestamp = DateTime.parse(message['created_at']);
+                      final timeString = DateFormat(
+                        'HH:mm',
+                        'id_ID',
+                      ).format(timestamp);
 
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 16,
-                                      backgroundColor: AppColors.primary,
-                                      child: Text(
-                                        senderName.substring(0, 1).toUpperCase(),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: AppColors.primary,
+                                  child: Text(
+                                    senderName.substring(0, 1).toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
                                         children: [
-                                          Row(
-                                            children: [
-                                              Text(
-                                                senderName,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 13,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: senderRole == 'manager'
-                                                      ? AppColors.accent
-                                                          .withValues(alpha: 0.2)
-                                                      : AppColors.primary
-                                                          .withValues(alpha: 0.2),
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                ),
-                                                child: Text(
-                                                  senderRole,
-                                                  style: TextStyle(
-                                                    color: senderRole == 'manager'
-                                                        ? AppColors.accent
-                                                        : AppColors.primary,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
+                                          Text(
+                                            senderName,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
                                           ),
-                                          const SizedBox(height: 4),
+                                          const SizedBox(width: 6),
                                           Container(
                                             padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 8,
+                                              horizontal: 6,
+                                              vertical: 2,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: AppColors.background,
-                                              border: Border.all(
-                                                color: AppColors.altSurface,
-                                              ),
+                                              color: senderRole == 'manager'
+                                                  ? AppColors.accent.withValues(
+                                                      alpha: 0.2,
+                                                    )
+                                                  : AppColors.primary
+                                                        .withValues(alpha: 0.2),
                                               borderRadius:
-                                                  BorderRadius.circular(8),
+                                                  BorderRadius.circular(4),
                                             ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  messageText,
-                                                  style: const TextStyle(
-                                                    fontSize: 13,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  timeString,
-                                                  style: TextStyle(
-                                                    color:
-                                                        AppColors.textSecondary,
-                                                    fontSize: 10,
-                                                  ),
-                                                ),
-                                              ],
+                                            child: Text(
+                                              senderRole,
+                                              style: TextStyle(
+                                                color: senderRole == 'manager'
+                                                    ? AppColors.accent
+                                                    : AppColors.primary,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.background,
+                                          border: Border.all(
+                                            color: AppColors.altSurface,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              messageText,
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              timeString,
+                                              style: TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
-                          );
-                        },
-                      ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
           // Input Area
           Container(
@@ -387,9 +381,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               12 + MediaQuery.of(context).viewInsets.bottom,
             ),
             decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: AppColors.altSurface),
-              ),
+              border: Border(top: BorderSide(color: AppColors.altSurface)),
             ),
             child: Row(
               children: [
@@ -401,7 +393,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                      ),
                     ),
                     maxLines: null,
                   ),

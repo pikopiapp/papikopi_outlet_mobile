@@ -35,6 +35,7 @@ class AuthService {
     await _prefs.setString('user_name', user.name);
     await _prefs.setString('user_role', user.role);
     await _prefs.setString('user_outlet_id', user.outletId);
+    await _prefs.setBool('user_is_active', user.isActive);
   }
 
   User? getSavedUser() {
@@ -47,6 +48,7 @@ class AuthService {
       name: _prefs.getString('user_name') ?? '',
       role: _prefs.getString('user_role') ?? 'barista',
       outletId: _prefs.getString('user_outlet_id') ?? '',
+      isActive: _prefs.getBool('user_is_active') ?? true,
       createdAt: DateTime.now(),
     );
   }
@@ -57,6 +59,7 @@ class AuthService {
     await _prefs.remove('user_name');
     await _prefs.remove('user_role');
     await _prefs.remove('user_outlet_id');
+    await _prefs.remove('user_is_active');
   }
 
   bool isLoggedIn() {

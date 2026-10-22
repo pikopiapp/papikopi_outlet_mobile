@@ -81,11 +81,15 @@ class _HomeScreenState extends State<HomeScreen>
           await supabaseService.getPrivateMessagesWithSenderInfo(
             userId: userId,
           );
-        } catch (e) {}
+        } catch (e) {
+          // Optional background chat fetch: ignore transient failures and keep UI usable.
+        }
 
         try {
           await supabaseService.getGroupChats();
-        } catch (e) {}
+        } catch (e) {
+          // Optional background chat fetch: ignore transient failures and keep UI usable.
+        }
 
         if (mounted) {
           setState(() {
@@ -94,7 +98,9 @@ class _HomeScreenState extends State<HomeScreen>
           });
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      // Ignore non-critical home data load failures; the screen can render with partial data.
+    }
   }
 
   Future<void> _loadOutletStatus() async {
@@ -117,7 +123,9 @@ class _HomeScreenState extends State<HomeScreen>
           });
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      // Ignore non-critical outlet status load failures; fallback status is already defined.
+    }
   }
 
   Future<void> _loadLowStockProducts() async {
@@ -166,7 +174,9 @@ class _HomeScreenState extends State<HomeScreen>
           }
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      // Ignore non-critical low-stock load failures and keep the dashboard responsive.
+    }
   }
 
   Future<void> _loadYesterdaySalesData() async {
@@ -186,7 +196,9 @@ class _HomeScreenState extends State<HomeScreen>
           _yesterdaySalesData = yesterdayData;
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      // Ignore non-critical previous sales load failures and keep the dashboard responsive.
+    }
   }
 
   Future<void> _loadRecentTransactions() async {
@@ -207,7 +219,9 @@ class _HomeScreenState extends State<HomeScreen>
           _recentTransactions = transactions;
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      // Ignore non-critical recent transactions load failures and keep the dashboard responsive.
+    }
   }
 
   double _calculatePercentageChange(double today, double yesterday) {
@@ -698,8 +712,10 @@ class _HomeScreenState extends State<HomeScreen>
               final amount =
                   (transaction['total_amount'] as num?)?.toInt() ?? 0;
               final method = transaction['payment_method'] ?? 'Unknown';
-                final createdAt = transaction['created_at'] != null
-                  ? parseTimestampAssumeUTC(transaction['created_at'].toString())
+              final createdAt = transaction['created_at'] != null
+                  ? parseTimestampAssumeUTC(
+                      transaction['created_at'].toString(),
+                    )
                   : null;
 
               return Column(

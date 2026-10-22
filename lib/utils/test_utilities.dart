@@ -12,7 +12,8 @@ class TestUtilities {
   }) {
     return {
       'id': id ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
-      'email': email ?? 'test${DateTime.now().millisecondsSinceEpoch}@papikopi.com',
+      'email':
+          email ?? 'test${DateTime.now().millisecondsSinceEpoch}@papikopi.com',
       'name': name ?? 'Test User',
       'role': role ?? 'barista', // barista, manager, owner
       'outlet_id': outletId ?? 'outlet_001',
@@ -31,7 +32,8 @@ class TestUtilities {
       'id': 'msg_${DateTime.now().millisecondsSinceEpoch}',
       'sender_id': senderId ?? 'user_001',
       'recipient_id': recipientId ?? 'user_002',
-      'message': message ?? 'Test message ${DateTime.now().millisecondsSinceEpoch}',
+      'message':
+          message ?? 'Test message ${DateTime.now().millisecondsSinceEpoch}',
       'created_at': DateTime.now().toIso8601String(),
       'read_at': null,
       'group_chat_id': isGroupChat ? 'group_001' : null,
@@ -48,10 +50,7 @@ class TestUtilities {
     int? monthlyCount,
   }) {
     return {
-      'daily': {
-        'amount': dailyAmount ?? 1500000.0,
-        'count': dailyCount ?? 25,
-      },
+      'daily': {'amount': dailyAmount ?? 1500000.0, 'count': dailyCount ?? 25},
       'weekly': {
         'amount': weeklyAmount ?? 8500000.0,
         'count': weeklyCount ?? 145,
@@ -112,9 +111,9 @@ class TestUtilities {
         recipientId: recipientId,
         message: messageText,
       );
-      
+
       await Future.delayed(timeout);
-      
+
       // In real test, would verify in database
       return true;
     } catch (e) {
@@ -143,14 +142,15 @@ class TestUtilities {
     Duration timeout = const Duration(milliseconds: 500),
   }) async {
     try {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: destinationBuilder),
-      );
-      
+      if (!context.mounted) return false;
+
+      Navigator.push(context, MaterialPageRoute(builder: destinationBuilder));
+
       await Future.delayed(timeout);
+
+      if (!context.mounted) return false;
       Navigator.pop(context);
-      
+
       return true;
     } catch (e) {
       return false;
@@ -165,10 +165,12 @@ class TestUtilities {
       final stopwatch = Stopwatch()..start();
       await Future.delayed(expectedDuration);
       stopwatch.stop();
-      
-      final variance = (stopwatch.elapsedMilliseconds - expectedDuration.inMilliseconds).abs();
+
+      final variance =
+          (stopwatch.elapsedMilliseconds - expectedDuration.inMilliseconds)
+              .abs();
       final acceptable = variance < 100; // 100ms tolerance
-      
+
       if (acceptable) {
         return true;
       } else {
@@ -185,6 +187,7 @@ class TestUtilities {
     String errorMessage,
   ) async {
     try {
+      if (!context.mounted) return false;
       // This would normally show error in ErrorHandler
       return true;
     } catch (e) {
@@ -196,7 +199,6 @@ class TestUtilities {
   static Future<Map<String, bool>> runAllTests({
     required BuildContext context,
   }) async {
-    
     final results = <String, bool>{};
 
     // Test 1: Data generation
@@ -205,11 +207,12 @@ class TestUtilities {
       final message = generateMockMessage();
       final sales = generateMockSalesData();
       final products = generateMockLowStockProducts();
-      
-      results['Data Generation'] = user.isNotEmpty && 
-                                   message.isNotEmpty && 
-                                   sales.isNotEmpty &&
-                                   products.isNotEmpty;
+
+      results['Data Generation'] =
+          user.isNotEmpty &&
+          message.isNotEmpty &&
+          sales.isNotEmpty &&
+          products.isNotEmpty;
     } catch (e) {
       results['Data Generation'] = false;
     }
@@ -234,13 +237,17 @@ class TestUtilities {
     results['Animation Performance'] = await verifyAnimationPerformance();
 
     // Test 6: Error handling
-    results['Error Handling'] = await verifyErrorHandling(
-      context,
-      'Test error message',
-    );
+    if (context.mounted) {
+      results['Error Handling'] = await verifyErrorHandling(
+        context,
+        'Test error message',
+      );
+    } else {
+      results['Error Handling'] = false;
+    }
 
     // Print summary
-    
+
     final passed = results.values.where((v) => v).length;
     final total = results.length;
 
@@ -249,7 +256,6 @@ class TestUtilities {
     });
 
     debugPrint('Test Summary: $passed / $total passed');
-    
 
     return results;
   }
@@ -276,9 +282,10 @@ class _AnimationTestWidgetState extends State<AnimationTestWidget>
       vsync: this,
     );
 
-    _animation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _animation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
     _controller.forward();
   }

@@ -44,6 +44,12 @@ Menampilkan:
 Data Source: Outlet investment data from Supabase
 Profit Calculation: Estimated based on investment amount
 
+### investor_home_screen.dart
+Tombol **Detil** pada ringkasan profit bulanan dan harian membuka rincian:
+- Omset dan laba dari ringkasan penjualan pada periode tersebut
+- Bonus barista dan uang makan dari data serah terima kas outlet
+- Profit share sesuai persentase investor
+
 ### investor_revenue_screen.dart
 Menampilkan:
 - Period selector (Daily, Weekly, Monthly)

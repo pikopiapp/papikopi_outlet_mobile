@@ -102,8 +102,9 @@ class _ManagerProfileScreenState extends State<ManagerProfileScreen> {
         }
 
         final user = snapshot.data;
-        if (user == null)
+        if (user == null) {
           return const Center(child: Text('Data pengguna tidak ditemukan'));
+        }
 
         return Scaffold(
           body: SingleChildScrollView(

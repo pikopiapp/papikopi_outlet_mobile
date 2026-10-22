@@ -4,6 +4,7 @@ class User {
   final String name;
   final String role; // 'barista', 'manager', 'admin'
   final String outletId;
+  final bool isActive;
   final String? avatarUrl;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -14,6 +15,7 @@ class User {
     required this.name,
     required this.role,
     required this.outletId,
+    this.isActive = true,
     this.avatarUrl,
     required this.createdAt,
     this.updatedAt,
@@ -33,8 +35,9 @@ class User {
     if (email == null) throw Exception('Missing required field: email');
     if (name == null) throw Exception('Missing required field: name');
     if (role == null) throw Exception('Missing required field: role');
-    if (createdAt == null)
+    if (createdAt == null) {
       throw Exception('Missing required field: created_at');
+    }
 
     // outlet_id can be null for some roles
 
@@ -44,6 +47,7 @@ class User {
       name: name as String,
       role: role as String,
       outletId: (outletId as String?) ?? '',
+      isActive: json['is_active'] as bool? ?? true,
       avatarUrl: avatarUrl as String?,
       createdAt: DateTime.parse(createdAt as String).toUtc(),
       updatedAt: json['updated_at'] != null
@@ -59,6 +63,7 @@ class User {
       'name': name,
       'role': role,
       'outlet_id': outletId,
+      'is_active': isActive,
       'avatar_url': avatarUrl,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),

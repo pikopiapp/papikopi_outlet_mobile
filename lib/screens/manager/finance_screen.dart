@@ -3348,8 +3348,9 @@ class _HolidayCalendarScreenState extends State<HolidayCalendarScreen> {
       Color bg = Colors.transparent;
       if (customDesc != null) {
         bg = Colors.red.withValues(alpha: 0.18);
-      } else if (isWeekend)
+      } else if (isWeekend) {
         bg = Colors.orange.withValues(alpha: 0.12);
+      }
 
       return GestureDetector(
         onTap: () {

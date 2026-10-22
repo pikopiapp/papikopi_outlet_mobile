@@ -697,11 +697,11 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                                   ?.toDouble() ??
                               0.0;
 
-                          print(
+                          debugPrint(
                             'DEBUG barista_payment_screen - $baristaName: statusType=$statusType, handoverStatus=$handoverStatus, shortfallReceiptRecorded=$shortfallReceiptRecorded, kekuranganUpah=$kekuranganUpah',
                           );
 
-                          print(
+                          debugPrint(
                             'DEBUG barista_payment_screen - ${baristaData['name']} | shortfallReceiptRecorded=$shortfallReceiptRecorded, statusType=$statusType',
                           );
 
@@ -729,11 +729,11 @@ class _BaristaPaymentScreenState extends State<BaristaPaymentScreen> {
                               ? statusType
                               : calculatedSettlementType;
 
-                          print(
+                          debugPrint(
                             'DEBUG barista_payment_screen - settlementType: DB=$statusType, calculated=$calculatedSettlementType, final=$settlementType',
                           );
                           if (settlementType == 'shortfall') {
-                            print(
+                            debugPrint(
                               'DEBUG barista_payment_screen - SHORTFALL: kekuranganUpah=$kekuranganUpah, handoverStatus=$handoverStatus',
                             );
                           }

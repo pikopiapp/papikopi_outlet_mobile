@@ -284,7 +284,8 @@ class _StockScreenState extends State<StockScreen>
                 headingRowColor: WidgetStateProperty.all(AppColors.background),
                 dataRowColor: WidgetStateProperty.all(AppColors.surface),
                 headingRowHeight: 50,
-                dataRowHeight: 56,
+                dataRowMinHeight: 56,
+                dataRowMaxHeight: 56,
                 columns: const [
                   DataColumn(label: Text('Produk')),
                   DataColumn(label: Text('Harga'), numeric: true),
@@ -934,7 +935,8 @@ class _StockScreenState extends State<StockScreen>
                     ),
                     dataRowColor: WidgetStateProperty.all(AppColors.surface),
                     headingRowHeight: 50,
-                    dataRowHeight: 56,
+                    dataRowMinHeight: 56,
+                    dataRowMaxHeight: 56,
                     columns: [
                       DataColumn(
                         label: Text(
@@ -2406,8 +2408,9 @@ class _StockScreenState extends State<StockScreen>
                               );
 
                           if (mounted) {
-                            if (dialogContext.mounted)
+                            if (dialogContext.mounted) {
                               Navigator.pop(dialogContext);
+                            }
 
                             if (success) {
                               // Show success dialog using captured navigator/context
@@ -2811,8 +2814,9 @@ class _StockScreenState extends State<StockScreen>
                               );
 
                           if (mounted) {
-                            if (dialogContext.mounted)
+                            if (dialogContext.mounted) {
                               Navigator.pop(dialogContext);
+                            }
                             notesController.dispose();
 
                             if (success) {

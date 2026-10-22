@@ -129,10 +129,7 @@ class SupabaseService {
       const Duration(milliseconds: 1),
     );
 
-    return {
-      'start': businessDayStartUtc,
-      'end': businessDayEndUtc,
-    };
+    return {'start': businessDayStartUtc, 'end': businessDayEndUtc};
   }
 
   DateTime resolveBusinessDayDate(
@@ -579,11 +576,16 @@ class SupabaseService {
     required List<Map<String, dynamic>> items,
     DateTime? createdAt,
   }) async {
+    String? saleId;
     try {
+      if (items.isEmpty) {
+        throw Exception('Transaksi harus memiliki minimal satu item');
+      }
+
       // 🔧 FIX: Generate UUID locally for reliable sale ID
       // This ensures sale_items will always link to the correct sale
       const uuid = Uuid();
-      final saleId = uuid.v4();
+      saleId = uuid.v4();
 
       final normalizedCreatedAt = (createdAt ?? DateTime.now()).toUtc();
 
@@ -599,22 +601,31 @@ class SupabaseService {
         'created_at': normalizedCreatedAt.toIso8601String(),
       });
 
-      // Insert sale items with guaranteed correct sale_id
-      for (final item in items) {
+      // Insert sale items as one request so a failed item batch can be rolled back.
+      final saleItems = items.map((item) {
         final price = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
         final hpp = (item['hpp'] as num?)?.toDouble() ?? 0.0;
 
-        await _client.from('sale_items').insert({
+        return {
           'sale_id': saleId, // 🔧 Use generated saleId directly
           'product_id': item['product_id'],
           'quantity': item['quantity'],
           'price': price,
           'hpp': hpp,
-        });
-      }
+        };
+      }).toList();
+
+      await _client.from('sale_items').insert(saleItems);
 
       return saleId;
     } catch (e) {
+      if (saleId != null) {
+        try {
+          await _client.from('sales').delete().eq('id', saleId);
+        } catch (_) {
+          // Preserve the original checkout error if cleanup also fails.
+        }
+      }
       rethrow;
     }
   }
@@ -702,32 +713,51 @@ class SupabaseService {
   }
 
   /// Get monthly gratis transaction statistics
+  /// Statistik pemakaian GRATIS bulanan per outlet — basis CUP (item).
+  ///
+  /// Mengembalikan:
+  /// - `total_cups`: total cup (jumlah quantity semua sale_items) bulan ini
+  /// - `gratis_cups`: cup yang berasal dari transaksi ber-metode GRATIS
   Future<Map<String, int>> getMonthlyGratisStats({
     required String outletId,
     required DateTime monthStart,
   }) async {
     try {
-      final monthEnd = DateTime(monthStart.year, monthStart.month + 1, 0);
+      final monthEnd = DateTime(
+        monthStart.year,
+        monthStart.month + 1,
+        0,
+        23,
+        59,
+        59,
+      );
 
-      // Get all sales for this month
+      // Ambil semua sales bulan ini beserta quantity item-nya.
       final response = await _client
           .from('sales')
-          .select('id, payment_method')
+          .select('id, payment_method, sale_items(quantity)')
           .eq('outlet_id', outletId)
           .gte('created_at', monthStart.toIso8601String())
           .lte('created_at', monthEnd.toIso8601String());
 
       final salesList = response as List<dynamic>;
-      final gratisCount = salesList
-          .where(
-            (sale) =>
-                (sale['payment_method'] as String?)?.toUpperCase() == 'GRATIS',
-          )
-          .length;
+      int totalCups = 0;
+      int gratisCups = 0;
 
-      return {'total': salesList.length, 'gratis_count': gratisCount};
+      for (final sale in salesList) {
+        final isGratis =
+            (sale['payment_method'] as String?)?.toUpperCase() == 'GRATIS';
+        final items = (sale['sale_items'] as List<dynamic>?) ?? const [];
+        for (final item in items) {
+          final qty = (item['quantity'] as num?)?.toInt() ?? 0;
+          totalCups += qty;
+          if (isGratis) gratisCups += qty;
+        }
+      }
+
+      return {'total_cups': totalCups, 'gratis_cups': gratisCups};
     } catch (e) {
-      return {'total': 0, 'gratis_count': 0};
+      return {'total_cups': 0, 'gratis_cups': 0};
     }
   }
 
@@ -1804,18 +1834,28 @@ class SupabaseService {
   }
 
   Future<void> _saveAvatarUrlToUser(String userId, String publicUrl) async {
-    final columnCandidates = <String>['avatar_url', 'photo_url', 'profile_image_url'];
+    final columnCandidates = <String>[
+      'avatar_url',
+      'photo_url',
+      'profile_image_url',
+    ];
 
     Object? lastError;
     for (final column in columnCandidates) {
       try {
-        await _client.from('users').update({column: publicUrl}).eq('id', userId);
+        await _client
+            .from('users')
+            .update({column: publicUrl})
+            .eq('id', userId);
         return;
       } catch (e) {
         lastError = e;
         final message = e.toString().toLowerCase();
-        final isMissingColumnError = message.contains('column') &&
-            (message.contains('does not exist') || message.contains('not exist') || message.contains('undefined column'));
+        final isMissingColumnError =
+            message.contains('column') &&
+            (message.contains('does not exist') ||
+                message.contains('not exist') ||
+                message.contains('undefined column'));
         if (!isMissingColumnError || column == columnCandidates.last) {
           rethrow;
         }
@@ -1835,12 +1875,15 @@ class SupabaseService {
 
     try {
       final bytes = await imageFile.readAsBytes();
-      final fileName = 'users/$userId/${DateTime.now().millisecondsSinceEpoch}_${imageFile.name}';
-      await _client.storage.from('avatars').uploadBinary(
-        fileName,
-        bytes,
-        fileOptions: const FileOptions(cacheControl: '3600', upsert: true),
-      );
+      final fileName =
+          'users/$userId/${DateTime.now().millisecondsSinceEpoch}_${imageFile.name}';
+      await _client.storage
+          .from('avatars')
+          .uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: const FileOptions(cacheControl: '3600', upsert: true),
+          );
 
       final publicUrl = _client.storage.from('avatars').getPublicUrl(fileName);
       await _saveAvatarUrlToUser(userId, publicUrl);
@@ -1849,7 +1892,8 @@ class SupabaseService {
       final message = e.toString().toLowerCase();
       if (e is PostgrestException) {
         final detail = e.message.toLowerCase();
-        if (detail.contains('row-level security') || detail.contains('policy')) {
+        if (detail.contains('row-level security') ||
+            detail.contains('policy')) {
           throw Exception(
             'Upload diblokir oleh RLS Supabase. Pastikan user sudah login dengan sesi auth yang valid dan policy bucket avatars sudah mengizinkan write.',
           );
@@ -1873,13 +1917,18 @@ class SupabaseService {
         );
       }
 
-      if (message.contains('policy') || message.contains('row-level security') || message.contains('permission denied')) {
+      if (message.contains('policy') ||
+          message.contains('row-level security') ||
+          message.contains('permission denied')) {
         throw Exception(
           'Upload diblokir oleh RLS Supabase. Pastikan user sudah login dengan sesi auth yang valid dan policy bucket avatars sudah mengizinkan write.',
         );
       }
 
-      if (message.contains('tls') || message.contains('ssl') || message.contains('handshake') || message.contains('certificate')) {
+      if (message.contains('tls') ||
+          message.contains('ssl') ||
+          message.contains('handshake') ||
+          message.contains('certificate')) {
         throw Exception(
           'Koneksi ke Supabase Storage gagal karena masalah TLS/SSL. Periksa jaringan, proxy, atau pengaturan HTTPS pada perangkat.',
         );
@@ -2120,10 +2169,13 @@ class SupabaseService {
     }
 
     try {
+      final investorIds = await _resolveInvestorAssignmentIds(investorId);
+      if (investorIds.isEmpty) return [];
+
       final response = await _client
           .from('investor_assignments')
           .select('outlet_id')
-          .eq('investor_id', investorId)
+          .inFilter('investor_id', investorIds)
           .eq('status', 'active');
 
       final rows = response as List<dynamic>;
@@ -2162,10 +2214,8 @@ class SupabaseService {
     }
 
     try {
-      // Gunakan investorId dari caller (AuthProvider biasanya sudah melakukan remap id untuk role investor)
-      // Hindari override dengan session.user.id karena bisa menyebabkan mismatch
-      // antara id auth user vs id investor yang dipakai oleh tabel investor_assignments.
-      final effectiveInvestorId = investorId.trim();
+      final investorIds = await _resolveInvestorAssignmentIds(investorId);
+      if (investorIds.isEmpty) return [];
 
       final endIso = DateTime.now().toUtc().toIso8601String();
       final startIso = DateTime.now()
@@ -2177,7 +2227,7 @@ class SupabaseService {
       final assignmentsResponse = await _client
           .from('investor_assignments')
           .select('outlet_id, investment_amount, margin_percentage, status')
-          .eq('investor_id', effectiveInvestorId);
+          .inFilter('investor_id', investorIds);
 
       final assignmentsRows = (assignmentsResponse as List<dynamic>)
           .whereType<Map<String, dynamic>>()
@@ -2275,91 +2325,31 @@ class SupabaseService {
     }
 
     try {
-      final effectiveInvestorId = investorId.trim();
-
-      // First, verify investor exists in system
-      try {
-        final userData = await _client
-            .from('users')
-            .select('id, email, role')
-            .eq('id', effectiveInvestorId)
-            .maybeSingle();
-
-        if (userData != null) {
-        } else {}
-      } catch (e) {}
-
-      // Query investor_assignments with direct outlet join
+      final investorIds = await _resolveInvestorAssignmentIds(investorId);
+      if (investorIds.isEmpty) return [];
 
       List<Map<String, dynamic>> response;
       try {
-        // Try with outlet join first
         response = await _client
             .from('investor_assignments')
             .select(
-              'id, outlet_id, investment_amount, margin_percentage, status, created_at, outlets(id, name, type, address)',
+              'id, investor_id, outlet_id, investment_amount, margin_percentage, status, start_date, created_at, outlets(id, name, type, address)',
             )
-            .eq('investor_id', effectiveInvestorId)
+            .inFilter('investor_id', investorIds)
             .order('created_at', ascending: false);
-      } catch (joinError) {
-        // Fallback: query without join
+      } catch (_) {
         response = await _client
             .from('investor_assignments')
             .select(
-              'id, outlet_id, investment_amount, margin_percentage, status, created_at',
+              'id, investor_id, outlet_id, investment_amount, margin_percentage, status, start_date, created_at',
             )
-            .eq('investor_id', effectiveInvestorId)
+            .inFilter('investor_id', investorIds)
             .order('created_at', ascending: false);
       }
 
       final assignmentRows = (response as List<dynamic>)
           .whereType<Map<String, dynamic>>()
           .toList();
-
-      if (assignmentRows.isNotEmpty) {
-      } else {
-        // Fallback: Check all investor_ids in the table for debugging
-        try {
-          final allAssignments = await _client
-              .from('investor_assignments')
-              .select('investor_id')
-              .limit(5);
-
-          final uniqueIds = <String>{};
-          (allAssignments as List<dynamic>?)?.forEach((row) {
-            final id = (row as Map<String, dynamic>)['investor_id'] as String?;
-            if (id != null) uniqueIds.add(id);
-          });
-
-          // If we found investor_ids in database, query with first one for dev testing
-          if (uniqueIds.isNotEmpty) {
-            final firstInvestorId = uniqueIds.first;
-
-            final devResponse = await _client
-                .from('investor_assignments')
-                .select(
-                  'id, outlet_id, investment_amount, margin_percentage, status, created_at',
-                )
-                .eq('investor_id', firstInvestorId)
-                .order('created_at', ascending: false);
-
-            final devRows = (devResponse as List<dynamic>)
-                .whereType<Map<String, dynamic>>()
-                .toList();
-
-            if (devRows.isNotEmpty) {
-              return devRows.map((assignment) {
-                return <String, dynamic>{
-                  ...assignment,
-                  'outlet_name': 'Test Outlet (Dev)',
-                  'outlet_type': 'dev_test',
-                  'outlet_address': 'Development Testing',
-                };
-              }).toList();
-            }
-          }
-        } catch (e) {}
-      }
 
       if (assignmentRows.isEmpty) {
         return [];
@@ -2399,6 +2389,52 @@ class SupabaseService {
     } catch (e) {
       return [];
     }
+  }
+
+  Future<List<String>> _resolveInvestorAssignmentIds(String investorId) async {
+    final providedId = investorId.trim();
+    final sessionUser = _client.auth.currentSession?.user;
+    if (sessionUser == null) {
+      return providedId.isEmpty ? [] : [providedId];
+    }
+
+    final candidateIds = <String>{sessionUser.id};
+    final sessionEmail = sessionUser.email?.trim().toLowerCase();
+
+    final profileById = await _client
+        .from('users')
+        .select('id, email')
+        .eq('id', sessionUser.id)
+        .maybeSingle();
+    final profiles = <Map<String, dynamic>>[];
+    if (profileById != null) {
+      profiles.add(Map<String, dynamic>.from(profileById));
+    }
+
+    final profileEmail = (profileById?['email'] as String?)
+        ?.trim()
+        .toLowerCase();
+    if (sessionEmail != null &&
+        sessionEmail.isNotEmpty &&
+        profileEmail != sessionEmail) {
+      final profileByEmail = await _client
+          .from('users')
+          .select('id, email')
+          .ilike('email', sessionEmail)
+          .maybeSingle();
+      if (profileByEmail != null) {
+        profiles.add(Map<String, dynamic>.from(profileByEmail));
+      }
+    }
+
+    for (final profile in profiles) {
+      final profileId = profile['id'] as String?;
+      if (profileId != null && profileId.trim().isNotEmpty) {
+        candidateIds.add(profileId.trim());
+      }
+    }
+
+    return candidateIds.toList();
   }
 
   // Get all outlets
@@ -3335,27 +3371,10 @@ class SupabaseService {
           .gte('created_at', weeklyStart.toIso8601String())
           .lte('created_at', dailyEnd.toIso8601String());
 
-      // Calculate monthly (last 30 business days)
-      DateTime monthlyStartLocal;
-      if (businessDayStartHour >= 12) {
-        monthlyStartLocal = DateTime(
-          year,
-          month,
-          day - 30 - 1,
-          businessDayStartHour,
-          0,
-          0,
-        );
-      } else {
-        monthlyStartLocal = DateTime(
-          year,
-          month,
-          day - 30,
-          businessDayStartHour,
-          0,
-          0,
-        );
-      }
+      // Calculate monthly (kalender bulan berjalan, mulai tanggal 1 jam 00:00 waktu lokal)
+      // FIX: sebelumnya "last 30 business days" (rolling) sehingga tidak sama
+      // dengan dashboard web yang memakai awal bulan kalender.
+      final monthlyStartLocal = DateTime(year, month, 1, 0, 0, 0);
       final monthlyStart = monthlyStartLocal.toUtc();
 
       final monthlyResponse = await _client
@@ -4526,10 +4545,7 @@ class SupabaseService {
 
       final businessDayStartHour =
           (outletData?['business_day_start_hour'] as int?) ?? 4;
-      final range = buildBusinessDayRange(
-        effectiveDate,
-        businessDayStartHour,
-      );
+      final range = buildBusinessDayRange(effectiveDate, businessDayStartHour);
 
       final allocationsResponse = await _client
           .from('showcase_allocations')
@@ -4665,7 +4681,8 @@ class SupabaseService {
           .eq('id', allocationId);
 
       if (allocationResponse != null) {
-        final showcaseProductId = allocationResponse['showcase_product_id'] as String?;
+        final showcaseProductId =
+            allocationResponse['showcase_product_id'] as String?;
         final allocationOutletId = allocationResponse['outlet_id'] as String?;
         if (showcaseProductId != null &&
             showcaseProductId.isNotEmpty &&
@@ -4721,7 +4738,9 @@ class SupabaseService {
 
       final allReturns = await _client
           .from('product_returns')
-          .select('id, product_id, outlet_id, return_reason, condition_status, resolution_status, return_date')
+          .select(
+            'id, product_id, outlet_id, return_reason, condition_status, resolution_status, return_date',
+          )
           .eq('outlet_id', outletId)
           .gte('return_date', extendedStart.toIso8601String())
           .lte('return_date', extendedEnd.toIso8601String())
@@ -4733,7 +4752,9 @@ class SupabaseService {
       // Get outlet business day start hour (fallback to 4)
       int businessDayStartHour = 4;
       try {
-        businessDayStartHour = await getBusinessDayStartHour(outletId: outletId);
+        businessDayStartHour = await getBusinessDayStartHour(
+          outletId: outletId,
+        );
       } catch (_) {
         // keep default
       }
@@ -4759,14 +4780,22 @@ class SupabaseService {
         }
 
         final local = parsed.toLocal();
-        DateTime returnBusinessDate = DateTime(local.year, local.month, local.day);
+        DateTime returnBusinessDate = DateTime(
+          local.year,
+          local.month,
+          local.day,
+        );
         if (local.hour < businessDayStartHour) {
-          returnBusinessDate = returnBusinessDate.subtract(const Duration(days: 1));
+          returnBusinessDate = returnBusinessDate.subtract(
+            const Duration(days: 1),
+          );
         }
 
         // Targeted verbose logging for a specific outlet to help debugging
         if (outletId == '46bac30c-133a-4f38-ae4d-db404f1feee0') {
-          print('[DEBUG_RETURN_ROW] id=${row['id']} product_id=${row['product_id']} raw=$raw parsed=$parsed local=$local businessDay=$returnBusinessDate');
+          print(
+            '[DEBUG_RETURN_ROW] id=${row['id']} product_id=${row['product_id']} raw=$raw parsed=$parsed local=$local businessDay=$returnBusinessDate',
+          );
         }
 
         if (returnBusinessDate.year == selectedBusinessDate.year &&
@@ -4787,7 +4816,9 @@ class SupabaseService {
           }
         } else {
           if (outletId == '46bac30c-133a-4f38-ae4d-db404f1feee0') {
-            print('[DEBUG_RETURN_EXCLUDED] id=${row['id']} product_id=${row['product_id']} maps_to=$returnBusinessDate not_selected=$selectedBusinessDate');
+            print(
+              '[DEBUG_RETURN_EXCLUDED] id=${row['id']} product_id=${row['product_id']} maps_to=$returnBusinessDate not_selected=$selectedBusinessDate',
+            );
           }
         }
       }
@@ -5074,12 +5105,20 @@ class SupabaseService {
       double totalHpp = 0;
       double totalBonus = 0;
       double totalProfit = 0;
+      var transactionCount = 0;
 
       for (final sale in sales) {
-        totalSales += (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
-        totalHpp += (sale['hpp_total'] as num?)?.toDouble() ?? 0.0;
+        if ((sale['payment_method'] as String?)?.toUpperCase() == 'GRATIS') {
+          continue;
+        }
+
+        final saleAmount = (sale['total_amount'] as num?)?.toDouble() ?? 0.0;
+        final saleHpp = (sale['hpp_total'] as num?)?.toDouble() ?? 0.0;
+        totalSales += saleAmount;
+        totalHpp += saleHpp;
         totalBonus += (sale['bonus_amount'] as num?)?.toDouble() ?? 0.0;
-        totalProfit += (sale['profit'] as num?)?.toDouble() ?? 0.0;
+        totalProfit += saleAmount - saleHpp;
+        transactionCount++;
       }
 
       return {
@@ -5087,7 +5126,7 @@ class SupabaseService {
         'totalHpp': totalHpp,
         'totalBonus': totalBonus,
         'totalProfit': totalProfit,
-        'transactionCount': sales.length,
+        'transactionCount': transactionCount,
       };
     } catch (e) {
       return {'totalSales': 0.0, 'totalHpp': 0.0, 'totalBonus': 0.0};
@@ -5200,7 +5239,10 @@ class SupabaseService {
         (total) => total + amount,
         ifAbsent: () => amount,
       );
-      if (baristaId != null && activeBaristaIds.contains(baristaId)) {
+      final hasEligibleBarista = calendarDays
+          ? baristaId != null
+          : baristaId != null && activeBaristaIds.contains(baristaId);
+      if (hasEligibleBarista) {
         salesByBaristaAndDay.update(
           '$baristaId|$dayKey',
           (total) => total + amount,
@@ -5210,13 +5252,24 @@ class SupabaseService {
     }
 
     var bonus = 0.0;
-    for (final entry in salesByBaristaAndDay.entries) {
-      if (entry.value <= 0) continue;
-      final businessDay = DateTime.parse(entry.key.split('|').last);
-      bonus += calculateBonus(
-        entry.value,
-        isHoliday: isHolidaySync(businessDay),
-      ).totalBonus;
+    if (calendarDays) {
+      for (final entry in salesByOutletAndDay.entries) {
+        if (entry.value <= 0) continue;
+        final calendarDay = DateTime.parse(entry.key);
+        bonus += calculateBonus(
+          entry.value,
+          isHoliday: isHolidaySync(calendarDay),
+        ).totalBonus;
+      }
+    } else {
+      for (final entry in salesByBaristaAndDay.entries) {
+        if (entry.value <= 0) continue;
+        final businessDay = DateTime.parse(entry.key.split('|').last);
+        bonus += calculateBonus(
+          entry.value,
+          isHoliday: isHolidaySync(businessDay),
+        ).totalBonus;
+      }
     }
 
     var mealAllowance = 0.0;
@@ -6367,57 +6420,92 @@ class SupabaseService {
         'DEBUG getInvestorMonthlyProfits - Getting profits for investor: $investorId',
       );
 
-      // Get all outlet assignments for this investor
-      final assignments = await _client
-          .from('investor_assignments')
-          .select('outlet_id, margin_percentage')
-          .eq('investor_id', investorId);
+      // Use the same investor ID resolution as the other investor screens.
+      final assignments = await getInvestorAssignments(investorId: investorId);
 
       print(
         'DEBUG getInvestorMonthlyProfits - Found ${assignments.length} assignments',
       );
 
-      if ((assignments as List).isEmpty) {
-        return [];
+      if (assignments.isEmpty) return [];
+
+      final assignmentByOutlet = <String, Map<String, dynamic>>{};
+      for (final assignment in assignments) {
+        final outletId = assignment['outlet_id'] as String?;
+        if (outletId == null || outletId.isEmpty) continue;
+        assignmentByOutlet.putIfAbsent(outletId, () => assignment);
       }
+      if (assignmentByOutlet.isEmpty) return [];
 
-      final outletIds = (assignments as List<dynamic>)
-          .whereType<Map<String, dynamic>>()
-          .map((a) => a['outlet_id'] as String)
-          .toList();
+      final nowUtc = DateTime.now().toUtc();
+      final nowWib = nowUtc.add(const Duration(hours: 7));
+      final currentMonth = DateTime(nowWib.year, nowWib.month);
+      final firstMonth = DateTime(nowWib.year, nowWib.month - 11);
+      final monthlyProfits = <String, double>{};
+      final monthlyStatus = <String, String>{};
 
-      // Get sales for last 12 months grouped by month
-      final now = DateTime.now();
-      final oneYearAgo = now.subtract(const Duration(days: 365));
-      final startDate = oneYearAgo.toUtc().toIso8601String();
+      for (
+        var month = firstMonth;
+        !month.isAfter(currentMonth);
+        month = DateTime(month.year, month.month + 1)
+      ) {
+        final monthStartUtc = DateTime.utc(
+          month.year,
+          month.month,
+          1,
+        ).subtract(const Duration(hours: 7));
+        final nextMonthStartUtc = DateTime.utc(
+          month.year,
+          month.month + 1,
+          1,
+        ).subtract(const Duration(hours: 7));
+        final isCurrentMonth =
+            month.year == currentMonth.year &&
+            month.month == currentMonth.month;
+        final monthEndUtc = isCurrentMonth
+            ? (nowUtc.isBefore(monthStartUtc) ? monthStartUtc : nowUtc)
+            : nextMonthStartUtc.subtract(const Duration(microseconds: 1));
+        final calendarEndDate = isCurrentMonth
+            ? DateTime(nowWib.year, nowWib.month, nowWib.day)
+            : DateTime(month.year, month.month + 1, 0);
+        final monthKey =
+            '${month.year}-${month.month.toString().padLeft(2, '0')}';
+        var monthlyInvestorProfit = 0.0;
+        var hasSales = false;
 
-      final sales = await _client
-          .from('sales')
-          .select('created_at, profit')
-          .inFilter('outlet_id', outletIds)
-          .gte('created_at', startDate);
+        for (final entry in assignmentByOutlet.entries) {
+          final outletId = entry.key;
+          final assignment = entry.value;
+          final assignmentStartDate = assignment['start_date'] as String?;
+          final summary = await getHppSummary(
+            outletId: outletId,
+            startDate: monthStartUtc,
+            endDate: monthEndUtc,
+            assignmentStartDate: assignmentStartDate,
+          );
+          final totalSales = (summary['totalSales'] as num?)?.toDouble() ?? 0.0;
+          if (totalSales <= 0) continue;
 
-      print(
-        'DEBUG getInvestorMonthlyProfits - Found ${sales.length} sales records',
-      );
-
-      // Group by month and calculate investor profit
-      Map<String, double> monthlyProfits = {};
-      Map<String, String> monthlyStatus = {};
-
-      for (final sale in sales) {
-        try {
-          final createdAt = sale['created_at'] as String;
-          final profit = (sale['profit'] as num?)?.toDouble() ?? 0.0;
-
-          final date = DateTime.parse(createdAt);
-          final monthKey =
-              '${date.year}-${date.month.toString().padLeft(2, '0')}';
-
-          monthlyProfits[monthKey] = (monthlyProfits[monthKey] ?? 0.0) + profit;
-        } catch (e) {
-          print('DEBUG getInvestorMonthlyProfits - Error processing sale: $e');
+          hasSales = true;
+          final grossProfit =
+              (summary['totalProfit'] as num?)?.toDouble() ?? 0.0;
+          final baristaCosts = await getInvestorBaristaCostSummary(
+            outletId: outletId,
+            startBusinessDate: DateTime(month.year, month.month),
+            endBusinessDate: calendarEndDate,
+            assignmentStartDate: assignmentStartDate,
+            calendarDays: true,
+          );
+          final netProfit =
+              grossProfit -
+              (baristaCosts['bonus'] ?? 0.0) -
+              (baristaCosts['mealAllowance'] ?? 0.0);
+          final marginPercentage =
+              (assignment['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+          monthlyInvestorProfit += netProfit * marginPercentage / 100;
         }
+
+        if (hasSales) monthlyProfits[monthKey] = monthlyInvestorProfit;
       }
 
       // Check which months have been approved (paid)
@@ -6445,10 +6533,6 @@ class SupabaseService {
             monthlyStatus[monthKey] = 'pending';
           }
         }
-      } else {
-        for (final monthKey in monthlyProfits.keys) {
-          monthlyStatus[monthKey] = 'pending';
-        }
       }
 
       // Format response
@@ -6458,15 +6542,6 @@ class SupabaseService {
         final profitAmount = entry.value;
         final status = monthlyStatus[monthKey] ?? 'pending';
 
-        // Get margin percentage (use first assignment)
-        final marginPercentage =
-            ((assignments as List<dynamic>)[0]['margin_percentage'] as num?)
-                ?.toDouble() ??
-            0.0;
-
-        // Calculate investor's share of profit
-        final investorProfit = profitAmount * (marginPercentage / 100);
-
         final parts = monthKey.split('-');
         final year = int.parse(parts[0]);
         final month = int.parse(parts[1]);
@@ -6475,7 +6550,7 @@ class SupabaseService {
         result.add({
           'month': '$monthName $year',
           'monthKey': monthKey,
-          'profit': investorProfit,
+          'profit': profitAmount,
           'status': status,
         });
       }
@@ -6493,7 +6568,7 @@ class SupabaseService {
       return result;
     } catch (e) {
       print('Error getting investor monthly profits: $e');
-      return [];
+      rethrow;
     }
   }
 

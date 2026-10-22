@@ -294,6 +294,10 @@ class _InvestorProfitPaymentScreenState
                                                                   'approved';
                                                             });
 
+                                                            final messenger =
+                                                                ScaffoldMessenger.maybeOf(
+                                                                  context,
+                                                                );
                                                             final success =
                                                                 await _supabaseService
                                                                     .approveInvestorMonthlyProfit(
@@ -303,9 +307,7 @@ class _InvestorProfitPaymentScreenState
 
                                                             if (mounted) {
                                                               if (success) {
-                                                                ScaffoldMessenger.of(
-                                                                  context,
-                                                                ).showSnackBar(
+                                                                messenger?.showSnackBar(
                                                                   SnackBar(
                                                                     content: Text(
                                                                       '✅ Pembayaran profit $monthKey untuk $investorName berhasil',
@@ -322,9 +324,7 @@ class _InvestorProfitPaymentScreenState
                                                                         monthKey,
                                                                       );
                                                                 });
-                                                                ScaffoldMessenger.of(
-                                                                  context,
-                                                                ).showSnackBar(
+                                                                messenger?.showSnackBar(
                                                                   const SnackBar(
                                                                     content: Text(
                                                                       '❌ Gagal memproses pembayaran',

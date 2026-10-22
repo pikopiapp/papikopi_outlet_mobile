@@ -17,6 +17,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
     with InvestorDataMixin {
   List<Map<String, dynamic>> _withdrawalHistory = [];
   bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -30,30 +31,44 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
   }
 
   Future<void> _loadWithdrawalData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
       final authProvider = context.read<AuthProvider>();
       final user = authProvider.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        throw StateError(
+          'Sesi investor tidak ditemukan. Silakan masuk kembali.',
+        );
+      }
 
       final monthlyProfits = await supabaseService.getInvestorMonthlyProfits(
         user.id,
       );
 
+      if (!mounted) return;
       setState(() {
         _withdrawalHistory = monthlyProfits;
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Gagal memuat data penarikan: $e';
+        _isLoading = false;
+      });
     }
   }
 
   String _formatCurrency(double value) {
-    return value.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-      (match) => '${match.group(1)}.',
-    );
+    return value
+        .toStringAsFixed(0)
+        .replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+          (match) => '${match.group(1)}.',
+        );
   }
 
   @override
@@ -66,14 +81,16 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 4),
-              if (_isLoading)
-                const Center(child: CircularProgressIndicator())
-              else if (_withdrawalHistory.isNotEmpty) ...[
-                Row(
-                  children: [
-                    Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Text(
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_month_rounded,
+                    size: 20,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
                       'Penarikan Pendapatan Bulanan',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: AppColors.textPrimary,
@@ -81,9 +98,68 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                         letterSpacing: 0.2,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                  ),
+                  IconButton(
+                    tooltip: 'Muat ulang',
+                    onPressed: _isLoading ? null : _loadWithdrawalData,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (_isLoading)
+                const Center(child: CircularProgressIndicator())
+              else if (_errorMessage != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Text(
+                    _errorMessage!,
+                    style: TextStyle(color: AppColors.error),
+                  ),
+                )
+              else if (_withdrawalHistory.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.altSurface),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 40,
+                        color: AppColors.textSecondary,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Belum ada pendapatan yang dapat ditampilkan.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Data pendapatan bulanan akan muncul setelah outlet memiliki transaksi.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                )
+              else ...[
                 ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -91,11 +167,17 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                   itemBuilder: (context, index) {
                     final item = _withdrawalHistory[index];
                     final month = (item['month'] as String?) ?? '-';
+                    final monthKey = item['monthKey'] as String?;
+                    final nowWib = DateTime.now().toUtc().add(
+                      const Duration(hours: 7),
+                    );
+                    final currentMonthKey =
+                        '${nowWib.year}-'
+                        '${nowWib.month.toString().padLeft(2, '0')}';
+                    final monthLabel = monthKey == currentMonthKey
+                        ? '$month - hari ini'
+                        : month;
                     final profit = (item['profit'] as num?)?.toDouble() ?? 0.0;
-                    final status = (item['status'] as String?) ?? 'pending';
-
-                    final isApproved = status == 'approved';
-                    final isPending = status == 'pending';
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
@@ -103,13 +185,7 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: isApproved
-                              ? AppColors.success.withValues(alpha: 0.3)
-                              : isPending
-                                  ? AppColors.primary.withValues(alpha: 0.2)
-                                  : AppColors.error.withValues(alpha: 0.2),
-                        ),
+                        border: Border.all(color: AppColors.altSurface),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,115 +197,26 @@ class _InvestorWithdrawalScreenState extends State<InvestorWithdrawalScreen>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      month,
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textPrimary,
-                                      ),
+                                      monthLabel,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.textPrimary,
+                                          ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
                                       'Pendapatan: Rp ${_formatCurrency(profit)}',
-                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: AppColors.textSecondary,
-                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: AppColors.textSecondary,
+                                          ),
                                     ),
                                   ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: isApproved
-                                      ? AppColors.success.withValues(alpha: 0.15)
-                                      : isPending
-                                          ? AppColors.primary.withValues(alpha: 0.15)
-                                          : AppColors.error.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  status.toUpperCase(),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: isApproved
-                                        ? AppColors.success
-                                        : isPending
-                                            ? AppColors.primary
-                                            : AppColors.error,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                  decoration: BoxDecoration(
-                                    color: isApproved
-                                        ? AppColors.success.withValues(alpha: 0.15)
-                                        : AppColors.altSurface,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.checklist_rtl_rounded,
-                                        size: 14,
-                                        color: isApproved
-                                            ? AppColors.success
-                                            : AppColors.textSecondary,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Transfer',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: isApproved
-                                              ? AppColors.success
-                                              : AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                  decoration: BoxDecoration(
-                                    color: isApproved
-                                        ? AppColors.success.withValues(alpha: 0.15)
-                                        : AppColors.altSurface,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.receipt_long_rounded,
-                                        size: 14,
-                                        color: isApproved
-                                            ? AppColors.success
-                                            : AppColors.textSecondary,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Bukti',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: isApproved
-                                              ? AppColors.success
-                                              : AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
                                 ),
                               ),
                             ],

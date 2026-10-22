@@ -6,7 +6,6 @@ import '../../providers/product_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../../utils/number_formatter.dart';
-import '../../utils/holiday_detector.dart';
 import '../../utils/timezone_formatter.dart';
 import '../../models/sale.dart';
 import '../../widgets/screen_skeleton.dart';
@@ -79,7 +78,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
       final txDate = toJakartaDate(transaction.createdAt);
       final now = toJakartaDate(DateTime.now());
 
-      final isSameDay = txDate.year == now.year &&
+      final isSameDay =
+          txDate.year == now.year &&
           txDate.month == now.month &&
           txDate.day == now.day;
 
@@ -115,10 +115,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                 Expanded(
                   child: Text(
                     'Tanggal: ${DateFormat('dd MMM yyyy', 'id_ID').format(_selectedDate)}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -133,46 +132,45 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
             child: _isLoading
                 ? const ScreenSkeleton(lineCount: 8, showTitle: false)
                 : _transactions.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.receipt_long_outlined,
-                              size: 48,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Tidak ada pesanan',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.receipt_long_outlined,
+                          size: 48,
+                          color: Colors.grey[400],
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: _transactions.length,
-                        addAutomaticKeepAlives:
-                            false, // Disable keep alive to force rebuild
-                        addRepaintBoundaries:
-                            false, // Disable repaint boundaries for full rebuild
-                        itemBuilder: (context, index) {
-                          final transaction = _transactions[index];
-                          final itemCountStr =
-                              transaction.items.length.toString();
-                          // Special tracking for target transaction
-                          return TransactionCard(
-                            key: ValueKey(
-                              '${transaction.id}-${transaction.totalAmount}-$itemCountStr-${transaction.isEdited}',
-                            ), // Include all data in key
-                            transaction: transaction,
-                            onTap: () => _showTransactionDetail(transaction),
-                            onDelete: () => _confirmDelete(transaction),
-                            canEdit: _isEditAllowedByRole(transaction),
-                          );
-                        },
-                      ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Tidak ada pesanan',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _transactions.length,
+                    addAutomaticKeepAlives:
+                        false, // Disable keep alive to force rebuild
+                    addRepaintBoundaries:
+                        false, // Disable repaint boundaries for full rebuild
+                    itemBuilder: (context, index) {
+                      final transaction = _transactions[index];
+                      final itemCountStr = transaction.items.length.toString();
+                      // Special tracking for target transaction
+                      return TransactionCard(
+                        key: ValueKey(
+                          '${transaction.id}-${transaction.totalAmount}-$itemCountStr-${transaction.isEdited}',
+                        ), // Include all data in key
+                        transaction: transaction,
+                        onTap: () => _showTransactionDetail(transaction),
+                        onDelete: () => _confirmDelete(transaction),
+                        canEdit: _isEditAllowedByRole(transaction),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -507,7 +505,10 @@ class TransactionCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: transaction.paymentMethod.toUpperCase() == 'GRATIS'
                         ? Colors.orange.shade100
@@ -526,7 +527,8 @@ class TransactionCard extends StatelessWidget {
                             ? Icons.qr_code_scanner
                             : Icons.money,
                         size: 14,
-                        color: transaction.paymentMethod.toUpperCase() == 'GRATIS'
+                        color:
+                            transaction.paymentMethod.toUpperCase() == 'GRATIS'
                             ? Colors.orange.shade800
                             : transaction.paymentMethod.toUpperCase() == 'QRIS'
                             ? Colors.blue.shade800
@@ -534,13 +536,20 @@ class TransactionCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Metode: ${transaction.paymentMethod.toUpperCase() == 'GRATIS' ? 'Gratis' : transaction.paymentMethod.toUpperCase() == 'QRIS' ? 'QRIS' : 'Cash'}',
+                        'Metode: ${transaction.paymentMethod.toUpperCase() == 'GRATIS'
+                            ? 'Gratis'
+                            : transaction.paymentMethod.toUpperCase() == 'QRIS'
+                            ? 'QRIS'
+                            : 'Cash'}',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: transaction.paymentMethod.toUpperCase() == 'GRATIS'
+                          color:
+                              transaction.paymentMethod.toUpperCase() ==
+                                  'GRATIS'
                               ? Colors.orange.shade800
-                              : transaction.paymentMethod.toUpperCase() == 'QRIS'
+                              : transaction.paymentMethod.toUpperCase() ==
+                                    'QRIS'
                               ? Colors.blue.shade800
                               : Colors.green.shade800,
                         ),
@@ -759,10 +768,10 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
         monthStart: monthStart,
       );
 
-      final totalTransactions = result['total'] as int;
-      final gratisCount = result['gratis_count'] as int;
+      final totalCups = result['total_cups'] as int;
+      final gratisCups = result['gratis_cups'] as int;
 
-      if (totalTransactions == 0) {
+      if (totalCups == 0) {
         setState(() {
           _gratisLimitReached = false;
           _gratisLimitMessage = '';
@@ -770,19 +779,19 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
         return;
       }
 
-      final gratisPercentage = (gratisCount / totalTransactions) * 100;
+      final gratisPercentage = (gratisCups / totalCups) * 100;
 
       if (gratisPercentage >= 3.0) {
         setState(() {
           _gratisLimitReached = true;
           _gratisLimitMessage =
-              '⚠️ Limit gratis 3% sudah tercapai! (${gratisPercentage.toStringAsFixed(1)}% dari $totalTransactions transaksi)';
+              '⚠️ Limit gratis 3% sudah tercapai! ($gratisCups dari $totalCups cup = ${gratisPercentage.toStringAsFixed(1)}%)';
         });
       } else {
         setState(() {
           _gratisLimitReached = false;
           _gratisLimitMessage =
-              'Gratis: ${gratisPercentage.toStringAsFixed(1)}% dari 3% limit';
+              'Gratis: $gratisCups/$totalCups cup (${gratisPercentage.toStringAsFixed(1)}% dari 3% limit)';
         });
       }
     } catch (e) {

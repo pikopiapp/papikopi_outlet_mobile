@@ -77,6 +77,7 @@ class _CheckoutModalState extends State<CheckoutModal> {
   Future<void> _checkMonthlyGratisLimit() async {
     try {
       final authProvider = context.read<AuthProvider>();
+      final cartProvider = context.read<CartProvider>();
       final supabaseService = SupabaseService();
 
       if (authProvider.currentUser == null) return;
@@ -90,10 +91,16 @@ class _CheckoutModalState extends State<CheckoutModal> {
         monthStart: monthStart,
       );
 
-      final totalTransactions = result['total'] as int;
-      final gratisCount = result['gratis_count'] as int;
+      final totalCups = result['total_cups'] as int;
+      final gratisCups = result['gratis_cups'] as int;
 
-      if (totalTransactions == 0) {
+      // Cup yang sedang di keranjang ikut dihitung (checkout GRATIS).
+      final cartCups = _selectedPaymentMethod == 'GRATIS'
+          ? cartProvider.items.fold<int>(0, (sum, item) => sum + item.quantity)
+          : 0;
+      final projectedGratisCups = gratisCups + cartCups;
+
+      if (totalCups == 0) {
         setState(() {
           _showWarning = false;
           _warningMessage = '';
@@ -101,19 +108,19 @@ class _CheckoutModalState extends State<CheckoutModal> {
         return;
       }
 
-      final gratisPercentage = (gratisCount / totalTransactions) * 100;
+      final gratisPercentage = (projectedGratisCups / totalCups) * 100;
 
       if (gratisPercentage >= 3.0) {
         setState(() {
           _showWarning = true;
           _warningMessage =
-              '⚠️ Limit gratis 3% sudah tercapai! (${gratisPercentage.toStringAsFixed(1)}% dari $totalTransactions transaksi)';
+              '⚠️ Limit gratis 3% sudah tercapai! ($projectedGratisCups dari $totalCups cup = ${gratisPercentage.toStringAsFixed(1)}%)';
         });
       } else {
         setState(() {
           _showWarning = false;
           _warningMessage =
-              'Gratis: ${gratisPercentage.toStringAsFixed(1)}% dari 3% limit';
+              'Gratis: $projectedGratisCups/$totalCups cup (${gratisPercentage.toStringAsFixed(1)}% dari 3% limit)';
         });
       }
     } catch (e) {
@@ -205,9 +212,6 @@ class _CheckoutModalState extends State<CheckoutModal> {
 
       // Capture outletId early to avoid using BuildContext after awaits
       final outletId = authProvider.currentUser!.outletId;
-      final businessDayStartHour = await supabaseService.getBusinessDayStartHour(
-        outletId: outletId,
-      );
       final checkoutTimestamp = supabaseService.resolveCheckoutTimestamp();
 
       // Create sale in POS system

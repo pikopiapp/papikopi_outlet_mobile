@@ -30,7 +30,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Get current user from AuthProvider
     final authProvider = context.read<AuthProvider>();
     final currentUser = authProvider.currentUser;
-    
+
     if (currentUser != null) {
       // User already loaded from local storage, fetch fresh data from Supabase
       _userFuture = supabaseService.getUserProfile(currentUser.id);
@@ -45,13 +45,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (outletId.isEmpty) {
         return {'name': 'Tidak ada outlet', 'address': ''};
       }
-      
+
       final response = await supabaseService.client
           .from('outlets')
           .select()
           .eq('id', outletId)
           .single();
-      
+
       return response;
     } catch (e) {
       return {'name': 'Outlet tidak ditemukan', 'address': ''};
@@ -73,9 +73,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _handleSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const SettingsScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -103,7 +103,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (source == null) return;
 
-      final pickedFile = await picker.pickImage(source: source, imageQuality: 85);
+      final pickedFile = await picker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
       if (pickedFile == null) return;
 
       if (!mounted) return;
@@ -208,15 +211,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: Colors.white.withValues(alpha: 0.2),
-                                border: Border.all(color: Colors.white, width: 3),
-                                image: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3,
+                                ),
+                                image:
+                                    user.avatarUrl != null &&
+                                        user.avatarUrl!.isNotEmpty
                                     ? DecorationImage(
                                         image: NetworkImage(user.avatarUrl!),
                                         fit: BoxFit.cover,
                                       )
                                     : null,
                               ),
-                              child: user.avatarUrl == null || user.avatarUrl!.isEmpty
+                              child:
+                                  user.avatarUrl == null ||
+                                      user.avatarUrl!.isEmpty
                                   ? Center(
                                       child: Text(
                                         user.name.isNotEmpty
@@ -240,7 +250,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               decoration: BoxDecoration(
                                 color: AppColors.primary,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
                               ),
                               child: _isUploadingPhoto
                                   ? const SizedBox(
@@ -273,7 +286,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 8),
                       // Role Badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
@@ -320,7 +336,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.email_outlined, size: 20, color: AppColors.primary),
+                            const Icon(
+                              Icons.email_outlined,
+                              size: 20,
+                              color: AppColors.primary,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -355,7 +375,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.badge_outlined, size: 20, color: AppColors.primary),
+                            const Icon(
+                              Icons.badge_outlined,
+                              size: 20,
+                              color: AppColors.primary,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -389,13 +413,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.fingerprint, size: 20, color: AppColors.primary),
+                            const Icon(
+                              Icons.fingerprint,
+                              size: 20,
+                              color: AppColors.primary,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: SelectableText(
                                 user.id,
                                 style: const TextStyle(fontSize: 14),
-                                toolbarOptions: ToolbarOptions(copy: true, selectAll: true),
                               ),
                             ),
                           ],
@@ -417,14 +444,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         builder: (context, outletSnapshot) {
                           String outletName = 'Memuat...';
                           String outletAddress = '';
-                          
+
                           if (outletSnapshot.hasData) {
-                            outletName = outletSnapshot.data?['name'] ?? 'Outlet tidak ditemukan';
-                            outletAddress = outletSnapshot.data?['address'] ?? '';
+                            outletName =
+                                outletSnapshot.data?['name'] ??
+                                'Outlet tidak ditemukan';
+                            outletAddress =
+                                outletSnapshot.data?['address'] ?? '';
                           } else if (outletSnapshot.hasError) {
                             outletName = 'Outlet tidak ditemukan';
                           }
-                          
+
                           return Column(
                             children: [
                               Container(
@@ -432,7 +462,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: AppColors.surface,
-                                  border: Border.all(color: AppColors.altSurface),
+                                  border: Border.all(
+                                    color: AppColors.altSurface,
+                                  ),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Column(
@@ -440,12 +472,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   children: [
                                     Row(
                                       children: [
-                                        const Icon(Icons.storefront_outlined, size: 20, color: AppColors.primary),
+                                        const Icon(
+                                          Icons.storefront_outlined,
+                                          size: 20,
+                                          color: AppColors.primary,
+                                        ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
                                             outletName,
-                                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
@@ -455,11 +494,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       const SizedBox(height: 8),
                                       Row(
                                         children: [
-                                          const SizedBox(width: 32), // Align with icon
+                                          const SizedBox(
+                                            width: 32,
+                                          ), // Align with icon
                                           Expanded(
                                             child: Text(
                                               outletAddress,
-                                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: AppColors.textSecondary,
+                                              ),
                                               overflow: TextOverflow.ellipsis,
                                               maxLines: 2,
                                             ),
@@ -497,7 +541,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, size: 20, color: AppColors.primary),
+                            const Icon(
+                              Icons.calendar_today,
+                              size: 20,
+                              color: AppColors.primary,
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -569,8 +617,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _formatDate(DateTime date) {
     final months = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
@@ -599,7 +657,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     labelText: 'Password Lama',
                     hintText: 'Masukkan password lama',
                     suffixIcon: IconButton(
-                      icon: Icon(obscureOld ? Icons.visibility_off : Icons.visibility),
+                      icon: Icon(
+                        obscureOld ? Icons.visibility_off : Icons.visibility,
+                      ),
                       onPressed: () {
                         setDialogState(() => obscureOld = !obscureOld);
                       },
@@ -614,7 +674,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     labelText: 'Password Baru',
                     hintText: 'Masukkan password baru',
                     suffixIcon: IconButton(
-                      icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility),
+                      icon: Icon(
+                        obscureNew ? Icons.visibility_off : Icons.visibility,
+                      ),
                       onPressed: () {
                         setDialogState(() => obscureNew = !obscureNew);
                       },
@@ -629,7 +691,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     labelText: 'Konfirmasi Password',
                     hintText: 'Konfirmasi password baru',
                     suffixIcon: IconButton(
-                      icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                      icon: Icon(
+                        obscureConfirm
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
                       onPressed: () {
                         setDialogState(() => obscureConfirm = !obscureConfirm);
                       },
@@ -661,7 +727,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   return;
                 }
 
-                if (newPasswordController.text != confirmPasswordController.text) {
+                if (newPasswordController.text !=
+                    confirmPasswordController.text) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Password baru tidak cocok')),
                   );
@@ -670,7 +737,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 if (newPasswordController.text.length < 6) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Password minimal 6 karakter')),
+                    const SnackBar(
+                      content: Text('Password minimal 6 karakter'),
+                    ),
                   );
                   return;
                 }
@@ -700,9 +769,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   confirmPasswordController.dispose();
                   Navigator.pop(context);
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
                   oldPasswordController.dispose();
                   newPasswordController.dispose();
                   confirmPasswordController.dispose();

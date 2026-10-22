@@ -9,6 +9,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/shared/shell_screen.dart';
 import 'screens/manager/manager_shell_screen.dart';
 import 'screens/investor/investor_screen.dart';
+import 'screens/auth/inactive_account_screen.dart';
 import 'services/supabase_service.dart';
 import 'services/auth_service.dart';
 import 'theme/thema.dart';
@@ -50,14 +51,12 @@ class MyApp extends StatelessWidget {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        supportedLocales: const [
-          Locale('id', 'ID'),
-          Locale('en', 'US'),
-        ],
+        supportedLocales: const [Locale('id', 'ID'), Locale('en', 'US')],
         theme: AppTheme.light(),
         home: _InitialScreen(),
         routes: {
           '/login': (context) => const LoginScreen(),
+          '/inactive': (context) => const InactiveAccountScreen(),
           '/shell': (context) => const ShellScreen(),
           '/manager': (context) => const ManagerShellScreen(),
           '/investor': (context) => const InvestorScreen(),
@@ -113,17 +112,29 @@ class _InitialScreenState extends State<_InitialScreen>
     super.dispose();
   }
 
+  String _normalizedRole(String? role) => (role ?? '').trim().toLowerCase();
+
+  void _navigateByRole(String? role) {
+    switch (_normalizedRole(role)) {
+      case 'manager':
+        Navigator.of(context).pushReplacementNamed('/manager');
+        break;
+      case 'investor':
+        Navigator.of(context).pushReplacementNamed('/investor');
+        break;
+      default:
+        // default: barista/admin -> shell
+        Navigator.of(context).pushReplacementNamed('/shell');
+    }
+  }
+
   Future<void> _initializeApp() async {
     try {
       if (!mounted) return;
 
       final authProvider = context.read<AuthProvider>();
 
-      // Add timeout to initialization
-      await authProvider.initialize().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {},
-      );
+      await authProvider.initialize();
 
       if (!mounted) return;
 
@@ -133,16 +144,12 @@ class _InitialScreenState extends State<_InitialScreen>
       if (!mounted) return;
 
       if (authProvider.isAuthenticated) {
-        final role = authProvider.currentUser?.role;
-
-        if (role == 'manager') {
-          Navigator.of(context).pushReplacementNamed('/manager');
-        } else if (role == 'investor') {
-          Navigator.of(context).pushReplacementNamed('/investor');
-        } else {
-          // default: barista/admin -> shell
-          Navigator.of(context).pushReplacementNamed('/shell');
+        if (authProvider.currentUser?.isActive == false) {
+          Navigator.of(context).pushReplacementNamed('/inactive');
+          return;
         }
+
+        _navigateByRole(authProvider.currentUser?.role);
       } else {
         Navigator.of(context).pushReplacementNamed('/login');
       }

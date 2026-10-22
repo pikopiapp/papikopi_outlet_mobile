@@ -13,7 +13,8 @@ class InvestorRevenueScreen extends StatefulWidget {
   State<InvestorRevenueScreen> createState() => _InvestorRevenueScreenState();
 }
 
-class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with InvestorDataMixin {
+class _InvestorRevenueScreenState extends State<InvestorRevenueScreen>
+    with InvestorDataMixin {
   String _period = 'daily';
   late DateTime _startDate;
   late DateTime _endDate;
@@ -44,8 +45,14 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
         break;
       case 'monthly':
       default:
-        _startDate = DateTime(baseNow.year, baseNow.month, 1);
-        _endDate = baseNow;
+        final nowUtc = now.toUtc();
+        final nowInJakarta = nowUtc.add(const Duration(hours: 7));
+        _startDate = DateTime.utc(
+          nowInJakarta.year,
+          nowInJakarta.month,
+          1,
+        ).subtract(const Duration(hours: 7));
+        _endDate = nowUtc;
         break;
     }
   }
@@ -53,16 +60,20 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
   Future<Map<String, dynamic>> _fetchRevenueForOutlet(String outletId) async {
     return supabaseService.getRevenueData(
       outletId: outletId,
-      selectedDate: _endDate,
+      selectedDate: DateTime.now(),
     );
   }
 
   /// Get actual HPP data from Supabase for a given period
-  Future<Map<String, dynamic>> _fetchHppForOutlet(String outletId) async {
+  Future<Map<String, dynamic>> _fetchHppForOutlet(
+    String outletId,
+    String? assignmentStartDate,
+  ) async {
     return supabaseService.getHppSummary(
       outletId: outletId,
       startDate: _startDate,
       endDate: _endDate,
+      assignmentStartDate: assignmentStartDate,
     );
   }
 
@@ -272,7 +283,10 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                       outlets.map((outlet) async {
                         final outletId = outlet['outlet_id'] as String? ?? '';
                         final revenue = await _fetchRevenueForOutlet(outletId);
-                        final hpp = await _fetchHppForOutlet(outletId);
+                        final hpp = await _fetchHppForOutlet(
+                          outletId,
+                          outlet['start_date'] as String?,
+                        );
                         return {...outlet, 'revenue': revenue, 'hpp': hpp};
                       }),
                     ),
@@ -312,13 +326,17 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                         final margin =
                             (item['margin_percentage'] as num?)?.toDouble() ??
                             0.0;
+                        final hpp =
+                            (item['hpp'] as Map<String, dynamic>?) ?? {};
+                        final profit =
+                            (hpp['totalProfit'] as num?)?.toDouble() ?? 0.0;
                         final cash =
                             (periodData['cash'] as num?)?.toDouble() ?? 0.0;
                         final qris =
                             (periodData['qris'] as num?)?.toDouble() ?? 0.0;
 
                         totalRevenue += amount;
-                        totalInvestorShare += (amount * margin / 100)
+                        totalInvestorShare += (profit * margin / 100)
                             .toDouble();
                         totalTransactions += count;
                         totalCash += cash;
@@ -329,75 +347,78 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                           ? totalRevenue / totalTransactions
                           : 0.0;
 
-                           return Column(
-                             children: [
-                               // Mixed Layout: 2-col, 2-col, Full to avoid empty space
-                               Column(
-                                 children: [
-                                   // Row 1: Card 1 + Card 2 (2 columns)
-                                   Row(
-                                     children: [
-                                       Expanded(
-                                         child: SummaryCard(
-                                           label: 'Total Revenue',
-                                           value: 'Rp${formatCurrency(totalRevenue)}',
-                                           bgColor: Colors.blue,
-                                         ),
-                                       ),
-                                       const SizedBox(width: 10),
-                                       Expanded(
-                                         child: SummaryCard(
-                                           label: 'Share Investor',
-                                           value: 'Rp${formatCurrency(totalInvestorShare)}',
-                                           bgColor: Colors.green,
-                                         ),
-                                       ),
-                                     ],
-                                   ),
-                                   const SizedBox(height: 10),
-                                   // Row 2: Card 3 + Card 4 (2 columns)
-                                   Row(
-                                     children: [
-                                       Expanded(
-                                         child: SummaryCard(
-                                           label: 'Transaksi',
-                                           value: '$totalTransactions',
-                                           bgColor: Colors.purple,
-                                         ),
-                                       ),
-                                       const SizedBox(width: 10),
-                                       Expanded(
-                                         child: SummaryCard(
-                                           label: 'Avg Transaksi',
-                                           value: 'Rp${formatCurrency(avgTransactionValue)}',
-                                           bgColor: Colors.orange,
-                                         ),
-                                       ),
-                                     ],
-                                   ),
-                                   const SizedBox(height: 10),
-                                   // Row 3: Card 5 + Card 6 (2 columns)
-                                   Row(
-                                     children: [
-                                       Expanded(
-                                         child: SummaryCard(
-                                           label: 'CASH',
-                                           value: 'Rp${formatCurrency(totalCash)}',
-                                           bgColor: Colors.red,
-                                         ),
-                                       ),
-                                       const SizedBox(width: 10),
-                                       Expanded(
-                                         child: SummaryCard(
-                                           label: 'QRIS',
-                                           value: 'Rp${formatCurrency(totalQris)}',
-                                           bgColor: Colors.teal,
-                                         ),
-                                       ),
-                                     ],
-                                   ),
-                                 ],
-                               ),
+                      return Column(
+                        children: [
+                          // Mixed Layout: 2-col, 2-col, Full to avoid empty space
+                          Column(
+                            children: [
+                              // Row 1: Card 1 + Card 2 (2 columns)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: SummaryCard(
+                                      label: 'Total Revenue',
+                                      value:
+                                          'Rp${formatCurrency(totalRevenue)}',
+                                      bgColor: Colors.blue,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: SummaryCard(
+                                      label: 'Share Investor',
+                                      value:
+                                          'Rp${formatCurrency(totalInvestorShare)}',
+                                      bgColor: Colors.green,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              // Row 2: Card 3 + Card 4 (2 columns)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: SummaryCard(
+                                      label: 'Transaksi',
+                                      value: '$totalTransactions',
+                                      bgColor: Colors.purple,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: SummaryCard(
+                                      label: 'Avg Transaksi',
+                                      value:
+                                          'Rp${formatCurrency(avgTransactionValue)}',
+                                      bgColor: Colors.orange,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              // Row 3: Card 5 + Card 6 (2 columns)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: SummaryCard(
+                                      label: 'CASH',
+                                      value: 'Rp${formatCurrency(totalCash)}',
+                                      bgColor: Colors.red,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: SummaryCard(
+                                      label: 'QRIS',
+                                      value: 'Rp${formatCurrency(totalQris)}',
+                                      bgColor: Colors.teal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 20),
                           // Per-Outlet Revenue Cards
                           ListView.builder(
@@ -423,7 +444,12 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                                   (item['margin_percentage'] as num?)
                                       ?.toDouble() ??
                                   0.0;
-                              final investorShare = (amount * margin / 100)
+                              final hpp =
+                                  (item['hpp'] as Map<String, dynamic>?) ?? {};
+                              final profit =
+                                  (hpp['totalProfit'] as num?)?.toDouble() ??
+                                  0.0;
+                              final investorShare = (profit * margin / 100)
                                   .toDouble();
 
                               return Padding(
@@ -472,18 +498,20 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                        CrossAxisAlignment.start,
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
                                                       Text(
                                                         'Revenue',
                                                         style: TextStyle(
                                                           fontSize: 11,
-                                                          color: Colors.grey[600],
+                                                          color:
+                                                              Colors.grey[600],
                                                         ),
                                                       ),
                                                       const SizedBox(height: 4),
                                                       Text(
-                                                         'Rp${formatCurrency(amount)}',
+                                                        'Rp${formatCurrency(amount)}',
                                                         style: const TextStyle(
                                                           fontSize: 12,
                                                           fontWeight:
@@ -491,7 +519,7 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                                                         ),
                                                       ),
                                                     ],
-                                                      ),
+                                                  ),
                                                 ),
                                                 const SizedBox(width: 10),
                                                 Expanded(
@@ -503,12 +531,13 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                                                         'Investor Share',
                                                         style: TextStyle(
                                                           fontSize: 11,
-                                                          color: Colors.grey[600],
+                                                          color:
+                                                              Colors.grey[600],
                                                         ),
                                                       ),
                                                       const SizedBox(height: 4),
                                                       Text(
-                                                         'Rp${formatCurrency(investorShare)}',
+                                                        'Rp${formatCurrency(investorShare)}',
                                                         style: const TextStyle(
                                                           fontSize: 12,
                                                           fontWeight:
@@ -528,13 +557,15 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment:
-                                                        CrossAxisAlignment.start,
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
                                                       Text(
                                                         'Margin',
                                                         style: TextStyle(
                                                           fontSize: 11,
-                                                          color: Colors.grey[600],
+                                                          color:
+                                                              Colors.grey[600],
                                                         ),
                                                       ),
                                                       const SizedBox(height: 4),
@@ -559,7 +590,8 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                                                         'Transaksi',
                                                         style: TextStyle(
                                                           fontSize: 11,
-                                                          color: Colors.grey[600],
+                                                          color:
+                                                              Colors.grey[600],
                                                         ),
                                                       ),
                                                       const SizedBox(height: 4),
@@ -582,10 +614,6 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                                         // Profit Breakdown Section - Using real HPP from database
                                         Builder(
                                           builder: (context) {
-                                            final hpp =
-                                                (item['hpp']
-                                                    as Map<String, dynamic>?) ??
-                                                {};
                                             final actualHpp =
                                                 (hpp['totalHpp'] as num?)
                                                     ?.toDouble() ??
@@ -594,15 +622,37 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
                                                 (hpp['totalSales'] as num?)
                                                     ?.toDouble() ??
                                                 amount;
+                                            final actualBonus =
+                                                (hpp['totalBonus'] as num?)
+                                                    ?.toDouble() ??
+                                                0.0;
+                                            final actualMeal =
+                                                (hpp['totalMealAllowance']
+                                                        as num?)
+                                                    ?.toDouble() ??
+                                                0.0;
+                                            final actualProfit =
+                                                (hpp['totalProfit'] as num?)
+                                                    ?.toDouble() ??
+                                                0.0;
+                                            final actualInvestorShare =
+                                                actualProfit * margin / 100;
                                             return ProfitBreakdownCard(
-                                              result:
-                                                  ProfitMarginCalculator.calculateFromAggregatedData(
-                                                    totalSales: actualSales,
-                                                    totalHpp: actualHpp,
-                                                    totalOmset: actualSales,
-                                                    investorPercentage: margin,
-                                                    isHoliday: false,
-                                                  ),
+                                              result: ProfitCalculationResult(
+                                                totalSales: actualSales,
+                                                totalHpp: actualHpp,
+                                                bonusBarista: actualBonus,
+                                                mealAllowance: actualMeal,
+                                                totalExpenses:
+                                                    actualBonus + actualMeal,
+                                                netProfit: actualProfit,
+                                                investorPercentage: margin,
+                                                investorProfit:
+                                                    actualInvestorShare,
+                                                outletProfit:
+                                                    actualProfit -
+                                                    actualInvestorShare,
+                                              ),
                                               outletName: outletName,
                                             );
                                           },
@@ -627,4 +677,3 @@ class _InvestorRevenueScreenState extends State<InvestorRevenueScreen> with Inve
     );
   }
 }
-

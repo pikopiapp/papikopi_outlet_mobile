@@ -37,13 +37,16 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     final now = DateTime.now();
-    _selectedDate = (now.hour < 4)
+    // Hitung "sekarang" dalam WIB (UTC+7) agar buka-app sebelum jam 04:00 WIB
+    // tetap dianggap business day kemarin, di perangkat timezone apa pun.
+    final nowWib = now.toUtc().add(const Duration(hours: 7));
+    _selectedDate = (nowWib.hour < 4)
         ? DateTime(
-            now.year,
-            now.month,
-            now.day,
+            nowWib.year,
+            nowWib.month,
+            nowWib.day,
           ).subtract(const Duration(days: 1))
-        : DateTime(now.year, now.month, now.day);
+        : DateTime(nowWib.year, nowWib.month, nowWib.day);
     _initialize();
   }
 
@@ -117,17 +120,14 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
 
       final salesList = await _supabaseService.getSales(outletId: outletId);
 
-      // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
-      // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
-      final selectedLocal = DateTime(
+      // Business day: 04:00 WIB = 21:00 UTC hari sebelumnya.
+      // Dibangun eksplisit dalam UTC agar tidak terpengaruh timezone perangkat.
+      final startDate = DateTime.utc(
         _selectedDate.year,
         _selectedDate.month,
-        _selectedDate.day,
-        4,
+        _selectedDate.day - 1,
+        21, // = 04:00 WIB
       );
-      final startDate = selectedLocal.subtract(
-        const Duration(hours: 7),
-      ); // Convert to UTC
       final endDate = startDate.add(const Duration(days: 1));
 
       int totalItems = 0;
@@ -146,13 +146,26 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
           {}; // baristaId -> free transaction count
 
       for (final sale in salesList) {
-        if (sale.createdAt.isAfter(startDate) &&
-            sale.createdAt.isBefore(endDate)) {
+        // FIX: created_at dari Supabase tidak membawa akhiran timezone sehingga
+        // diparse sebagai waktu LOKAL perangkat. Bandingkan sebagai UTC agar
+        // window business day tidak bergeser di perangkat non-WIB.
+        final saleCreatedUtc = sale.createdAt.isUtc
+            ? sale.createdAt
+            : DateTime.utc(
+                sale.createdAt.year,
+                sale.createdAt.month,
+                sale.createdAt.day,
+                sale.createdAt.hour,
+                sale.createdAt.minute,
+                sale.createdAt.second,
+                sale.createdAt.millisecond,
+                sale.createdAt.microsecond,
+              );
+        if (saleCreatedUtc.isAfter(startDate) &&
+            saleCreatedUtc.isBefore(endDate)) {
           salesForDate.add(sale);
           for (final item in sale.items) {
             totalItems += item.quantity;
-            totalRevenue += item.unitPrice * item.quantity;
-
             productCount[item.productId] =
                 (productCount[item.productId] ?? 0) + item.quantity;
             productRevenue[item.productId] =
@@ -166,6 +179,11 @@ class _SalesOutletManagerScreenState extends State<SalesOutletManagerScreen>
                 (baristaRevenue[sale.baristaId] ?? 0.0) +
                 (item.unitPrice * item.quantity);
           }
+
+          // FIX: Total revenue memakai total_amount per transaksi (sumber
+          // kebenaran yang sama dengan POS & dashboard web), bukan jumlah
+          // harga item — agar transaksi GRATIS (total Rp0) tidak dihitung.
+          totalRevenue += sale.totalAmount;
 
           // Count items per barista
           baristaItemCount[sale.baristaId] =

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../theme/thema.dart';
-import 'shared/investor_widgets.dart';
 import 'shared/investor_data_mixin.dart';
+import 'shared/investor_period_helper.dart';
 
+/// Home investor sesuai mockup:
+/// - Sapaan + "Pilih Gerobak"
+/// - Profit Bulan Ini, Profit Hari Ini, Transaksi Hari Ini (+ tombol Detil)
 class InvestorHomeScreen extends StatefulWidget {
   const InvestorHomeScreen({super.key, this.onNavigate});
 
@@ -16,616 +18,646 @@ class InvestorHomeScreen extends StatefulWidget {
   State<InvestorHomeScreen> createState() => _InvestorHomeScreenState();
 }
 
-class _InvestorHomeScreenState extends State<InvestorHomeScreen> with InvestorDataMixin {
-  String _chartPeriod = 'daily'; // 'daily' or 'monthly'
+class _InvestorHomeScreenState extends State<InvestorHomeScreen>
+    with InvestorDataMixin {
+  List<InvestorGerobak> _gerobakList = [];
+  InvestorGerobak? _selected;
+  bool _loading = true;
+  String? _errorMessage;
+  late DateTime _selectedMonth;
 
-  /// Fetch daily profit trend for last 30 days
-  Future<List<FlSpot>> _fetchDailyChartData() async {
+  double _profitMonth = 0;
+  double _profitToday = 0;
+  double _salesToday = 0;
+  Map<String, dynamic> _summaryToday = {};
+  Map<String, dynamic> _summaryMonth = {};
+  Map<String, double> _baristaCostsToday = {};
+  Map<String, double> _baristaCostsMonth = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final nowJakarta = DateTime.now().toUtc().add(const Duration(hours: 7));
+    _selectedMonth = DateTime(nowJakarta.year, nowJakarta.month);
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _loading = true);
     try {
-      final authProvider = context.read<AuthProvider>();
-      final user = authProvider.currentUser;
-      if (user == null) return [];
+      final assignments = await resolveInvestorOutlets();
+      final gerobak = assignments
+          .map(InvestorGerobak.fromAssignment)
+          .where((g) => g.outletId.isNotEmpty)
+          .toList();
 
-      final outlets = await supabaseService.getInvestorAssignments(
-        investorId: user.id,
-      );
-      if (outlets.isEmpty) return [];
-
-      final spots = <FlSpot>[];
-      final now = DateTime.now();
-
-      // Get last 30 days of data
-      for (int i = 29; i >= 0; i--) {
-        final date = now.subtract(Duration(days: i));
-        final startOfDay = DateTime(date.year, date.month, date.day, 21, 0);
-        final endOfDay = DateTime(
-          date.year,
-          date.month,
-          date.day + 1,
-          20,
-          59,
-          59,
-        );
-
-        double totalProfit = 0;
-        for (final outlet in outlets) {
-          final outletId = outlet['outlet_id'] as String? ?? '';
-          final margin =
-              (outlet['margin_percentage'] as num?)?.toDouble() ?? 0.0;
-
-          final hppData = await supabaseService.getHppSummary(
-            outletId: outletId,
-            startDate: startOfDay,
-            endDate: endOfDay,
-          );
-
-          final sales = (hppData['totalSales'] as num?)?.toDouble() ?? 0.0;
-          final profit = sales * (margin / 100);
-          totalProfit += profit;
+      InvestorGerobak? selected;
+      for (final outlet in gerobak) {
+        if (outlet.isActive) {
+          selected = outlet;
+          break;
         }
+      }
+      selected ??= gerobak.isEmpty ? null : gerobak.first;
 
-        spots.add(FlSpot(i.toDouble(), totalProfit / 1000000));
+      if (!mounted) return;
+      setState(() {
+        _gerobakList = gerobak;
+        _selected = selected;
+        _errorMessage = null;
+      });
+
+      if (selected != null) {
+        await _loadSummary(selected, _selectedMonth);
       }
 
-      return spots;
-    } catch (e) {
-      return [];
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Gagal memuat ringkasan investor: $error';
+        _loading = false;
+      });
     }
   }
 
-  /// Fetch monthly profit trend for last 12 months
-  Future<List<FlSpot>> _fetchMonthlyChartData() async {
-    try {
-      final authProvider = context.read<AuthProvider>();
-      final user = authProvider.currentUser;
-      if (user == null) return [];
+  Future<void> _loadSummary(
+    InvestorGerobak gerobak,
+    DateTime selectedMonth,
+  ) async {
+    final nowUtc = DateTime.now().toUtc();
+    final nowJakarta = nowUtc.add(const Duration(hours: 7));
+    final today = DateTime(nowJakarta.year, nowJakarta.month, nowJakarta.day);
+    final dayWin = InvestorPeriod.calendarDateRangeUtc(today, today);
+    final monthStartUtc = DateTime.utc(
+      selectedMonth.year,
+      selectedMonth.month,
+      1,
+    ).subtract(const Duration(hours: 7));
+    final nextMonthStartUtc = DateTime.utc(
+      selectedMonth.year,
+      selectedMonth.month + 1,
+      1,
+    ).subtract(const Duration(hours: 7));
+    final isCurrentMonth =
+        selectedMonth.year == nowJakarta.year &&
+        selectedMonth.month == nowJakarta.month;
+    final monthEndUtc = isCurrentMonth
+        ? nowUtc
+        : nextMonthStartUtc.subtract(const Duration(microseconds: 1));
+    final monthEndDay = isCurrentMonth
+        ? today
+        : DateTime(selectedMonth.year, selectedMonth.month + 1, 0);
 
-      final outlets = await supabaseService.getInvestorAssignments(
-        investorId: user.id,
-      );
-      if (outlets.isEmpty) return [];
+    final hppDay = await supabaseService.getHppSummary(
+      outletId: gerobak.outletId,
+      startDate: dayWin.start,
+      endDate: nowUtc,
+      assignmentStartDate: gerobak.startDate,
+    );
+    final hppMonth = await supabaseService.getHppSummary(
+      outletId: gerobak.outletId,
+      startDate: monthStartUtc,
+      endDate: monthEndUtc,
+      assignmentStartDate: gerobak.startDate,
+    );
 
-      final spots = <FlSpot>[];
-      final now = DateTime.now();
-
-      // Get last 12 months of data
-      for (int i = 11; i >= 0; i--) {
-        final monthDate = DateTime(now.year, now.month - i, 1);
-        final startOfMonth = DateTime(monthDate.year, monthDate.month, 1);
-        final endOfMonth = DateTime(
-          monthDate.year,
-          monthDate.month + 1,
-          0,
-          23,
-          59,
-          59,
+    final baristaCostsToday = await supabaseService
+        .getInvestorBaristaCostSummary(
+          outletId: gerobak.outletId,
+          startBusinessDate: today,
+          endBusinessDate: today,
+          assignmentStartDate: gerobak.startDate,
+          calendarDays: true,
+        );
+    final baristaCostsMonth = await supabaseService
+        .getInvestorBaristaCostSummary(
+          outletId: gerobak.outletId,
+          startBusinessDate: DateTime(selectedMonth.year, selectedMonth.month),
+          endBusinessDate: monthEndDay,
+          assignmentStartDate: gerobak.startDate,
+          calendarDays: true,
         );
 
-        double totalProfit = 0;
-        for (final outlet in outlets) {
-          final outletId = outlet['outlet_id'] as String? ?? '';
-          final margin =
-              (outlet['margin_percentage'] as num?)?.toDouble() ?? 0.0;
+    final salesToday = (hppDay['totalSales'] as num?)?.toDouble() ?? 0.0;
+    final profitToday = _investorProfit(
+      hppDay,
+      baristaCostsToday,
+      gerobak.marginPercentage,
+    );
+    final profitMonth = _investorProfit(
+      hppMonth,
+      baristaCostsMonth,
+      gerobak.marginPercentage,
+    );
 
-          final hppData = await supabaseService.getHppSummary(
-            outletId: outletId,
-            startDate: startOfMonth,
-            endDate: endOfMonth,
-          );
+    if (!mounted) return;
+    setState(() {
+      _salesToday = salesToday;
+      _profitToday = profitToday;
+      _profitMonth = profitMonth;
+      _summaryToday = hppDay;
+      _summaryMonth = hppMonth;
+      _baristaCostsToday = baristaCostsToday;
+      _baristaCostsMonth = baristaCostsMonth;
+    });
+  }
 
-          final sales = (hppData['totalSales'] as num?)?.toDouble() ?? 0.0;
-          final profit = sales * (margin / 100);
-          totalProfit += profit;
-        }
+  double _investorProfit(
+    Map<String, dynamic> hpp,
+    Map<String, double> baristaCosts,
+    double margin,
+  ) {
+    final grossProfit = (hpp['totalProfit'] as num?)?.toDouble() ?? 0.0;
+    final bonus = baristaCosts['bonus'] ?? 0.0;
+    final mealAllowance = baristaCosts['mealAllowance'] ?? 0.0;
+    final netProfit = grossProfit - bonus - mealAllowance;
+    return netProfit * (margin / 100);
+  }
 
-        spots.add(FlSpot(i.toDouble(), totalProfit / 1000000));
-      }
+  void _showProfitDetails({required bool monthly}) {
+    final outlet = _selected;
+    if (outlet == null) return;
 
-      return spots;
-    } catch (e) {
-      return [];
+    final nowJakarta = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final today = DateTime(nowJakarta.year, nowJakarta.month, nowJakarta.day);
+    final periodLabel = monthly
+        ? _monthLabel(_selectedMonth)
+        : '${today.day} ${_monthLabel(today).split(' ').first} ${today.year}';
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Detil Bagian Investor $periodLabel'),
+        content: SizedBox(
+          width: 360,
+          child: _buildProfitDetails(
+            context,
+            outlet,
+            monthly ? _summaryMonth : _summaryToday,
+            monthly ? _baristaCostsMonth : _baristaCostsToday,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfitDetails(
+    BuildContext context,
+    InvestorGerobak outlet,
+    Map<String, dynamic> summary,
+    Map<String, double> baristaCosts,
+  ) {
+    final sales = (summary['totalSales'] as num?)?.toDouble() ?? 0.0;
+    final grossProfit = (summary['totalProfit'] as num?)?.toDouble() ?? 0.0;
+    final bonus = baristaCosts['bonus'] ?? 0.0;
+    final mealAllowance = baristaCosts['mealAllowance'] ?? 0.0;
+    final netProfit = grossProfit - bonus - mealAllowance;
+    final investorShare = netProfit * outlet.marginPercentage / 100;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(outlet.name, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 16),
+        _ProfitDetailRow(label: 'Omset', amount: sales),
+        _ProfitDetailRow(label: 'Laba kotor', amount: grossProfit),
+        _ProfitDetailRow(label: 'Bonus Barista', amount: bonus),
+        _ProfitDetailRow(
+          label: 'Operasional Barista (Uang Makan)',
+          amount: mealAllowance,
+        ),
+        _ProfitDetailRow(
+          label: 'Laba bersih',
+          amount: netProfit,
+          emphasized: true,
+        ),
+        const Divider(height: 24),
+        _ProfitDetailRow(
+          label:
+              'Bagian investor (${outlet.marginPercentage.toStringAsFixed(0)}%)',
+          amount: investorShare,
+          emphasized: true,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _onSelectGerobak(InvestorGerobak? g) async {
+    if (g == null) return;
+    setState(() {
+      _selected = g;
+      _errorMessage = null;
+      _loading = true;
+    });
+    try {
+      await _loadSummary(g, _selectedMonth);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Gagal memuat ringkasan investor: $error';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _selectMonth() async {
+    final nowJakarta = DateTime.now().toUtc().add(const Duration(hours: 7));
+    final currentYear = nowJakarta.year;
+    var dialogYear = _selectedMonth.year;
+    var dialogMonth = _selectedMonth.month;
+
+    final selected = await showDialog<DateTime>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Pilih Bulan'),
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButton<int>(
+                  value: dialogYear,
+                  isExpanded: true,
+                  items: [
+                    for (var year = currentYear; year >= 2015; year--)
+                      DropdownMenuItem(value: year, child: Text('$year')),
+                  ],
+                  onChanged: (year) {
+                    if (year != null) {
+                      setDialogState(() => dialogYear = year);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                GridView.count(
+                  crossAxisCount: 3,
+                  shrinkWrap: true,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  childAspectRatio: 2,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    for (var month = 1; month <= 12; month++)
+                      _MonthChoice(
+                        month: month,
+                        selected:
+                            dialogYear == _selectedMonth.year &&
+                            month == dialogMonth,
+                        enabled:
+                            dialogYear < currentYear ||
+                            month <= nowJakarta.month,
+                        onTap: () {
+                          setDialogState(() => dialogMonth = month);
+                          Navigator.of(
+                            dialogContext,
+                          ).pop(DateTime(dialogYear, month));
+                        },
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Batal'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null ||
+        (selected.year == _selectedMonth.year &&
+            selected.month == _selectedMonth.month)) {
+      return;
+    }
+
+    setState(() {
+      _selectedMonth = selected;
+      _errorMessage = null;
+      _loading = true;
+    });
+    try {
+      final outlet = _selected;
+      if (outlet != null) await _loadSummary(outlet, selected);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Gagal memuat ringkasan investor: $error';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    final user = authProvider.currentUser;
+    final userName = authProvider.currentUser?.name ?? 'Investor';
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Selamat Datang, ${user?.name ?? "Investor"}! 👋',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Selamat Datang, $userName! 👋',
+            style: const TextStyle(
+              fontSize: 21,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+              height: 1.25,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Pantau performa investasi Anda',
+            style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          _buildGerobakPicker(),
+          const SizedBox(height: 10),
+          _buildMonthPicker(),
+          const SizedBox(height: 20),
+          if (_errorMessage != null) ...[
+            _buildLoadError(),
+            const SizedBox(height: 16),
+          ],
+          InvestorSummaryCard(
+            icon: Icons.show_chart,
+            iconColor: const Color(0xFF2563EB),
+            circleColor: const Color(0xFFDBEAFE),
+            bgColor: const Color(0xFFEFF4FB),
+            valueColor: const Color(0xFF2563EB),
+            title: 'Bagian Investor ${_monthLabel(_selectedMonth)}',
+            value: InvestorPeriod.rupiah(_profitMonth),
+            trendUp: _profitMonth > 0
+                ? true
+                : (_profitMonth < 0 ? false : null),
+            onDetail: () => _showProfitDetails(monthly: true),
+          ),
+          const SizedBox(height: 16),
+          InvestorSummaryCard(
+            icon: Icons.trending_down,
+            iconColor: _profitToday < 0
+                ? const Color(0xFFDC2626)
+                : const Color(0xFF16A34A),
+            circleColor: _profitToday < 0
+                ? const Color(0xFFFEE2E2)
+                : const Color(0xFFDCFCE7),
+            bgColor: _profitToday < 0
+                ? const Color(0xFFFDF0EF)
+                : const Color(0xFFF0F9F1),
+            valueColor: _profitToday < 0
+                ? const Color(0xFFDC2626)
+                : const Color(0xFF16A34A),
+            title: 'Bagian Investor Hari Ini',
+            value: InvestorPeriod.rupiah(_profitToday),
+            trendUp: _profitToday > 0
+                ? true
+                : (_profitToday < 0 ? false : null),
+            onDetail: () => _showProfitDetails(monthly: false),
+          ),
+          const SizedBox(height: 16),
+          InvestorSummaryCard(
+            icon: Icons.payments_outlined,
+            iconColor: const Color(0xFF16A34A),
+            circleColor: const Color(0xFFDCFCE7),
+            bgColor: const Color(0xFFF1F7F2),
+            valueColor: const Color(0xFF16A34A),
+            title: 'Transaksi Hari Ini',
+            value: InvestorPeriod.rupiah(_salesToday),
+            trendUp: null,
+            onDetail: () => widget.onNavigate?.call(1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadError() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _errorMessage!,
+            style: const TextStyle(color: Color(0xFF991B1B)),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Coba Lagi'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMonthPicker() {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: OutlinedButton.icon(
+        onPressed: _selectMonth,
+        icon: const Icon(Icons.calendar_month_outlined, size: 18),
+        label: Text(_monthLabel(_selectedMonth)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          side: BorderSide(color: Colors.grey.shade300),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        ),
+      ),
+    );
+  }
+
+  String _monthLabel(DateTime month) {
+    const names = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+    return '${names[month.month - 1]} ${month.year}';
+  }
+
+  Widget _buildGerobakPicker() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.storefront, color: AppColors.primary, size: 28),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Pilih Gerobak',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Pantau performa investasi Anda',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.6,
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<InvestorGerobak>(
+                    value: _selected,
+                    isDense: true,
+                    isExpanded: true,
+                    hint: const Text('Pilih Gerobak'),
+                    items: _gerobakList
+                        .map(
+                          (g) => DropdownMenuItem(
+                            value: g,
+                            child: Text(
+                              g.name,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (g) => _onSelectGerobak(g),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              // Chart Header
-              Row(
-                children: [
-                  Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    child: Icon(
-                      Icons.trending_up_rounded,
-                      size: 14,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Tren Profit ${_chartPeriod == 'daily' ? '30 Hari Terakhir' : '12 Bulan Terakhir'}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Period Selection
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => setState(() => _chartPeriod = 'daily'),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _chartPeriod == 'daily'
-                              ? AppColors.primary.withValues(alpha: 0.2)
-                              : AppColors.surface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _chartPeriod == 'daily'
-                                ? AppColors.primary
-                                : Colors.grey[300]!,
-                          ),
-                        ),
-                        child: Text(
-                          'Harian',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: _chartPeriod == 'daily'
-                                ? AppColors.primary
-                                : Colors.grey[600],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => setState(() => _chartPeriod = 'monthly'),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _chartPeriod == 'monthly'
-                              ? AppColors.primary.withValues(alpha: 0.2)
-                              : AppColors.surface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _chartPeriod == 'monthly'
-                                ? AppColors.primary
-                                : Colors.grey[300]!,
-                          ),
-                        ),
-                        child: Text(
-                          'Bulanan',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: _chartPeriod == 'monthly'
-                                ? AppColors.primary
-                                : Colors.grey[600],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Line Chart
-              FutureBuilder<List<FlSpot>>(
-                future: _chartPeriod == 'daily'
-                    ? _fetchDailyChartData()
-                    : _fetchMonthlyChartData(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Container(
-                      height: 250,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.altSurface),
-                      ),
-                      child: const Center(child: CircularProgressIndicator()),
-                    );
-                  }
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-                  if (snapshot.hasError ||
-                      snapshot.data == null ||
-                      snapshot.data!.isEmpty) {
-                    return Container(
-                      height: 250,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.altSurface),
-                      ),
-                      child: const Center(
-                        child: Text('Tidak ada data untuk ditampilkan'),
-                      ),
-                    );
-                  }
+class _MonthChoice extends StatelessWidget {
+  const _MonthChoice({
+    required this.month,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
 
-                  final spots = snapshot.data!;
-                  final maxYValue = spots.isNotEmpty
-                      ? (spots.map((e) => e.y).reduce((a, b) => a > b ? a : b) *
-                            1.2)
-                      : 10.0;
+  final int month;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
 
-                  return Container(
-                    height: 250,
-                    padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.altSurface),
-                    ),
-                    child: LineChart(
-                      LineChartData(
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          horizontalInterval: maxYValue / 4,
-                          getDrawingHorizontalLine: (value) {
-                            return FlLine(
-                              color: Colors.grey[300],
-                              strokeWidth: 1,
-                            );
-                          },
-                        ),
-                        titlesData: FlTitlesData(
-                          show: true,
-                          rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 30,
-                              interval: _chartPeriod == 'daily' ? 5 : 2,
-                              getTitlesWidget: (value, meta) {
-                                if (_chartPeriod == 'daily') {
-                                  final dayIndex = value.toInt();
-                                  final now = DateTime.now();
-                                  final date = now.subtract(
-                                    Duration(days: 29 - dayIndex),
-                                  );
-                                  if (dayIndex % 5 == 0) {
-                                    return Text(
-                                      '${date.day}/${date.month}',
-                                      style: const TextStyle(fontSize: 10),
-                                    );
-                                  }
-                                  return const Text('');
-                                } else {
-                                  final monthIndex = value.toInt();
-                                  final now = DateTime.now();
-                                  final month = now.month - (11 - monthIndex);
-                                  final displayMonth = month > 0
-                                      ? month
-                                      : month + 12;
-                                  if (monthIndex % 2 == 0) {
-                                    return Text(
-                                      '$displayMonth',
-                                      style: const TextStyle(fontSize: 10),
-                                    );
-                                  }
-                                  return const Text('');
-                                }
-                              },
-                            ),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              interval: maxYValue / 4,
-                              getTitlesWidget: (value, meta) {
-                                return Text(
-                                  value.toStringAsFixed(0),
-                                  style: const TextStyle(fontSize: 10),
-                                );
-                              },
-                              reservedSize: 40,
-                            ),
-                          ),
-                        ),
-                        borderData: FlBorderData(show: false),
-                        minX: 0,
-                        maxX: _chartPeriod == 'daily' ? 29 : 11,
-                        minY: 0,
-                        maxY: maxYValue,
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: spots,
-                            isCurved: true,
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.primary,
-                                AppColors.primary.withValues(alpha: 0.6),
-                              ],
-                            ),
-                            barWidth: 3,
-                            isStrokeCapRound: true,
-                            dotData: FlDotData(
-                              show: true,
-                              getDotPainter: (spot, percent, barData, index) {
-                                return FlDotCirclePainter(
-                                  radius: 4,
-                                  color: AppColors.primary,
-                                  strokeWidth: 2,
-                                  strokeColor: Colors.white,
-                                );
-                              },
-                            ),
-                            belowBarData: BarAreaData(
-                              show: true,
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.primary.withValues(alpha: 0.2),
-                                  AppColors.primary.withValues(alpha: 0.0),
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ),
-                            ),
-                          ),
-                        ],
-                        lineTouchData: LineTouchData(
-                          handleBuiltInTouches: true,
-                          enabled: true,
-                          touchTooltipData: LineTouchTooltipData(
-                            tooltipBgColor: AppColors.primary.withValues(
-                              alpha: 0.8,
-                            ),
-                            tooltipBorder: BorderSide(
-                              color: AppColors.primary,
-                              width: 1,
-                            ),
-                            getTooltipItems: (touchedSpots) {
-                              return touchedSpots.map((barSpot) {
-                                return LineTooltipItem(
-                                  'Rp ${barSpot.y.toStringAsFixed(1)}M',
-                                  const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                );
-                              }).toList();
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-              // 3 Summary Cards
-              FutureBuilder<List<Map<String, dynamic>>>(
-                future: resolveInvestorOutlets(),
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
-                      height: 100,
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-
-                  final outlets = snap.data ?? [];
-
-                  // Calculate summary
-                  double totalInvestment = 0;
-                  double avgMonthlyProfit = 0;
-                  String bestPerformer = 'N/A';
-                  double bestMargin = 0;
-
-                  for (final outlet in outlets) {
-                    final amount =
-                        (outlet['investment_amount'] as num?)?.toDouble() ??
-                        0.0;
-                    final margin =
-                        (outlet['margin_percentage'] as num?)?.toDouble() ??
-                        0.0;
-                    totalInvestment += amount;
-
-                    if (margin > bestMargin) {
-                      bestMargin = margin;
-                      bestPerformer =
-                          (outlet['outlet_name'] as String?) ?? 'N/A';
-                    }
-                  }
-
-                  avgMonthlyProfit =
-                      (totalInvestment * (bestMargin / 100)) / 12;
-
-                  final formattedTotal = totalInvestment
-                      .toStringAsFixed(0)
-                      .replaceAllMapped(
-                        RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-                        (match) => '${match.group(1)}.',
-                      );
-
-                  final formattedProfit = avgMonthlyProfit
-                      .toStringAsFixed(0)
-                      .replaceAllMapped(
-                        RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-                        (match) => '${match.group(1)}.',
-                      );
-
-                   return Column(
-                     children: [
-                       // Mixed Layout: 2-col + full width for odd number of cards
-                       Column(
-                         children: [
-                           // Row 1: Card 1 + Card 2 (2 columns)
-                           Row(
-                             children: [
-                               Expanded(
-                                 child: SummaryCard(
-                                   label: 'Total Investasi',
-                                   value: 'Rp $formattedTotal',
-                                   bgColor: Colors.orange,
-                                 ),
-                               ),
-                               const SizedBox(width: 10),
-                               Expanded(
-                                 child: SummaryCard(
-                                   label: 'Profit Estimasi/Bulan',
-                                   value: 'Rp $formattedProfit',
-                                   bgColor: Colors.green,
-                                 ),
-                               ),
-                             ],
-                           ),
-                           const SizedBox(height: 10),
-                           // Row 2: Card 3 (full width)
-                           SummaryCard(
-                             label: 'Outlet Terbaik',
-                             value: '$bestPerformer ($bestMargin%)',
-                             bgColor: Colors.blue,
-                           ),
-                         ],
-                       ),
-                      const SizedBox(height: 24),
-                      // Quick Links
-                      const Text(
-                        'Akses Cepat',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: () {
-                                // Navigate to Revenue screen
-                                widget.onNavigate?.call(1);
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.primary),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Column(
-                                  children: [
-                                    const Text(
-                                      '📊',
-                                      style: TextStyle(fontSize: 24),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    const Text(
-                                      'Revenue',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Detail Analisis',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: InkWell(
-                              onTap: () {
-                                // Navigate to Report screen
-                                widget.onNavigate?.call(2);
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.primary),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Column(
-                                  children: [
-                                    const Text(
-                                      '🏪',
-                                      style: TextStyle(fontSize: 24),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    const Text(
-                                      'Outlet',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Kelola Investasi',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
+  @override
+  Widget build(BuildContext context) {
+    const labels = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : null,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.primary : Colors.grey.shade300,
           ),
         ),
+        child: Text(
+          labels[month - 1],
+          style: TextStyle(
+            color: !enabled
+                ? Colors.grey.shade400
+                : selected
+                ? Colors.white
+                : AppColors.textPrimary,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfitDetailRow extends StatelessWidget {
+  const _ProfitDetailRow({
+    required this.label,
+    required this.amount,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final double amount;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = TextStyle(
+      fontWeight: emphasized ? FontWeight.w700 : FontWeight.w500,
+      color: emphasized ? AppColors.success : AppColors.textPrimary,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: textStyle)),
+          const SizedBox(width: 12),
+          Text(InvestorPeriod.rupiah(amount), style: textStyle),
+        ],
       ),
     );
   }

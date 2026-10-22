@@ -144,10 +144,9 @@ class LoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ignore: deprecated_member_use
-    // TODO: migrate to PopScope when project-wide API is updated
-    return WillPopScope(
-      onWillPop: () async => dismissible,
+    return PopScope(
+      canPop: dismissible,
+      onPopInvokedWithResult: (_, __) {},
       child: Dialog(
         backgroundColor: Colors.transparent,
         elevation: 0,

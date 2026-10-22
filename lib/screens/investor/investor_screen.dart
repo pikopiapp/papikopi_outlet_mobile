@@ -8,8 +8,8 @@ import '../../widgets/header.dart';
 import 'investor_home_screen.dart';
 import 'investor_notification_screen.dart';
 import 'investor_profile_screen.dart';
-import 'investor_revenue_screen.dart';
 import 'investor_report_outlet_screen.dart';
+import 'investor_transactions_screen.dart';
 import 'investor_withdrawal_screen.dart';
 
 class InvestorScreen extends StatefulWidget {
@@ -37,7 +37,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
     // Initialize screens with navigation callback
     _screens = [
       InvestorHomeScreen(onNavigate: _onItemTapped),
-      const InvestorRevenueScreen(),
+      const InvestorTransactionsScreen(),
       const InvestorReportOutletScreen(),
       const InvestorWithdrawalScreen(),
     ];
@@ -120,7 +120,7 @@ class _InvestorScreenState extends State<InvestorScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
             icon: Icon(Icons.trending_up),
-            label: 'Revenue',
+            label: 'Transaksi',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long),
@@ -216,12 +216,14 @@ class _InvestorProfilePlaceholderState
 
     try {
       await _supabaseService.seedTestInvestorAssignments(investorId: user.id);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Test data seeded successfully')),
       );
       // Refresh the UI
       setState(() {});
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -240,49 +242,49 @@ class _InvestorProfilePlaceholderState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-               Text(
-                 'Selamat Datang, ${user?.name ?? "Investor"}! 👋',
-                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                   color: AppColors.textPrimary,
-                   fontWeight: FontWeight.w700,
-                   letterSpacing: -0.2,
-                 ),
-               ),
-               const SizedBox(height: 10),
-               Text(
-                 'Kelola investasi Anda dan pantau performa outlet',
-                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                   color: AppColors.textSecondary,
-                   height: 1.6,
-                 ),
-               ),
-               const SizedBox(height: 28),
-               Row(
-                 children: [
-                   Container(
-                     width: 22,
-                     height: 22,
-                     decoration: BoxDecoration(
-                       color: AppColors.primary.withValues(alpha: 0.12),
-                       borderRadius: BorderRadius.circular(7),
-                     ),
-                     child: Icon(
-                       Icons.storefront_rounded,
-                       size: 14,
-                       color: AppColors.primary,
-                     ),
-                   ),
-                   const SizedBox(width: 10),
-                   Text(
-                     'Outlet yang diinvestasikan',
-                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                       color: AppColors.textPrimary,
-                       fontWeight: FontWeight.w700,
-                       letterSpacing: 0.2,
-                     ),
-                   ),
-                 ],
-               ),
+              Text(
+                'Selamat Datang, ${user?.name ?? "Investor"}! 👋',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Kelola investasi Anda dan pantau performa outlet',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 28),
+              Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Icon(
+                      Icons.storefront_rounded,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Outlet yang diinvestasikan',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: _resolveInvestorOutlets(),
@@ -655,6 +657,45 @@ class _InvestorRevenuePlaceholderState
     extends State<_InvestorRevenuePlaceholder> {
   final _supabaseService = SupabaseService();
   String _period = 'daily';
+  late DateTime _startDate;
+  late DateTime _endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateDateRange();
+  }
+
+  void _updateDateRange() {
+    final now = DateTime.now();
+    final baseNow = now.hour < 4
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
+        : DateTime(now.year, now.month, now.day);
+    switch (_period) {
+      case 'daily':
+        _startDate = DateTime(baseNow.year, baseNow.month, baseNow.day - 1);
+        _endDate = DateTime(baseNow.year, baseNow.month, baseNow.day);
+        break;
+      case 'weekly':
+        _startDate = baseNow.subtract(const Duration(days: 7));
+        _endDate = baseNow;
+        break;
+      case 'monthly':
+        final nowUtc = now.toUtc();
+        final nowInJakarta = nowUtc.add(const Duration(hours: 7));
+        _startDate = DateTime.utc(
+          nowInJakarta.year,
+          nowInJakarta.month,
+          1,
+        ).subtract(const Duration(hours: 7));
+        _endDate = nowUtc;
+        break;
+    }
+  }
 
   Future<List<Map<String, dynamic>>> _resolveInvestorOutlets() async {
     final authProvider = context.read<AuthProvider>();
@@ -672,6 +713,18 @@ class _InvestorRevenuePlaceholderState
     return _supabaseService.getRevenueData(
       outletId: outletId,
       selectedDate: DateTime.now(),
+    );
+  }
+
+  Future<Map<String, dynamic>> _fetchProfitForOutlet(
+    String outletId,
+    String? assignmentStartDate,
+  ) {
+    return _supabaseService.getHppSummary(
+      outletId: outletId,
+      startDate: _startDate,
+      endDate: _endDate,
+      assignmentStartDate: assignmentStartDate,
     );
   }
 
@@ -707,17 +760,26 @@ class _InvestorRevenuePlaceholderState
                   _PillButton(
                     active: _period == 'daily',
                     label: 'Harian (Daily)',
-                    onTap: () => setState(() => _period = 'daily'),
+                    onTap: () => setState(() {
+                      _period = 'daily';
+                      _updateDateRange();
+                    }),
                   ),
                   _PillButton(
                     active: _period == 'weekly',
                     label: 'Mingguan (Weekly)',
-                    onTap: () => setState(() => _period = 'weekly'),
+                    onTap: () => setState(() {
+                      _period = 'weekly';
+                      _updateDateRange();
+                    }),
                   ),
                   _PillButton(
                     active: _period == 'monthly',
                     label: 'Bulanan (Monthly)',
-                    onTap: () => setState(() => _period = 'monthly'),
+                    onTap: () => setState(() {
+                      _period = 'monthly';
+                      _updateDateRange();
+                    }),
                   ),
                 ],
               ),
@@ -755,10 +817,19 @@ class _InvestorRevenuePlaceholderState
                   return FutureBuilder<List<Map<String, dynamic>>>(
                     future: Future.wait(
                       outlets.map((outlet) async {
-                        final revenue = await _fetchRevenueForOutlet(
-                          outlet['outlet_id'] as String? ?? '',
-                        );
-                        return {...outlet, 'revenue': revenue};
+                        final outletId = outlet['outlet_id'] as String? ?? '';
+                        final results = await Future.wait([
+                          _fetchRevenueForOutlet(outletId),
+                          _fetchProfitForOutlet(
+                            outletId,
+                            outlet['start_date'] as String?,
+                          ),
+                        ]);
+                        return {
+                          ...outlet,
+                          'revenue': results[0],
+                          'profitSummary': results[1],
+                        };
                       }),
                     ),
                     builder: (context, revenueSnap) {
@@ -795,9 +866,16 @@ class _InvestorRevenuePlaceholderState
                         final margin =
                             (item['margin_percentage'] as num?)?.toDouble() ??
                             0.0;
+                        final profitSummary =
+                            (item['profitSummary'] as Map<String, dynamic>?) ??
+                            {};
+                        final outletProfit =
+                            (profitSummary['totalProfit'] as num?)
+                                ?.toDouble() ??
+                            0.0;
 
                         totalRevenue += amount;
-                        totalInvestorShare += (amount * margin / 100)
+                        totalInvestorShare += (outletProfit * margin / 100)
                             .toDouble();
                         totalTransactions += count;
                       }
@@ -971,8 +1049,16 @@ class _InvestorRevenuePlaceholderState
                                   (item['margin_percentage'] as num?)
                                       ?.toDouble() ??
                                   0.0;
-                              final investorShare = (amount * margin / 100)
-                                  .toDouble();
+                              final profitSummary =
+                                  (item['profitSummary']
+                                      as Map<String, dynamic>?) ??
+                                  {};
+                              final outletProfit =
+                                  (profitSummary['totalProfit'] as num?)
+                                      ?.toDouble() ??
+                                  0.0;
+                              final investorShare =
+                                  (outletProfit * margin / 100).toDouble();
 
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),

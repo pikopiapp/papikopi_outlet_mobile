@@ -29,6 +29,21 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  String _normalizedRole(String? role) => (role ?? '').trim().toLowerCase();
+
+  void _navigateByRole(String? role) {
+    switch (_normalizedRole(role)) {
+      case 'manager':
+        Navigator.of(context).pushReplacementNamed('/manager');
+        break;
+      case 'investor':
+        Navigator.of(context).pushReplacementNamed('/investor');
+        break;
+      default:
+        Navigator.of(context).pushReplacementNamed('/shell');
+    }
+  }
+
   void _handleLogin() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -49,15 +64,12 @@ class _LoginScreenState extends State<LoginScreen> {
       await authProvider.signIn(email: rawEmail, password: rawPassword);
 
       if (mounted && authProvider.isAuthenticated) {
-        final role = authProvider.currentUser?.role;
-
-        if (role == 'manager') {
-          Navigator.of(context).pushReplacementNamed('/manager');
-        } else if (role == 'investor') {
-          Navigator.of(context).pushReplacementNamed('/investor');
-        } else {
-          Navigator.of(context).pushReplacementNamed('/shell');
+        if (authProvider.currentUser?.isActive == false) {
+          Navigator.of(context).pushReplacementNamed('/inactive');
+          return;
         }
+
+        _navigateByRole(authProvider.currentUser?.role);
       }
     } catch (e) {
       if (mounted) {

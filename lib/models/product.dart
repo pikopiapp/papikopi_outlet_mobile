@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class Category {
   final String id;
   final String name;
@@ -113,6 +115,10 @@ class Product {
   /// Returns JSON with product information that can be encoded in QR code
   /// Format matches web dashboard batch QR code structure
   String getQRData() {
-    return '{"product":"${name}","id":"${id}","price":$price}';
+    return jsonEncode({
+      'product': name,
+      'id': id,
+      'price': price,
+    });
   }
 }

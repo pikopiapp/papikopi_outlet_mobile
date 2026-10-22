@@ -213,6 +213,7 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
           ),
           TextButton(
             onPressed: () async {
+              final messenger = ScaffoldMessenger.maybeOf(context);
               Navigator.pop(context);
               try {
                 await supabaseService.client
@@ -220,19 +221,13 @@ class _ExpenseManagementScreenState extends State<ExpenseManagementScreen> {
                     .delete()
                     .eq('id', expenseId);
                 _loadExpenses();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Pengeluaran berhasil dihapus'),
-                    ),
-                  );
-                }
+                if (!mounted) return;
+                messenger?.showSnackBar(
+                  const SnackBar(content: Text('Pengeluaran berhasil dihapus')),
+                );
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
+                if (!mounted) return;
+                messenger?.showSnackBar(SnackBar(content: Text('Error: $e')));
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),

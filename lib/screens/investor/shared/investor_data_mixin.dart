@@ -11,11 +11,7 @@ mixin InvestorDataMixin<T extends StatefulWidget> on State<T> {
     final user = authProvider.currentUser;
     if (user == null) return [];
 
-    try {
-      return await supabaseService.getInvestorAssignments(investorId: user.id);
-    } catch (e) {
-      return [];
-    }
+    return supabaseService.getInvestorAssignments(investorId: user.id);
   }
 
   Future<String?> resolveInvestorOutletId() async {
