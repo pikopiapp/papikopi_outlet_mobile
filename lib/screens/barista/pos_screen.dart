@@ -902,15 +902,33 @@ class _POSScreenState extends State<POSScreen> with TickerProviderStateMixin {
             ? product.products
             : product.getProductsByCategory(_selectedCategoryId!);
 
-        if (product.isLoading) {
+        // Only show the skeleton on the very first load. Background refreshes used to
+        // replace the whole grid, so the product list appeared to vanish until a reload.
+        if (product.isLoading && products.isEmpty) {
           return _buildProductGridSkeleton();
         }
 
         if (products.isEmpty) {
+          final auth = context.read<AuthProvider>();
           return Center(
-            child: Text(
-              'Tidak ada produk',
-              style: Theme.of(context).textTheme.bodyMedium,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Tidak ada produk',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () {
+                    if (auth.currentUser != null) {
+                      product.loadProductsWithStock(auth.currentUser!.outletId);
+                    }
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Muat ulang'),
+                ),
+              ],
             ),
           );
         }

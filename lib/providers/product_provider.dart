@@ -132,8 +132,24 @@ class ProductProvider extends ChangeNotifier {
     return _products.where((p) => p.categoryId == categoryId).toList();
   }
 
-  // Load products with stock for a specific outlet
-  Future<void> loadProductsWithStock(String outletId) async {
+  // Load products with stock for a specific outlet.
+  // Concurrent calls are coalesced: switching tabs used to start overlapping fetches and
+  // each one flipped the POS back into its skeleton state.
+  Future<void>? _inflightLoad;
+
+  Future<void> loadProductsWithStock(String outletId) {
+    final running = _inflightLoad;
+    if (running != null) {
+      return running;
+    }
+
+    _inflightLoad = _loadProductsWithStock(outletId).whenComplete(() {
+      _inflightLoad = null;
+    });
+    return _inflightLoad!;
+  }
+
+  Future<void> _loadProductsWithStock(String outletId) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -255,22 +271,28 @@ class ProductProvider extends ChangeNotifier {
         const Duration(milliseconds: 1),
       );
 
-      final stockMap = await _supabaseService.getProductStock(
-        outletId,
-        selectedDate: today,
-      );
-      final soldMap = await _supabaseService.getSoldQuantityToday(
-        outletId: outletId,
-        selectedDate: today,
-      );
-      final returnedMap = await _supabaseService.getReturnedQuantityToday(
-        outletId: outletId,
-        selectedDate: today,
-      );
-      final transferStats = await _supabaseService.getProductTransferStats(
-        outletId: outletId,
-        selectedDate: today,
-      );
+      // Run the four stock queries together; sequentially they could take long enough
+      // that the POS showed a skeleton for several seconds on every refresh.
+      final stockResults = await Future.wait<Object>([
+        _supabaseService
+            .getProductStock(outletId, selectedDate: today)
+            .catchError((_) => <String, int>{}),
+        _supabaseService
+            .getSoldQuantityToday(outletId: outletId, selectedDate: today)
+            .catchError((_) => <String, int>{}),
+        _supabaseService
+            .getReturnedQuantityToday(outletId: outletId, selectedDate: today)
+            .catchError((_) => <String, int>{}),
+        _supabaseService
+            .getProductTransferStats(outletId: outletId, selectedDate: today)
+            .catchError((_) => <String, Map<String, int>>{}),
+      ]);
+
+      final stockMap = stockResults[0] as Map<String, int>;
+      final soldMap = stockResults[1] as Map<String, int>;
+      final returnedMap = stockResults[2] as Map<String, int>;
+      final transferStats =
+          stockResults[3] as Map<String, Map<String, int>>;
 
       // Add stock info to products
       // stock = quantity from showcase_allocations (no deductions)
