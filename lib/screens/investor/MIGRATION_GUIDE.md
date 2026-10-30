@@ -10,7 +10,7 @@ This document describes the comprehensive refactoring of the investor module scr
 lib/screens/investor/
 ├── investor_screen.dart                    # Main wrapper with bottom nav
 ├── investor_home_screen.dart               # Dashboard with outlet performance
-├── investor_revenue_screen.dart            # Revenue analytics with charts
+├── investor_transactions_screen.dart       # Transaction history
 ├── investor_report_outlet_screen.dart      # Outlet performance reports
 ├── investor_notification_screen.dart       # Investor notifications
 ├── investor_withdrawal_screen.dart         # Withdrawal request management

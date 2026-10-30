@@ -1,5 +1,7 @@
 # Profit Calculator Integration Summary
 
+> Catatan 2026-10-30: `investor_revenue_screen.dart` sudah dihapus. Ringkasan profit investor kini ada di `investor_home_screen.dart` dan `investor_report_outlet_screen.dart`; sedangkan riwayat transaksi ada di `investor_transactions_screen.dart`.
+
 ## Completed Integration Tasks
 
 ### 1. **investor_revenue_screen.dart** ✅
