@@ -19,10 +19,37 @@ class AuthProvider extends ChangeNotifier {
   Future<void> initialize() async {
     final saved = _authService.getSavedUser();
 
-    // Resolve current user (and investorId remap) from Supabase session.
-    final current = await _supabaseService.getCurrentUserWithProfile();
+    try {
+      // Resolve the profile from the live Supabase session.
+      final current = await _supabaseService.getCurrentUserWithProfile();
 
-    _currentUser = current ?? saved;
+      if (current != null) {
+        _currentUser = current;
+        // Refresh the cache so a re-keyed profile replaces the old id on disk.
+        await _authService.saveUser(current);
+      } else if (_supabaseService.hasActiveSession) {
+        // The session is live but no users row matches it: the profile was removed or
+        // recreated. Selling under the cached id would write sales no report can
+        // attribute, so end the session and ask for a fresh login.
+        try {
+          await _supabaseService.signOut();
+        } catch (_) {
+          // Even when the server call fails the local cache must not keep the old id.
+        }
+        await _authService.clearUser();
+        _currentUser = null;
+      } else {
+        // No session left (expired, or signed out elsewhere). A cached id can point at
+        // a profile that has since been replaced; it is not proof of a login.
+        await _authService.clearUser();
+        _currentUser = null;
+      }
+    } catch (e) {
+      // Offline: the profile cannot be re-verified. Boot with the cached identity so
+      // the app stays usable; it is checked again on the next online start.
+      _currentUser = saved;
+    }
+
     notifyListeners();
   }
 
@@ -50,8 +77,16 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return;
       } catch (e) {
-        attempt++;
         _error = e.toString();
+
+        // A missing profile will not appear on retry; send the user to the login screen.
+        if (e is MissingProfileException) {
+          _isLoading = false;
+          notifyListeners();
+          rethrow;
+        }
+
+        attempt++;
 
         // If last attempt failed, stop retrying
         if (attempt >= retryCount) {

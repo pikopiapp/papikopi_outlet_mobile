@@ -10,6 +10,17 @@ import '../models/stock.dart';
 import '../utils/bonus_calculator.dart';
 import 'package:image_picker/image_picker.dart';
 
+/// Thrown when the signed-in auth account has no matching `public.users` row.
+/// Callers must answer it by sending the user back to login, never by writing
+/// records with the auth id (it is not a users.id for most staff).
+class MissingProfileException implements Exception {
+  const MissingProfileException();
+
+  @override
+  String toString() =>
+      'Akun ini belum memiliki profil pengguna. Hubungi admin.';
+}
+
 // ignore_for_file: avoid_print, empty_catches, unused_catch_stack
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -327,11 +338,16 @@ class SupabaseService {
           print('DEBUG signIn user id: ${sessionUser.id}');
         } catch (e) {}
         // Ambil user profile dari tabel untuk isi role/outletId seperti model app.
-        final profile = await _client
-            .from('users')
-            .select()
-            .eq('id', sessionUser.id)
-            .single();
+        // Profil staff tidak selalu memakai auth id, jadi email dipakai sebagai cadangan.
+        final profile = await _fetchUserRow(
+          id: sessionUser.id,
+          email: sessionUser.email ?? email,
+        );
+        if (profile == null) {
+          // Tanpa profil, role dan outlet tidak bisa dipastikan; id auth bukan users.id.
+          await _client.auth.signOut();
+          throw const MissingProfileException();
+        }
 
         final user = user_model.User.fromJson(profile);
 
@@ -359,6 +375,8 @@ class SupabaseService {
         return user;
       }
     } catch (e) {
+      if (e is MissingProfileException) rethrow;
+
       // 2) Fallback ke RPC verifikasi (legacy) jika auth sign-in gagal.
 
       final response = await _client
@@ -464,9 +482,15 @@ class SupabaseService {
 
   /// Async variant: resolve investor remap from `users` table using the current session.
   /// This fixes the case where we load "saved user" without re-running `signIn()`.
+  ///
+  /// Returns null when there is no session or when no `users` row matches it. It never
+  /// falls back to the auth id: every sale, approval and handover column stores a
+  /// `users.id`, and for most staff the auth id is a different value, so writing it
+  /// creates rows that wages and reports cannot attribute.
   Future<user_model.User?> getCurrentUserWithProfile() async {
     // If we already have a remapped cached user, use it.
     if (_cachedUser != null) return _cachedUser;
+    if (!_isInitialized) return null;
 
     final session = _client.auth.currentSession;
     if (session == null) return null;
@@ -478,54 +502,74 @@ class SupabaseService {
       // ignore
     }
 
-    // Baseline user from session
-    final baseline = user_model.User(
+    final profile = await _fetchUserRow(
       id: session.user.id,
-      email: session.user.email ?? '',
-      name: session.user.userMetadata?['name'] ?? 'User',
-      role: session.user.userMetadata?['role'] ?? 'barista',
-      outletId: session.user.userMetadata?['outlet_id'] ?? '',
-      createdAt: DateTime.parse(session.user.createdAt),
+      email: session.user.email,
     );
+    if (profile == null) {
+      return null;
+    }
 
-    try {
-      final profile = await _client
+    final parsed = user_model.User.fromJson(profile);
+
+    final profileRole = parsed.role;
+    final dynamicInvestorId = profile['investor_id'];
+    final investorIdFromProfile =
+        (dynamicInvestorId is String && dynamicInvestorId.isNotEmpty)
+        ? dynamicInvestorId
+        : null;
+
+    if (profileRole == 'investor' && investorIdFromProfile != null) {
+      _cachedUser = user_model.User(
+        id: investorIdFromProfile,
+        email: parsed.email,
+        name: parsed.name,
+        role: parsed.role,
+        outletId: parsed.outletId,
+        createdAt: parsed.createdAt,
+        updatedAt: parsed.updatedAt,
+      );
+      return _cachedUser;
+    }
+
+    _cachedUser = parsed;
+    return _cachedUser;
+  }
+
+  /// True when Supabase restored a session, even if the profile could not be read.
+  bool get hasActiveSession => _isInitialized && _client.auth.currentSession != null;
+
+  /// Resolve the `users` row for a signed-in account: by id first, then by email,
+  /// because staff profiles are not always keyed by the auth user id.
+  /// Throws when the lookup itself fails (e.g. offline) and returns null when no row matches.
+  Future<Map<String, dynamic>?> _fetchUserRow({String? id, String? email}) async {
+    if (id != null && id.isNotEmpty) {
+      final byId = await _client
           .from('users')
           .select()
-          .eq('id', session.user.id)
-          .single();
-
-      // Debug: show all columns returned by users so we can find which one maps to investor_assignments.investor_id
-
-      final parsed = user_model.User.fromJson(profile);
-
-      final profileRole = parsed.role;
-      final dynamicInvestorId = profile['investor_id'];
-      final investorIdFromProfile =
-          (dynamicInvestorId is String && dynamicInvestorId.isNotEmpty)
-          ? dynamicInvestorId
-          : null;
-
-      if (profileRole == 'investor' && investorIdFromProfile != null) {
-        _cachedUser = user_model.User(
-          id: investorIdFromProfile,
-          email: parsed.email,
-          name: parsed.name,
-          role: parsed.role,
-          outletId: parsed.outletId,
-          createdAt: parsed.createdAt,
-          updatedAt: parsed.updatedAt,
-        );
-        return _cachedUser;
-      }
-
-      _cachedUser = parsed;
-      return _cachedUser;
-    } catch (e) {
-      // If profile lookup fails, fallback to baseline.
-      return baseline;
+          .eq('id', id)
+          .maybeSingle();
+      if (byId != null) return byId;
     }
+
+    final address = (email ?? '').trim();
+    if (address.isNotEmpty) {
+      final byEmail = await _client
+          .from('users')
+          .select()
+          .ilike('email', _escapeLikePattern(address))
+          .limit(1)
+          .maybeSingle();
+      if (byEmail != null) return byEmail;
+    }
+
+    return null;
   }
+
+  // `_` and `%` are LIKE wildcards and appear in real addresses; escape them so the
+  // email match cannot land on a different account.
+  static String _escapeLikePattern(String value) =>
+      value.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '\\${m[0]}');
 
   void setCurrentUser(user_model.User user) {
     _cachedUser = user;
