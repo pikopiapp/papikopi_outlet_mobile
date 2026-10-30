@@ -383,7 +383,6 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
         showcaseProductId: showcaseProductId,
         outletId: _selectedOutletId!,
         quantity: quantity,
-        selectedDate: _selectedDate,
       );
 
       debugPrint('[ShowcaseAllocationScreen] Allocation result: $result');
@@ -635,10 +634,8 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       final productId = product['id'] as String;
       final allocProductName = product['product_name'] as String? ?? 'Produk';
       final totalQuantity = product['total_quantity'] as int? ?? 0;
-      final allocated = _assignments
-          .where((a) => a['showcase_product_id'] == productId)
-          .fold<int>(0, (sum, a) => sum + (a['quantity'] as int? ?? 0));
-      final remaining = totalQuantity - allocated;
+      final dispatched = (product['allocated_quantity'] as num?)?.toInt() ?? 0;
+      final remaining = totalQuantity - dispatched;
 
       if (remaining <= 0) {
         if (mounted) {
@@ -871,7 +868,6 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
             showcaseProductId: showcaseProductId,
             outletId: _selectedOutletId!,
             quantity: quantity,
-            selectedDate: _selectedDate,
           );
 
           if (result['success'] == true) {
@@ -944,11 +940,8 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
     final productId = product['id'] as String;
     final productName = product['product_name'] as String? ?? 'Unknown';
     final totalQuantity = product['total_quantity'] as int? ?? 0;
-
-    final allocated = _assignments
-        .where((a) => a['showcase_product_id'] == productId)
-        .fold<int>(0, (sum, a) => sum + (a['quantity'] as int? ?? 0));
-    final remaining = totalQuantity - allocated;
+    final dispatched = (product['allocated_quantity'] as num?)?.toInt() ?? 0;
+    final remaining = totalQuantity - dispatched;
     final canAllocate = remaining > 0;
 
     if (!_quantityControllers.containsKey(productId)) {
@@ -999,11 +992,11 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Dialokasikan:',
+                'Tersalur (semua outlet):',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               Text(
-                allocated.toString(),
+                dispatched.toString(),
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
