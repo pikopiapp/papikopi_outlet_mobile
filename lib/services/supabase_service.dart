@@ -609,6 +609,11 @@ class SupabaseService {
   }
 
   // Sales
+  //
+  // The header and its items are written by one Postgres function so a dropped
+  // connection can never leave a sale without items. `saleId` is generated once per
+  // checkout attempt by the caller and reused on retry: a repeat call is a no-op,
+  // which is what keeps an ambiguous timeout from booking the sale twice.
   Future<String> createSale({
     required String outletId,
     required String baristaId,
@@ -619,59 +624,41 @@ class SupabaseService {
     required double profit,
     required List<Map<String, dynamic>> items,
     DateTime? createdAt,
+    String? saleId,
   }) async {
-    String? saleId;
-    try {
-      if (items.isEmpty) {
-        throw Exception('Transaksi harus memiliki minimal satu item');
-      }
-
-      // 🔧 FIX: Generate UUID locally for reliable sale ID
-      // This ensures sale_items will always link to the correct sale
-      const uuid = Uuid();
-      saleId = uuid.v4();
-
-      final normalizedCreatedAt = (createdAt ?? DateTime.now()).toUtc();
-
-      await _client.from('sales').insert({
-        'id': saleId, // 🔧 Include generated ID in insert
-        'outlet_id': outletId,
-        'barista_id': baristaId,
-        'payment_method': paymentMethod.toUpperCase(),
-        'total_amount': totalAmount,
-        'hpp_total': totalHpp,
-        'bonus_amount': totalBonus,
-        'profit': profit,
-        'created_at': normalizedCreatedAt.toIso8601String(),
-      });
-
-      // Insert sale items as one request so a failed item batch can be rolled back.
-      final saleItems = items.map((item) {
-        final price = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
-        final hpp = (item['hpp'] as num?)?.toDouble() ?? 0.0;
-
-        return {
-          'sale_id': saleId, // 🔧 Use generated saleId directly
-          'product_id': item['product_id'],
-          'quantity': item['quantity'],
-          'price': price,
-          'hpp': hpp,
-        };
-      }).toList();
-
-      await _client.from('sale_items').insert(saleItems);
-
-      return saleId;
-    } catch (e) {
-      if (saleId != null) {
-        try {
-          await _client.from('sales').delete().eq('id', saleId);
-        } catch (_) {
-          // Preserve the original checkout error if cleanup also fails.
-        }
-      }
-      rethrow;
+    if (items.isEmpty) {
+      throw Exception('Transaksi harus memiliki minimal satu item');
     }
+
+    final id = saleId ?? const Uuid().v4();
+    final normalizedCreatedAt = (createdAt ?? DateTime.now()).toUtc();
+
+    await _client.rpc(
+      'create_sale',
+      params: {
+        'p_sale_id': id,
+        'p_outlet_id': outletId,
+        'p_barista_id': baristaId,
+        'p_payment_method': paymentMethod.toUpperCase(),
+        'p_total_amount': totalAmount,
+        'p_hpp_total': totalHpp,
+        'p_bonus_amount': totalBonus,
+        'p_profit': profit,
+        'p_created_at': normalizedCreatedAt.toIso8601String(),
+        'p_items': items
+            .map(
+              (item) => {
+                'product_id': item['product_id'],
+                'quantity': item['quantity'],
+                'price': (item['unit_price'] as num?)?.toDouble() ?? 0.0,
+                'hpp': (item['hpp'] as num?)?.toDouble() ?? 0.0,
+              },
+            )
+            .toList(),
+      },
+    );
+
+    return id;
   }
 
   Future<List<Sale>> getSales({
@@ -4017,16 +4004,19 @@ class SupabaseService {
     }
 
     try {
-      await _client
+      // .select() makes an update that matched no row observable; without it the
+      // screen reported success for a handover that was never touched.
+      final updated = await _client
           .from('cash_deposit_handovers')
           .update({
             'status': 'approved',
             'approved_by': approverId,
             'approved_at': DateTime.now().toIso8601String(),
           })
-          .eq('id', handoverId);
+          .eq('id', handoverId)
+          .select('id');
 
-      return true;
+      return (updated as List).isNotEmpty;
     } catch (e) {
       return false;
     }
@@ -5864,36 +5854,9 @@ class SupabaseService {
         'DEBUG getDailyReceipts - finalResult count: ${finalResult.length}',
       );
 
-      // If no data, return sample data for demonstration
-      if (finalResult.isEmpty) {
-        print('DEBUG getDailyReceipts - No data found, creating sample data');
-        final now = DateTime.now();
-        final List<Map<String, dynamic>> sampleData = [];
-        // Create sample data for last 7 days
-        for (int i = 0; i < 7; i++) {
-          final date = now.subtract(Duration(days: i));
-          final businessDay = DateTime(
-            date.year,
-            date.month,
-            date.day,
-            4,
-            0,
-            0,
-          );
-
-          sampleData.add({
-            'date': businessDay,
-            'dateKey': businessDay.toIso8601String().split('T')[0],
-            'salesAmount': (150000.0 + (i * 25000)).toDouble(),
-            'salesCount': 2 + i,
-            'depositAmount': (100000.0 + (i * 15000)).toDouble(),
-            'depositStatus': i % 2 == 0 ? 'approved' : 'pending',
-            'items': [],
-          });
-        }
-        return sampleData;
-      }
-
+      // No fabricated fallback here: an empty day must render as empty. Inventing
+      // seven days of wages and approved/pending statuses made the finance screen
+      // present money that never moved.
       return finalResult;
     } catch (e) {
       print('Error getting daily receipts: $e');
@@ -6278,12 +6241,20 @@ class SupabaseService {
 
       // Update existing record status to approved for the computed business day and outlet
       print('DEBUG approveBaristaPayment - Updating existing record');
-      await _client
+      final updated = await _client
           .from('cash_deposit_handovers')
           .update({'status': 'approved'})
           .eq('barista_id', baristaId)
           .eq('outlet_id', outletId)
-          .eq('date', queryDateStr);
+          .eq('date', queryDateStr)
+          .select('id');
+
+      if ((updated as List).isEmpty) {
+        print(
+          'DEBUG approveBaristaPayment - no handover matched barista=$baristaId outlet=$outletId date=$queryDateStr',
+        );
+        return false;
+      }
 
       print('DEBUG approveBaristaPayment - Record updated successfully');
 

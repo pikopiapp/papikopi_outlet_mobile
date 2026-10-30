@@ -12,134 +12,44 @@ class InvestorNotificationScreen extends StatefulWidget {
 }
 
 class _InvestorNotificationScreenState extends State<InvestorNotificationScreen> {
+  // This screen used to render three hardcoded items, including "Profit bulan Juni
+  // 2026 telah dibagikan" and an Rp 150.000 transaction. Nothing in the database
+  // backed them, so investors were shown fabricated financial events. Until real
+  // notifications exist, say so instead of inventing them.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: PapikopiAppBar(
-        titleText: 'Notifikasi',
-      ),
+      appBar: PapikopiAppBar(titleText: 'Notifikasi'),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
+        child: Center(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Notification item cards
-              _buildNotificationItem(
-                icon: Icons.payments_rounded,
-                title: 'Transaksi Baru',
-                subtitle: 'Outlet Papi Kopi Sawangan telah melakukan transaksi sebesar Rp 150.000',
-                time: '2 jam yang lalu',
-                isRead: false,
+              Icon(
+                Icons.notifications_none_rounded,
+                size: 48,
+                color: AppColors.textSecondary,
               ),
-              const SizedBox(height: 10),
-              _buildNotificationItem(
-                icon: Icons.trending_up_rounded,
-                title: 'Profit Dibagikan',
-                subtitle: 'Profit bulan Juni 2026 telah dibagikan ke akun Anda.',
-                time: '1 hari yang lalu',
-                isRead: false,
+              const SizedBox(height: 12),
+              Text(
+                'Belum ada notifikasi',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
               ),
-              const SizedBox(height: 10),
-              _buildNotificationItem(
-                icon: Icons.new_releases_rounded,
-                title: 'Pembaruan Sistem',
-                subtitle: 'Aplikasi telah diperbarui dengan fitur terbaru.',
-                time: '3 hari yang lalu',
-                isRead: true,
+              const SizedBox(height: 6),
+              Text(
+                'Pemberitahuan pembagian profit akan muncul di sini.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNotificationItem({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String time,
-    required bool isRead,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isRead ? AppColors.surface : AppColors.primary.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isRead
-              ? AppColors.altSurface
-              : AppColors.primary.withValues(alpha: 0.15),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isRead
-                  ? AppColors.altSurface
-                  : AppColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: isRead ? AppColors.textSecondary : AppColors.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: isRead ? FontWeight.w600 : FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    if (!isRead)
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  time,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary.withValues(alpha: 0.7),
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

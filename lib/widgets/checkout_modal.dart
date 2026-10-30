@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
@@ -22,6 +23,10 @@ class _CheckoutModalState extends State<CheckoutModal> {
   bool _isProcessing = false;
   bool _showWarning = false;
   String _warningMessage = '';
+
+  // Reused across retries of the same cart so a retry after an ambiguous timeout
+  // resolves to the sale that was already written instead of booking a second one.
+  String? _pendingSaleId;
 
   // Get the tabController from widget prop or try to find from context
   TabController? get tabController {
@@ -217,6 +222,8 @@ class _CheckoutModalState extends State<CheckoutModal> {
       // Create sale in POS system
       if (_selectedPaymentMethod == 'GRATIS') {}
 
+      final saleId = _pendingSaleId ??= const Uuid().v4();
+
       await supabaseService.createSale(
         outletId: outletId,
         baristaId: authProvider.currentUser!.id,
@@ -227,7 +234,11 @@ class _CheckoutModalState extends State<CheckoutModal> {
         profit: profit,
         items: items,
         createdAt: checkoutTimestamp,
+        saleId: saleId,
       );
+
+      // The sale is committed; a later retry must start a new one.
+      _pendingSaleId = null;
 
       // Record sales to warehouse system (sales_records table)
       // This tracks batch sales for inventory management

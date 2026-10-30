@@ -226,8 +226,11 @@ class _ApprovalScreenState extends State<ApprovalScreen>
 
   Future<void> _recordShortfallCompensation(
     String handoverId,
-    double kekuranganUpah,
-  ) async {
+    double kekuranganUpah, {
+    required String outletId,
+    required String baristaId,
+    required DateTime date,
+  }) async {
     final noteController = TextEditingController();
 
     showDialog(
@@ -308,6 +311,28 @@ class _ApprovalScreenState extends State<ApprovalScreen>
                   messenger.showSnackBar(
                     const SnackBar(
                       content: Text('User tidak ditemukan'),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                  return;
+                }
+
+                // Write the receipt itself first. Approving without it told the
+                // manager the compensation was recorded while nothing was booked.
+                final recorded = await supabaseService.recordShortfallReceipt(
+                  outletId: outletId,
+                  baristaId: baristaId,
+                  kekuranganUpah: kekuranganUpah,
+                  notes: noteController.text.trim(),
+                  date: date,
+                );
+
+                if (!recorded) {
+                  navigator.pop();
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Gagal mencatat tanda terima'),
                       backgroundColor: Colors.red,
                       duration: Duration(seconds: 3),
                     ),
@@ -678,8 +703,15 @@ class _ApprovalScreenState extends State<ApprovalScreen>
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () => _recordShortfallCompensation(
-                          handover['id'],
+                          handover['id'] as String,
                           kekuranganUpah,
+                          outletId: handover['outlet_id'] as String,
+                          baristaId: handover['barista_id'] as String,
+                          date:
+                              DateTime.tryParse(
+                                handover['date']?.toString() ?? '',
+                              ) ??
+                              DateTime.now(),
                         ),
                         icon: const Icon(Icons.receipt),
                         label: const Text('Catat Tanda Terima'),
