@@ -83,16 +83,18 @@ class _InvestorReportOutletScreenState extends State<InvestorReportOutletScreen>
       _errorMessage = null;
     });
     try {
-      final dateWindow = InvestorPeriod.calendarDateRangeUtc(
-        selectedRange.start,
-        selectedRange.end,
+      final dateWindow = (
+        start: InvestorPeriod.businessDayUtc(selectedRange.start).start,
+        end: InvestorPeriod.businessDayUtc(
+          selectedRange.end,
+        ).end.subtract(const Duration(microseconds: 1)),
       );
       final nowUtc = DateTime.now().toUtc();
-      final nowWib = nowUtc.add(const Duration(hours: 7));
+      final today = InvestorPeriod.businessDayNow();
       final isTodaySelected =
-          selectedRange.end.year == nowWib.year &&
-          selectedRange.end.month == nowWib.month &&
-          selectedRange.end.day == nowWib.day;
+          selectedRange.end.year == today.year &&
+          selectedRange.end.month == today.month &&
+          selectedRange.end.day == today.day;
       final hppEndDate = isTodaySelected ? nowUtc : dateWindow.end;
       final calendarEndDate = DateTime(
         selectedRange.end.year,
@@ -120,7 +122,7 @@ class _InvestorReportOutletScreenState extends State<InvestorReportOutletScreen>
         ),
         endBusinessDate: calendarEndDate,
         assignmentStartDate: gerobak.startDate,
-        calendarDays: true,
+        outletLevelBonus: true,
       );
 
       if (!mounted) return;
@@ -172,7 +174,10 @@ class _InvestorReportOutletScreenState extends State<InvestorReportOutletScreen>
           createdAt.toUtc().isBefore(assignmentStartUtc)) {
         continue;
       }
-      final dateWib = createdAt.toUtc().add(const Duration(hours: 7));
+      var dateWib = createdAt.toUtc().add(const Duration(hours: 7));
+      if (dateWib.hour < 4) {
+        dateWib = dateWib.subtract(const Duration(days: 1));
+      }
       final day = DateTime(dateWib.year, dateWib.month, dateWib.day);
       final index = day.difference(range.start).inDays;
       if (index < 0 || index >= dayCount) continue;

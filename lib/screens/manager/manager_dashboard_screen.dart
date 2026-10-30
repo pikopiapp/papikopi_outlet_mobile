@@ -75,16 +75,85 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     }
   }
 
+  /// UTC bounds of the business day that contains [date]. `sales.created_at`
+  /// stores UTC wall time without an offset, so the window is built in UTC
+  /// (04:00 WIB = 21:00 UTC the day before) instead of converting a local
+  /// DateTime, which shifted the window by the device's offset.
+  ({DateTime start, DateTime end}) _businessDayBounds(DateTime date) {
+    final start = DateTime.utc(
+      date.year,
+      date.month,
+      date.day,
+      4,
+    ).subtract(const Duration(hours: 7));
+    return (start: start, end: start.add(const Duration(days: 1)));
+  }
+
   Future<void> _loadDashboardData() async {
     setState(() => isLoading = true);
     try {
-      await Future.wait([
-        _loadDateSales(),
-        _loadDateTransactions(),
-        _loadDateTopOutlets(),
-        _loadDateActiveOutlets(),
-      ]);
-      setState(() => isLoading = false);
+      final auth = context.read<AuthProvider>();
+      // Managers see all outlets; everyone else is limited to their own.
+      final outletId = auth.currentUser?.role == 'manager'
+          ? null
+          : auth.currentUser?.outletId;
+      final win = _businessDayBounds(selectedDate);
+
+      final rows = await supabaseService.getSalesForRange(
+        outletId: outletId,
+        startUtc: win.start,
+        endUtc: win.end,
+      );
+
+      var salesTotal = 0.0;
+      final outletSales = <String, double>{};
+      final outletNames = <String, String>{};
+      for (final sale in rows) {
+        final amount = (sale['total_amount'] as num?)?.toDouble() ?? 0;
+        salesTotal += amount;
+        final oid = sale['outlet_id'] as String?;
+        if (oid == null || oid.isEmpty) continue;
+        outletSales[oid] = (outletSales[oid] ?? 0) + amount;
+        outletNames[oid] =
+            (sale['outlets'] as Map?)?['name'] as String? ?? 'Unknown';
+      }
+
+      final ranked = outletSales.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      final top = <Map<String, dynamic>>[];
+      for (var i = 0; i < ranked.length && i < 3; i++) {
+        top.add({
+          'name': outletNames[ranked[i].key] ?? 'Unknown',
+          'amount': ranked[i].value,
+          'rank': i + 1,
+        });
+      }
+
+      final recent = rows.take(5).map((sale) {
+        final oid = sale['outlet_id'] as String? ?? '';
+        return <String, dynamic>{
+          'id': sale['id'],
+          'amount': (sale['total_amount'] as num?)?.toDouble() ?? 0,
+          'outlet': outletNames[oid] ?? 'Unknown',
+          'time': formatTimestampForJakartaDisplay(
+            sale['created_at'] ?? '',
+            pattern: 'HH:mm',
+          ),
+          'payment_method': sale['payment_method'],
+        };
+      }).toList();
+
+      if (!mounted) return;
+      setState(() {
+        todaySales = salesTotal;
+        totalTransactions = rows.length;
+        recentTransactions = recent;
+        topOutlets = top;
+        activeOutlets = outletNames.entries
+            .map((entry) => {'id': entry.key, 'name': entry.value})
+            .toList();
+        isLoading = false;
+      });
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
@@ -92,199 +161,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
-    }
-  }
-
-  Future<void> _loadDateActiveOutlets() async {
-    try {
-      final selectedLocal = DateTime(
-        selectedDate.year,
-        selectedDate.month,
-        selectedDate.day,
-        4,
-      );
-      final startOfDayUtc = selectedLocal.subtract(const Duration(hours: 7)).toUtc();
-      final endOfDayUtc = startOfDayUtc.add(const Duration(days: 1));
-
-      final response = await supabaseService.client
-          .from('sales')
-          .select('outlet_id, outlets(name)')
-          .gte('created_at', startOfDayUtc.toIso8601String())
-          .lt('created_at', endOfDayUtc.toIso8601String());
-
-      final Map<String, String> outletNames = {};
-      for (var sale in response) {
-        final outletId = sale['outlet_id'] as String?;
-        final outletName = sale['outlets']?['name'] as String? ?? 'Unknown';
-        if (outletId != null && outletId.isNotEmpty) {
-          outletNames[outletId] = outletName;
-        }
-      }
-
-      final outlets = outletNames.entries
-          .map((entry) => {
-                'id': entry.key,
-                'name': entry.value,
-              })
-          .toList();
-
-      setState(() => activeOutlets = outlets);
-    } catch (e) {
-      debugPrint('Error loading active outlets: $e');
-      setState(() => activeOutlets = []);
-    }
-  }
-
-  Future<void> _loadDateSales() async {
-    try {
-      // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
-      // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
-      final selectedLocal = DateTime(
-        selectedDate.year,
-        selectedDate.month,
-        selectedDate.day,
-        4,
-      );
-      final startOfDay = selectedLocal.subtract(
-        const Duration(hours: 7),
-      ); // Convert to UTC
-      final endOfDay = startOfDay.add(const Duration(days: 1));
-
-      final response = await supabaseService.client
-          .from('sales')
-          .select('total_amount')
-          .gte('created_at', startOfDay.toIso8601String())
-          .lt('created_at', endOfDay.toIso8601String());
-
-      double total = 0;
-      for (var sale in response) {
-        total += (sale['total_amount'] as num?)?.toDouble() ?? 0;
-      }
-
-      setState(() => todaySales = total);
-    } catch (e) {
-      debugPrint('Error loading date sales: $e');
-    }
-  }
-
-  Future<void> _loadDateTransactions() async {
-    try {
-      // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
-      final selectedLocal = DateTime(
-        selectedDate.year,
-        selectedDate.month,
-        selectedDate.day,
-        4,
-      );
-      final startOfDayUtc = selectedLocal.subtract(const Duration(hours: 7)).toUtc();
-      final endOfDayUtc = startOfDayUtc.add(const Duration(days: 1));
-
-        // Get outlet id from AuthProvider
-        final auth = context.read<AuthProvider>();
-        // Managers should see all outlets (no outlet filter). Baristas see their outlet only.
-        final outletId = auth.currentUser?.role == 'manager'
-          ? null
-          : auth.currentUser?.outletId;
-
-      // Fetch sales using service helper (reuses Sale.fromJson parsing)
-      final fetched = await supabaseService.getSales(outletId: outletId);
-      debugPrint('[ManagerDashboard] fetched sales: ${fetched.length}, outletId: $outletId');
-
-      // Filter by business-day UTC range
-      final filtered = fetched.where((s) {
-        final createdUtc = s.createdAt.toUtc();
-        return !createdUtc.isBefore(startOfDayUtc) && createdUtc.isBefore(endOfDayUtc);
-      }).toList();
-      debugPrint('[ManagerDashboard] filtered sales by range (${startOfDayUtc.toIso8601String()} - ${endOfDayUtc.toIso8601String()}): ${filtered.length}');
-
-      // Sort descending and take latest 5
-      filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      final top5 = filtered.take(5).toList();
-
-      // Resolve outlet names (cache per id) to avoid showing raw ids
-      final Map<String, String> outletNames = {};
-      // Fetch outlet names from `outlets` table once to map ids -> names.
-      try {
-        final outletsResp = await supabaseService.client.from('outlets').select('id, name');
-        for (var o in outletsResp) {
-          outletNames[o['id']] = o['name'];
-        }
-      } catch (e) {
-        debugPrint('[ManagerDashboard] failed to fetch outlets: $e');
-      }
-
-      final transactions = top5.map((sale) {
-        final oid = sale.outletId;
-        final displayTime = formatTimestampForJakartaDisplay(
-          sale.createdAt,
-          pattern: 'HH:mm',
-        );
-        return {
-          'id': sale.id,
-          'amount': sale.totalAmount,
-          'outlet': outletNames[oid] ?? 'Unknown',
-          'time': displayTime,
-          'payment_method': sale.paymentMethod,
-        };
-      }).toList();
-
-      setState(() {
-        recentTransactions = transactions;
-        totalTransactions = filtered.length;
-      });
-    } catch (e) {
-      debugPrint('Error loading date transactions: $e');
-    }
-  }
-
-  Future<void> _loadDateTopOutlets() async {
-    try {
-      // Business day: 04:00 local (UTC+7) = 21:00 previous day UTC
-      // For date 2026-06-11, business day is 2026-06-10 21:00 UTC to 2026-06-11 21:00 UTC
-      final selectedLocal = DateTime(
-        selectedDate.year,
-        selectedDate.month,
-        selectedDate.day,
-        4,
-      );
-      final startOfDay = selectedLocal.subtract(
-        const Duration(hours: 7),
-      ); // Convert to UTC
-      final endOfDay = startOfDay.add(const Duration(days: 1));
-
-      final response = await supabaseService.client
-          .from('sales')
-          .select('outlet_id, total_amount, outlets(name)')
-          .gte('created_at', startOfDay.toIso8601String())
-          .lt('created_at', endOfDay.toIso8601String());
-
-      Map<String, double> outletSales = {};
-      Map<String, String> outletNames = {};
-
-      for (var sale in response) {
-        final outletId = sale['outlet_id'];
-        final amount = (sale['total_amount'] as num?)?.toDouble() ?? 0;
-        final name = sale['outlets']?['name'] ?? 'Unknown';
-
-        outletNames[outletId] = name;
-        outletSales[outletId] = (outletSales[outletId] ?? 0) + amount;
-      }
-
-      // Sort by sales amount
-      final sorted = outletSales.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-
-      List<Map<String, dynamic>> topList = sorted.take(3).map((entry) {
-        return {
-          'name': outletNames[entry.key] ?? 'Unknown',
-          'amount': entry.value,
-          'rank': sorted.indexOf(entry) + 1,
-        };
-      }).toList();
-
-      setState(() => topOutlets = topList);
-    } catch (e) {
-      debugPrint('Error loading date top outlets: $e');
     }
   }
 

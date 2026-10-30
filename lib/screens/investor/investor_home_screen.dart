@@ -89,25 +89,15 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen>
     DateTime selectedMonth,
   ) async {
     final nowUtc = DateTime.now().toUtc();
-    final nowJakarta = nowUtc.add(const Duration(hours: 7));
-    final today = DateTime(nowJakarta.year, nowJakarta.month, nowJakarta.day);
-    final dayWin = InvestorPeriod.calendarDateRangeUtc(today, today);
-    final monthStartUtc = DateTime.utc(
-      selectedMonth.year,
-      selectedMonth.month,
-      1,
-    ).subtract(const Duration(hours: 7));
-    final nextMonthStartUtc = DateTime.utc(
-      selectedMonth.year,
-      selectedMonth.month + 1,
-      1,
-    ).subtract(const Duration(hours: 7));
+    final today = InvestorPeriod.businessDayNow();
+    final dayWin = InvestorPeriod.businessDayUtc(today);
+    final monthWin = InvestorPeriod.businessMonthUtc(selectedMonth);
     final isCurrentMonth =
-        selectedMonth.year == nowJakarta.year &&
-        selectedMonth.month == nowJakarta.month;
+        selectedMonth.year == today.year && selectedMonth.month == today.month;
+    final monthStartUtc = monthWin.start;
     final monthEndUtc = isCurrentMonth
         ? nowUtc
-        : nextMonthStartUtc.subtract(const Duration(microseconds: 1));
+        : monthWin.end.subtract(const Duration(microseconds: 1));
     final monthEndDay = isCurrentMonth
         ? today
         : DateTime(selectedMonth.year, selectedMonth.month + 1, 0);
@@ -131,7 +121,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen>
           startBusinessDate: today,
           endBusinessDate: today,
           assignmentStartDate: gerobak.startDate,
-          calendarDays: true,
+          outletLevelBonus: true,
         );
     final baristaCostsMonth = await supabaseService
         .getInvestorBaristaCostSummary(
@@ -139,7 +129,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen>
           startBusinessDate: DateTime(selectedMonth.year, selectedMonth.month),
           endBusinessDate: monthEndDay,
           assignmentStartDate: gerobak.startDate,
-          calendarDays: true,
+          outletLevelBonus: true,
         );
 
     final salesToday = (hppDay['totalSales'] as num?)?.toDouble() ?? 0.0;
@@ -182,8 +172,7 @@ class _InvestorHomeScreenState extends State<InvestorHomeScreen>
     final outlet = _selected;
     if (outlet == null) return;
 
-    final nowJakarta = DateTime.now().toUtc().add(const Duration(hours: 7));
-    final today = DateTime(nowJakarta.year, nowJakarta.month, nowJakarta.day);
+    final today = InvestorPeriod.businessDayNow();
     final periodLabel = monthly
         ? _monthLabel(_selectedMonth)
         : '${today.day} ${_monthLabel(today).split(' ').first} ${today.year}';

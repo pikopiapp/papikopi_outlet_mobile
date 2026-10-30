@@ -743,6 +743,33 @@ class SupabaseService {
     }
   }
 
+  /// Every sale in a UTC window, paged, with the outlet name attached.
+  /// `sales.created_at` holds naive UTC wall time, so callers pass the window
+  /// as UTC bounds.
+  Future<List<Map<String, dynamic>>> getSalesForRange({
+    String? outletId,
+    required DateTime startUtc,
+    required DateTime endUtc,
+  }) async {
+    if (!_isInitialized) {
+      return [];
+    }
+
+    return _fetchAllPaged(() {
+      var query = _client
+          .from('sales')
+          .select(
+            'id, outlet_id, total_amount, payment_method, created_at, outlets(name)',
+          )
+          .gte('created_at', startUtc.toIso8601String())
+          .lt('created_at', endUtc.toIso8601String());
+      if (outletId != null) {
+        query = query.eq('outlet_id', outletId);
+      }
+      return query.order('created_at', ascending: false).order('id');
+    });
+  }
+
   /// Get monthly gratis transaction statistics
   /// Statistik pemakaian GRATIS bulanan per outlet — basis CUP (item).
   ///
@@ -2298,16 +2325,15 @@ class SupabaseService {
       };
 
       // 3) Aggregate sales profit for those outlets
-      final salesResponse = await _client
-          .from('sales')
-          .select('outlet_id, profit')
-          .inFilter('outlet_id', outletIds)
-          .gte('created_at', startIso)
-          .lte('created_at', endIso);
-
-      final salesRows = (salesResponse as List<dynamic>)
-          .whereType<Map<String, dynamic>>()
-          .toList();
+      final salesRows = await _fetchAllPaged(
+        () => _client
+            .from('sales')
+            .select('outlet_id, profit')
+            .inFilter('outlet_id', outletIds)
+            .gte('created_at', startIso)
+            .lte('created_at', endIso)
+            .order('id'),
+      );
 
       final profitMap = <String, double>{};
       for (final sale in salesRows) {
@@ -3365,12 +3391,15 @@ class SupabaseService {
       );
 
       // Query daily sales
-      final dailyResponse = await _client
-          .from('sales')
-          .select('payment_method, total_amount, created_at, outlet_id')
-          .eq('outlet_id', outletId)
-          .gte('created_at', dailyStart.toIso8601String())
-          .lte('created_at', dailyEnd.toIso8601String());
+      final dailyResponse = await _fetchAllPaged(
+        () => _client
+            .from('sales')
+            .select('payment_method, total_amount, created_at, outlet_id')
+            .eq('outlet_id', outletId)
+            .gte('created_at', dailyStart.toIso8601String())
+            .lte('created_at', dailyEnd.toIso8601String())
+            .order('id'),
+      );
 
       // Calculate weekly (last 7 business days)
       DateTime weeklyStartLocal;
@@ -3395,12 +3424,15 @@ class SupabaseService {
       }
       final weeklyStart = weeklyStartLocal.toUtc();
 
-      final weeklyResponse = await _client
-          .from('sales')
-          .select('payment_method, total_amount, created_at, outlet_id')
-          .eq('outlet_id', outletId)
-          .gte('created_at', weeklyStart.toIso8601String())
-          .lte('created_at', dailyEnd.toIso8601String());
+      final weeklyResponse = await _fetchAllPaged(
+        () => _client
+            .from('sales')
+            .select('payment_method, total_amount, created_at, outlet_id')
+            .eq('outlet_id', outletId)
+            .gte('created_at', weeklyStart.toIso8601String())
+            .lte('created_at', dailyEnd.toIso8601String())
+            .order('id'),
+      );
 
       // Calculate monthly (kalender bulan berjalan, mulai tanggal 1 jam 00:00 waktu lokal)
       // FIX: sebelumnya "last 30 business days" (rolling) sehingga tidak sama
@@ -3408,12 +3440,15 @@ class SupabaseService {
       final monthlyStartLocal = DateTime(year, month, 1, 0, 0, 0);
       final monthlyStart = monthlyStartLocal.toUtc();
 
-      final monthlyResponse = await _client
-          .from('sales')
-          .select('payment_method, total_amount, created_at, outlet_id')
-          .eq('outlet_id', outletId)
-          .gte('created_at', monthlyStart.toIso8601String())
-          .lte('created_at', dailyEnd.toIso8601String());
+      final monthlyResponse = await _fetchAllPaged(
+        () => _client
+            .from('sales')
+            .select('payment_method, total_amount, created_at, outlet_id')
+            .eq('outlet_id', outletId)
+            .gte('created_at', monthlyStart.toIso8601String())
+            .lte('created_at', dailyEnd.toIso8601String())
+            .order('id'),
+      );
 
       // Process daily data
       double dailyTotal = 0, dailyCash = 0, dailyQris = 0;
@@ -5031,6 +5066,20 @@ class SupabaseService {
     }
   }
 
+  /// PostgREST silently stops at 1,000 rows, which silently truncates any sum
+  /// computed client-side. Page until a short page arrives.
+  Future<List<Map<String, dynamic>>> _fetchAllPaged(
+    PostgrestTransformBuilder<List<Map<String, dynamic>>> Function() build,
+  ) async {
+    const pageSize = 1000;
+    final rows = <Map<String, dynamic>>[];
+    for (var offset = 0; ; offset += pageSize) {
+      final page = await build().range(offset, offset + pageSize - 1);
+      rows.addAll(List<Map<String, dynamic>>.from(page));
+      if (page.length < pageSize) return rows;
+    }
+  }
+
   /// Fetch sales data with HPP for profit calculation
   /// Returns list of sales with total_amount and hpp_total
   Future<List<Map<String, dynamic>>> getSalesWithHpp({
@@ -5043,17 +5092,18 @@ class SupabaseService {
     }
 
     try {
-      final response = await _client
-          .from('sales')
-          .select(
-            'id, total_amount, hpp_total, bonus_amount, profit, created_at, payment_method',
-          )
-          .eq('outlet_id', outletId)
-          .gte('created_at', startDate.toIso8601String())
-          .lte('created_at', endDate.toIso8601String())
-          .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(response);
+      return await _fetchAllPaged(
+        () => _client
+            .from('sales')
+            .select(
+              'id, total_amount, hpp_total, bonus_amount, profit, created_at, payment_method',
+            )
+            .eq('outlet_id', outletId)
+            .gte('created_at', startDate.toIso8601String())
+            .lte('created_at', endDate.toIso8601String())
+            .order('created_at', ascending: false)
+            .order('id'),
+      );
     } catch (e) {
       return [];
     }
@@ -5128,14 +5178,17 @@ class SupabaseService {
     }
   }
 
-  /// Calculate bonus from active baristas' non-free sales and meal allowance
-  /// from outlet sales, grouped by business day or calendar day.
+  /// Bonus and meal allowance for an outlet between two business days.
+  /// With [outletLevelBonus] the bonus is computed from all of the outlet's
+  /// non-free sales per day — what the investor pages need, so sales carrying
+  /// a barista id without a profile still count. Otherwise it is computed per
+  /// active barista.
   Future<Map<String, double>> getInvestorBaristaCostSummary({
     required String outletId,
     required DateTime startBusinessDate,
     required DateTime endBusinessDate,
     String? assignmentStartDate,
-    bool calendarDays = false,
+    bool outletLevelBonus = false,
   }) async {
     if (!_isInitialized) {
       throw StateError('SupabaseService belum diinisialisasi');
@@ -5168,46 +5221,53 @@ class SupabaseService {
       };
     }
 
-    final baristaResponse = await _client
-        .from('users')
-        .select('id')
-        .eq('role', 'barista')
-        .eq('outlet_id', outletId)
-        .eq('is_active', true);
-    final baristaIds = List<Map<String, dynamic>>.from(
-      baristaResponse,
-    ).map((barista) => barista['id'] as String?).whereType<String>().toList();
-    if (baristaIds.isEmpty && !calendarDays) {
-      return {
-        'bonus': 0.0,
-        'mealAllowance': 0.0,
-        'mealAllowance25Count': 0.0,
-        'mealAllowance34Count': 0.0,
-      };
+    final baristaIds = <String>[];
+    if (!outletLevelBonus) {
+      final baristaResponse = await _client
+          .from('users')
+          .select('id')
+          .eq('role', 'barista')
+          .eq('outlet_id', outletId)
+          .eq('is_active', true);
+      baristaIds.addAll(
+        List<Map<String, dynamic>>.from(
+          baristaResponse,
+        ).map((barista) => barista['id'] as String?).whereType<String>(),
+      );
+      if (baristaIds.isEmpty) {
+        return {
+          'bonus': 0.0,
+          'mealAllowance': 0.0,
+          'mealAllowance25Count': 0.0,
+          'mealAllowance34Count': 0.0,
+        };
+      }
     }
 
     final startUtc = DateTime.utc(
       effectiveStartDate.year,
       effectiveStartDate.month,
       effectiveStartDate.day,
-      calendarDays ? 0 : 4,
+      4,
     ).subtract(const Duration(hours: 7));
     final endUtcExclusive = DateTime.utc(
       endBusinessDate.year,
       endBusinessDate.month,
       endBusinessDate.day + 1,
-      calendarDays ? 0 : 4,
+      4,
     ).subtract(const Duration(hours: 7));
-    var salesQuery = _client
-        .from('sales')
-        .select('barista_id, total_amount, payment_method, created_at')
-        .eq('outlet_id', outletId)
-        .gte('created_at', startUtc.toIso8601String())
-        .lt('created_at', endUtcExclusive.toIso8601String());
-    if (!calendarDays) {
-      salesQuery = salesQuery.inFilter('barista_id', baristaIds);
-    }
-    final salesResponse = await salesQuery;
+    final salesResponse = await _fetchAllPaged(() {
+      var query = _client
+          .from('sales')
+          .select('barista_id, total_amount, payment_method, created_at')
+          .eq('outlet_id', outletId)
+          .gte('created_at', startUtc.toIso8601String())
+          .lt('created_at', endUtcExclusive.toIso8601String());
+      if (!outletLevelBonus) {
+        query = query.inFilter('barista_id', baristaIds);
+      }
+      return query.order('id');
+    });
     final activeBaristaIds = baristaIds.toSet();
 
     final salesByBaristaAndDay = <String, double>{};
@@ -5221,7 +5281,7 @@ class SupabaseService {
       if (createdAt == null) continue;
 
       var reportDay = createdAt.toUtc().add(const Duration(hours: 7));
-      if (!calendarDays && reportDay.hour < 4) {
+      if (reportDay.hour < 4) {
         reportDay = reportDay.subtract(const Duration(days: 1));
       }
       final dayKey =
@@ -5234,7 +5294,7 @@ class SupabaseService {
         (total) => total + amount,
         ifAbsent: () => amount,
       );
-      final hasEligibleBarista = calendarDays
+      final hasEligibleBarista = outletLevelBonus
           ? baristaId != null
           : baristaId != null && activeBaristaIds.contains(baristaId);
       if (hasEligibleBarista) {
@@ -5247,13 +5307,13 @@ class SupabaseService {
     }
 
     var bonus = 0.0;
-    if (calendarDays) {
+    if (outletLevelBonus) {
       for (final entry in salesByOutletAndDay.entries) {
         if (entry.value <= 0) continue;
-        final calendarDay = DateTime.parse(entry.key);
+        final businessDay = DateTime.parse(entry.key);
         bonus += calculateBonus(
           entry.value,
-          isHoliday: isHolidaySync(calendarDay),
+          isHoliday: isHolidaySync(businessDay),
         ).totalBonus;
       }
     } else {
@@ -6470,7 +6530,7 @@ class SupabaseService {
             startBusinessDate: DateTime(month.year, month.month),
             endBusinessDate: calendarEndDate,
             assignmentStartDate: assignmentStartDate,
-            calendarDays: true,
+            outletLevelBonus: true,
           );
           final netProfit =
               grossProfit -
