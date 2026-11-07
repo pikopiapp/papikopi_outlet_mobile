@@ -4699,6 +4699,184 @@ class SupabaseService {
     }
   }
 
+  // Allocation requests: a barista scans product QR codes into a pending request;
+  // only approval writes to `showcase_allocations`, so unscanned/unapproved stock
+  // never becomes sellable.
+
+  Future<Map<String, dynamic>> createAllocationRequest({
+    required String outletId,
+    required String requestedBy,
+    required String requestedByName,
+    required List<Map<String, dynamic>> items,
+    String? note,
+  }) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+    if (items.isEmpty) {
+      return {'success': false, 'message': 'Belum ada produk yang discan'};
+    }
+
+    try {
+      final request = await _client
+          .from('showcase_allocation_requests')
+          .insert({
+            'outlet_id': outletId,
+            'requested_by': requestedBy,
+            'requested_by_name': requestedByName,
+            'note': note,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .select('id')
+          .single();
+
+      final requestId = request['id'] as String;
+
+      try {
+        await _client.from('showcase_allocation_request_items').insert([
+          for (final item in items)
+            {
+              'request_id': requestId,
+              'showcase_product_id': item['showcase_product_id'],
+              'product_name': item['product_name'],
+              'quantity': item['quantity'],
+            },
+        ]);
+      } catch (e) {
+        // A request without items would look like an empty approval.
+        await _client
+            .from('showcase_allocation_requests')
+            .delete()
+            .eq('id', requestId);
+        rethrow;
+      }
+
+      return {
+        'success': true,
+        'message': 'Permintaan alokasi terkirim',
+        'id': requestId,
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllocationRequests({
+    String? outletId,
+    String? status,
+    int limit = 100,
+  }) async {
+    if (!_isInitialized) {
+      return [];
+    }
+
+    try {
+      var query = _client
+          .from('showcase_allocation_requests')
+          .select(
+            'id, outlet_id, requested_by, requested_by_name, status, note, '
+            'created_at, reviewed_at, reviewed_by, outlets(name), '
+            'showcase_allocation_request_items(showcase_product_id, product_name, quantity)',
+          );
+
+      if (outletId != null && outletId.isNotEmpty) {
+        query = query.eq('outlet_id', outletId);
+      }
+      if (status != null && status.isNotEmpty) {
+        query = query.eq('status', status);
+      }
+
+      final response = await query
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching allocation requests: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> approveAllocationRequest(
+    String requestId, {
+    String? reviewer,
+  }) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    try {
+      await _client.rpc(
+        'approve_showcase_allocation_request',
+        params: {'p_request_id': requestId, 'p_reviewer': reviewer},
+      );
+      return {'success': true, 'message': 'Permintaan alokasi disetujui'};
+    } catch (e) {
+      return {'success': false, 'message': _allocationRequestError(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> rejectAllocationRequest(
+    String requestId, {
+    String? reviewer,
+    String? reason,
+  }) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    try {
+      await _client.rpc(
+        'reject_showcase_allocation_request',
+        params: {
+          'p_request_id': requestId,
+          'p_reviewer': reviewer,
+          'p_reason': reason,
+        },
+      );
+      return {'success': true, 'message': 'Permintaan alokasi ditolak'};
+    } catch (e) {
+      return {'success': false, 'message': _allocationRequestError(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> cancelAllocationRequest(String requestId) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    try {
+      final updated = await _client
+          .from('showcase_allocation_requests')
+          .update({
+            'status': 'cancelled',
+            'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', requestId)
+          .eq('status', 'pending')
+          .select('id');
+
+      if ((updated as List).isEmpty) {
+        return {
+          'success': false,
+          'message': 'Permintaan sudah diproses admin',
+        };
+      }
+
+      return {'success': true, 'message': 'Permintaan dibatalkan'};
+    } catch (e) {
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+  String _allocationRequestError(Object error) {
+    if (error is PostgrestException) {
+      // The RPC raises a readable message (e.g. insufficient recorded intake).
+      return error.message;
+    }
+    return 'Error: $error';
+  }
+
   /// Delete a showcase allocation
   Future<Map<String, dynamic>> deleteShowcaseAllocation(
     String allocationId,

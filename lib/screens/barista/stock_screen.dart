@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 import '../../providers/auth_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
@@ -7,6 +8,7 @@ import '../../providers/product_provider.dart';
 import '../../theme/thema.dart';
 import '../../widgets/header.dart';
 import '../shared/profile_screen.dart';
+import 'camera_scanner_screen.dart';
 
 import '../shared/settings_screen.dart';
 
@@ -39,10 +41,19 @@ class _StockScreenState extends State<StockScreen>
   int _businessDayStartHour = 4; // Business day start hour (default 4 AM)
   int _transferRefreshCounter = 0; // Counter to force FutureBuilder refresh
 
+  // Allocation request queue: scanned products stay local until submitted,
+  // and only reach sellable stock once a manager approves the request.
+  final List<Map<String, dynamic>> _requestItems = [];
+  List<Map<String, dynamic>> _myRequests = [];
+  List<Map<String, dynamic>> _showcaseProducts = [];
+  bool _isSubmittingRequest = false;
+  bool _isLoadingRequests = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _selectedDate = DateTime.now();
 
     // Initialize refresh animation controller
@@ -63,6 +74,205 @@ class _StockScreenState extends State<StockScreen>
 
     _loadBusinessDayStartHour();
     _loadData();
+    _loadShowcaseProducts();
+    _loadMyRequests();
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadShowcaseProducts() async {
+    final products = await SupabaseService().fetchShowcaseProducts();
+    if (!mounted) return;
+    setState(() => _showcaseProducts = products);
+  }
+
+  Future<void> _loadMyRequests() async {
+    if (_outletId.isEmpty) return;
+    setState(() => _isLoadingRequests = true);
+    final requests = await SupabaseService().getAllocationRequests(
+      outletId: _outletId,
+      limit: 50,
+    );
+    if (!mounted) return;
+    setState(() {
+      _myRequests = requests;
+      _isLoadingRequests = false;
+    });
+  }
+
+  Future<void> _scanShowcaseProduct() async {
+    final code = await CameraScannerScreen.open(
+      context,
+      title: 'Scan QR Produk',
+      subtitle: 'Scan satu per satu, produk masuk daftar permintaan',
+    );
+    if (code == null || code.isEmpty || code == '-1') return;
+    await _addScannedProduct(code);
+  }
+
+  Future<void> _addScannedProduct(String code) async {
+    String? searchId;
+    String? productName;
+
+    try {
+      final data = jsonDecode(code) as Map<String, dynamic>;
+      searchId = (data['product_id'] ?? data['id'])?.toString();
+      productName =
+          (data['product'] ?? data['product_name'] ?? data['name'])?.toString();
+    } catch (_) {
+      searchId = code;
+    }
+
+    var products = _showcaseProducts;
+    if (products.isEmpty) {
+      products = await SupabaseService().fetchShowcaseProducts();
+      if (!mounted) return;
+      setState(() => _showcaseProducts = products);
+    }
+
+    Map<String, dynamic>? product;
+    if (searchId != null && searchId.isNotEmpty) {
+      for (final p in products) {
+        if (p['id'] == searchId || p['product_id'] == searchId) {
+          product = p;
+          break;
+        }
+      }
+    }
+    if (product == null && productName != null && productName.isNotEmpty) {
+      for (final p in products) {
+        if ((p['product_name'] as String? ?? '').toLowerCase() ==
+            productName.toLowerCase()) {
+          product = p;
+          break;
+        }
+      }
+    }
+
+    if (product == null) {
+      _showMessage(
+        'Produk tidak ditemukan${productName != null ? ' ($productName)' : ''}',
+        isError: true,
+      );
+      return;
+    }
+
+    final showcaseProductId = product['id'] as String;
+    final name = product['product_name'] as String? ?? 'Produk';
+    final totalQuantity = (product['total_quantity'] as num?)?.toInt() ?? 0;
+    final allocated = (product['allocated_quantity'] as num?)?.toInt() ?? 0;
+    final queued = _requestItems
+        .where((item) => item['showcase_product_id'] == showcaseProductId)
+        .fold<int>(0, (sum, item) => sum + (item['quantity'] as int));
+
+    if (totalQuantity - allocated - queued <= 0) {
+      _showMessage('$name tidak tersedia', isError: true);
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      final index = _requestItems.indexWhere(
+        (item) => item['showcase_product_id'] == showcaseProductId,
+      );
+      if (index >= 0) {
+        _requestItems[index]['quantity'] =
+            (_requestItems[index]['quantity'] as int) + 1;
+      } else {
+        _requestItems.add({
+          'showcase_product_id': showcaseProductId,
+          'product_name': name,
+          'quantity': 1,
+        });
+      }
+    });
+    _tabController.animateTo(3);
+    _showMessage('$name ditambahkan');
+  }
+
+  Future<void> _submitAllocationRequest() async {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) {
+      _showMessage('Sesi login tidak valid, silakan login ulang', isError: true);
+      return;
+    }
+    if (_requestItems.isEmpty) {
+      _showMessage('Belum ada produk yang discan', isError: true);
+      return;
+    }
+
+    setState(() => _isSubmittingRequest = true);
+    final result = await SupabaseService().createAllocationRequest(
+      outletId: _outletId,
+      requestedBy: user.id,
+      requestedByName: user.name,
+      items: List<Map<String, dynamic>>.from(_requestItems),
+    );
+    if (!mounted) return;
+    setState(() => _isSubmittingRequest = false);
+
+    _showMessage(
+      result['message'] as String? ?? 'Gagal mengirim permintaan',
+      isError: result['success'] != true,
+    );
+
+    if (result['success'] == true) {
+      setState(() => _requestItems.clear());
+      await _loadMyRequests();
+    }
+  }
+
+  Future<void> _cancelRequest(String requestId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Batalkan Permintaan'),
+        content: const Text(
+          'Permintaan ini akan dibatalkan dan tidak bisa dipulihkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Tidak'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Batalkan'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final result = await SupabaseService().cancelAllocationRequest(requestId);
+    if (!mounted) return;
+    _showMessage(
+      result['message'] as String? ?? 'Gagal membatalkan permintaan',
+      isError: result['success'] != true,
+    );
+    if (result['success'] == true) await _loadMyRequests();
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : AppColors.primary,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  String _formatRequestTime(dynamic value) {
+    if (value == null) return '-';
+    final parsed = DateTime.tryParse(value.toString())?.toLocal();
+    if (parsed == null) return '-';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(parsed.day)}/${two(parsed.month)} ${two(parsed.hour)}:${two(parsed.minute)}';
   }
 
   Future<void> _loadBusinessDayStartHour() async {
@@ -608,10 +818,13 @@ class _StockScreenState extends State<StockScreen>
             color: AppColors.background,
             child: TabBar(
               controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               tabs: const [
                 Tab(icon: Icon(Icons.inventory_2), text: 'Stok Produk'),
                 Tab(icon: Icon(Icons.send), text: 'Pindah Stok'),
                 Tab(icon: Icon(Icons.undo), text: 'Pengembalian'),
+                Tab(icon: Icon(Icons.add_box_outlined), text: 'Tambah Stok'),
               ],
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textSecondary,
@@ -626,11 +839,23 @@ class _StockScreenState extends State<StockScreen>
                 _buildStockTab(),
                 _buildTransferTab(),
                 _buildReturnTab(),
+                _buildRequestTab(),
               ],
             ),
           ),
         ],
       ),
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton.extended(
+              onPressed: _scanShowcaseProduct,
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+              label: const Text(
+                'Tambah Stok',
+                style: TextStyle(color: Colors.white),
+              ),
+            )
+          : null,
     );
   }
 
@@ -810,6 +1035,273 @@ class _StockScreenState extends State<StockScreen>
         // Stock Data
         Expanded(child: _buildStockContent()),
       ],
+    );
+  }
+
+  Widget _buildRequestTab() {
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadShowcaseProducts();
+        await _loadMyRequests();
+      },
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.altSurface),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ambil Stok dengan Scan QR',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Scan produk satu per satu. Stok baru masuk ke daftar jual '
+                  'setelah disetujui admin.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _scanShowcaseProduct,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Scan QR Produk'),
+                  ),
+                ),
+                if (_requestItems.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  ..._requestItems.map(_buildRequestItemRow),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSubmittingRequest
+                          ? null
+                          : _submitAllocationRequest,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                      ),
+                      child: _isSubmittingRequest
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Kirim Permintaan (${_requestItems.length} produk)',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Riwayat Permintaan',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _isLoadingRequests ? null : _loadMyRequests,
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          if (_isLoadingRequests)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_myRequests.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'Belum ada permintaan alokasi',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+            )
+          else
+            ..._myRequests.map(_buildRequestHistoryCard),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequestItemRow(Map<String, dynamic> item) {
+    final index = _requestItems.indexOf(item);
+    final quantity = item['quantity'] as int;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.altSurface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              item['product_name'] as String? ?? 'Produk',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          IconButton(
+            onPressed: quantity <= 1
+                ? null
+                : () => setState(
+                    () => _requestItems[index]['quantity'] = quantity - 1,
+                  ),
+            icon: const Icon(Icons.remove_circle_outline, size: 20),
+          ),
+          Text('$quantity', style: const TextStyle(fontWeight: FontWeight.bold)),
+          IconButton(
+            onPressed: () => setState(
+              () => _requestItems[index]['quantity'] = quantity + 1,
+            ),
+            icon: const Icon(Icons.add_circle_outline, size: 20),
+          ),
+          IconButton(
+            onPressed: () => setState(() => _requestItems.removeAt(index)),
+            icon: const Icon(Icons.close, size: 20, color: AppColors.error),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequestHistoryCard(Map<String, dynamic> request) {
+    final status = request['status'] as String? ?? 'pending';
+    final items =
+        (request['showcase_allocation_request_items'] as List<dynamic>?) ?? [];
+    final outletName =
+        (request['outlets'] as Map<String, dynamic>?)?['name'] as String?;
+
+    final Color statusColor;
+    final String statusLabel;
+    switch (status) {
+      case 'approved':
+        statusColor = AppColors.success;
+        statusLabel = 'Disetujui';
+        break;
+      case 'rejected':
+        statusColor = AppColors.error;
+        statusLabel = 'Ditolak';
+        break;
+      case 'cancelled':
+        statusColor = AppColors.textSecondary;
+        statusLabel = 'Dibatalkan';
+        break;
+      default:
+        statusColor = Colors.orange;
+        statusLabel = 'Menunggu Admin';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.altSurface),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _formatRequestTime(request['created_at']),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (outletName != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              outletName,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          ...items.map((raw) {
+            final item = raw as Map<String, dynamic>;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                '• ${item['product_name'] ?? 'Produk'} × ${item['quantity']}',
+                style: const TextStyle(fontSize: 13),
+              ),
+            );
+          }),
+          if (request['note'] != null &&
+              (request['note'] as String).isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Catatan: ${request['note']}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+          if (status == 'pending')
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => _cancelRequest(request['id'] as String),
+                child: const Text(
+                  'Batalkan',
+                  style: TextStyle(color: AppColors.error),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

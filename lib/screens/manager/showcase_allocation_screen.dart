@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/business_day_helper.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../barista/camera_scanner_screen.dart';
@@ -40,6 +42,10 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
   String? _successMessage; // ignore: unused_field
   int _currentTabIndex = 0;
 
+  // Barista-raised allocation requests awaiting approval
+  List<Map<String, dynamic>> _allocationRequests = [];
+  bool _isLoadingRequests = false;
+
   // Temporary buffer for scanned allocations (before batch submit)
   List<Map<String, dynamic>> _tempAllocations = [];
   DateTime? _tempAllocationsTimestamp;
@@ -73,6 +79,8 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
 
     // Load saved outlet selection
     await _loadSelectedOutlet();
+
+    await _loadAllocationRequests();
 
     // Load showcase products and assignments for the selected outlet immediately
     if (_selectedOutletId != null) {
@@ -498,6 +506,290 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
     }
     // Always refresh after deletion attempt
     await _fetchProductsAndAssignments();
+  }
+
+  Future<void> _loadAllocationRequests() async {
+    setState(() => _isLoadingRequests = true);
+    final requests = await _supabaseService.getAllocationRequests(
+      status: 'pending',
+      limit: 100,
+    );
+    if (!mounted) return;
+    setState(() {
+      _allocationRequests = requests;
+      _isLoadingRequests = false;
+    });
+  }
+
+  Future<void> _approveRequest(Map<String, dynamic> request) async {
+    final reviewer = context.read<AuthProvider>().currentUser?.name;
+    final outletName =
+        (request['outlets'] as Map<String, dynamic>?)?['name'] as String? ??
+        'outlet';
+    final items =
+        (request['showcase_allocation_request_items'] as List<dynamic>?) ?? [];
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Setujui Permintaan'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$outletName · ${request['requested_by_name'] ?? '-'}'),
+            const SizedBox(height: 8),
+            ...items.map((raw) {
+              final item = raw as Map<String, dynamic>;
+              return Text('• ${item['product_name']} × ${item['quantity']}');
+            }),
+            const SizedBox(height: 12),
+            const Text(
+              'Setelah disetujui, produk langsung masuk stok outlet dan '
+              'bisa dijual barista.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Setujui'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _isSubmitting = true);
+    final result = await _supabaseService.approveAllocationRequest(
+      request['id'] as String,
+      reviewer: reviewer,
+    );
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result['message'] as String? ?? 'Gagal menyetujui'),
+        backgroundColor: result['success'] == true
+            ? AppColors.success
+            : AppColors.error,
+      ),
+    );
+
+    if (result['success'] == true) {
+      await _loadAllocationRequests();
+      if (_selectedOutletId != null) {
+        await _fetchProductsAndAssignments();
+      }
+    }
+  }
+
+  Future<void> _rejectRequest(Map<String, dynamic> request) async {
+    final reviewer = context.read<AuthProvider>().currentUser?.name;
+    final reasonController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Tolak Permintaan'),
+        content: TextField(
+          controller: reasonController,
+          decoration: const InputDecoration(
+            labelText: 'Alasan (opsional)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Tolak'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _isSubmitting = true);
+    final result = await _supabaseService.rejectAllocationRequest(
+      request['id'] as String,
+      reviewer: reviewer,
+      reason: reasonController.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result['message'] as String? ?? 'Gagal menolak'),
+        backgroundColor: result['success'] == true
+            ? AppColors.success
+            : AppColors.error,
+      ),
+    );
+
+    if (result['success'] == true) await _loadAllocationRequests();
+  }
+
+  Widget _buildRequestsTab() {
+    if (_isLoadingRequests) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadAllocationRequests,
+      child: _allocationRequests.isEmpty
+          ? ListView(
+              padding: const EdgeInsets.all(32),
+              children: [
+                const SizedBox(height: 48),
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 48,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Tidak ada permintaan menunggu',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ],
+            )
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: _allocationRequests
+                  .map(_buildRequestCard)
+                  .toList(growable: false),
+            ),
+    );
+  }
+
+  Widget _buildRequestCard(Map<String, dynamic> request) {
+    final items =
+        (request['showcase_allocation_request_items'] as List<dynamic>?) ?? [];
+    final outletName =
+        (request['outlets'] as Map<String, dynamic>?)?['name'] as String? ??
+        'Outlet';
+    final createdAt = DateTime.tryParse(
+      request['created_at']?.toString() ?? '',
+    )?.toLocal();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.altSurface),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  outletName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Menunggu',
+                  style: TextStyle(
+                    color: Colors.orange,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${request['requested_by_name'] ?? 'Barista'} · '
+            '${createdAt != null ? DateFormat('dd MMM HH:mm').format(createdAt) : '-'}',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...items.map((raw) {
+            final item = raw as Map<String, dynamic>;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                '• ${item['product_name'] ?? 'Produk'} × ${item['quantity']}',
+                style: const TextStyle(fontSize: 13),
+              ),
+            );
+          }),
+          if (request['note'] != null &&
+              (request['note'] as String).isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Catatan: ${request['note']}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => _rejectRequest(request),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                  ),
+                  child: const Text('Tolak'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => _approveRequest(request),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                  ),
+                  child: const Text(
+                    'Setujui',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleQRScan() async {
@@ -1268,75 +1560,67 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
                       ),
                     ),
                   const SizedBox(height: 12),
-                  if (showTabs)
-                    Expanded(
-                      child: DefaultTabController(
-                        length: 2,
-                        initialIndex: _currentTabIndex,
-                        child: Column(
-                          children: [
-                            TabBar(
-                              onTap: (index) {
-                                setState(() {
-                                  _currentTabIndex = index;
-                                });
-                              },
-                              tabs: const [
-                                Tab(text: 'Alokasi Produk'),
-                                Tab(text: 'Daftar Alokasi'),
+                  Expanded(
+                    child: DefaultTabController(
+                      length: 3,
+                      initialIndex: _currentTabIndex,
+                      child: Column(
+                        children: [
+                          TabBar(
+                            onTap: (index) {
+                              setState(() {
+                                _currentTabIndex = index;
+                              });
+                              if (index == 2) _loadAllocationRequests();
+                            },
+                            tabs: [
+                              const Tab(text: 'Alokasi Produk'),
+                              const Tab(text: 'Daftar Alokasi'),
+                              Tab(
+                                text: _allocationRequests.isEmpty
+                                    ? 'Permintaan'
+                                    : 'Permintaan (${_allocationRequests.length})',
+                              ),
+                            ],
+                          ),
+                          Expanded(
+                            child: TabBarView(
+                              physics: const NeverScrollableScrollPhysics(),
+                              children: [
+                                SingleChildScrollView(
+                                  padding: EdgeInsets.only(
+                                    left: 16,
+                                    right: 16,
+                                    top: 16,
+                                    bottom:
+                                        MediaQuery.of(context).padding.bottom +
+                                        16,
+                                  ),
+                                  child: showTabs
+                                      ? _buildAllocationCard()
+                                      : _buildSelectOutletHint(),
+                                ),
+                                SingleChildScrollView(
+                                  padding: EdgeInsets.only(
+                                    left: 16,
+                                    right: 16,
+                                    top: 16,
+                                    bottom:
+                                        MediaQuery.of(context).padding.bottom +
+                                        16,
+                                  ),
+                                  child: showTabs
+                                      ? _buildAllocationListCard()
+                                      : _buildSelectOutletHint(),
+                                ),
+                                _buildRequestsTab(),
                               ],
                             ),
-                            Expanded(
-                              child: TabBarView(
-                                physics: const NeverScrollableScrollPhysics(),
-                                children: [
-                                  SingleChildScrollView(
-                                    padding: EdgeInsets.only(
-                                      left: 16,
-                                      right: 16,
-                                      top: 16,
-                                      bottom:
-                                          MediaQuery.of(
-                                            context,
-                                          ).padding.bottom +
-                                          16,
-                                    ),
-                                    child: _buildAllocationCard(),
-                                  ),
-                                  SingleChildScrollView(
-                                    padding: EdgeInsets.only(
-                                      left: 16,
-                                      right: 16,
-                                      top: 16,
-                                      bottom:
-                                          MediaQuery.of(
-                                            context,
-                                          ).padding.bottom +
-                                          16,
-                                    ),
-                                    child: _buildAllocationListCard(),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Text(
-                            'Pilih outlet di atas untuk memulai alokasi produk',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(color: AppColors.textSecondary),
                           ),
-                        ),
+                        ],
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
@@ -1351,6 +1635,19 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
               ),
             )
           : null,
+    );
+  }
+
+  Widget _buildSelectOutletHint() {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Text(
+        'Pilih outlet di atas untuk memulai alokasi produk',
+        textAlign: TextAlign.center,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyLarge?.copyWith(color: AppColors.textSecondary),
+      ),
     );
   }
 
