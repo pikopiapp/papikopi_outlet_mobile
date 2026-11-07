@@ -479,36 +479,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    isToday
-                                        ? 'Penjualan Hari Ini'
-                                        : 'Penjualan ${dayFormat.format(selectedDate)}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.trending_up,
+                            Text(
+                              isToday
+                                  ? 'Penjualan Hari Ini'
+                                  : 'Penjualan ${dayFormat.format(selectedDate)}',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
                                     color: Colors.white,
-                                    size: 20,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                ),
-                              ],
                             ),
                             const SizedBox(height: 12),
                             Text(
