@@ -34,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _navigateByRole(String? role) {
     switch (_normalizedRole(role)) {
       case 'manager':
+      case 'admin':
         Navigator.of(context).pushReplacementNamed('/manager');
         break;
       case 'investor':

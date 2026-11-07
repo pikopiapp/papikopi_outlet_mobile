@@ -1937,12 +1937,12 @@ class _FinanceScreenState extends State<FinanceScreen>
     final supabaseService = SupabaseService();
 
     // 🆕 Status options based on role
-    String selectedStatus = currentUser.role == 'manager'
-        ? 'pending'
-        : 'verified by barista';
+    final isApprover =
+        currentUser.role == 'manager' || currentUser.role == 'admin';
+    String selectedStatus = isApprover ? 'pending' : 'verified by barista';
 
     // Determine available status options based on role
-    List<String> availableStatuses = currentUser.role == 'manager'
+    List<String> availableStatuses = isApprover
         ? ['pending', 'approved', 'rejected']
         : ['verified by barista']; // Barista can only set verified by barista
 

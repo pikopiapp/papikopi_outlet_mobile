@@ -117,13 +117,13 @@ class _InitialScreenState extends State<_InitialScreen>
   void _navigateByRole(String? role) {
     switch (_normalizedRole(role)) {
       case 'manager':
+      case 'admin':
         Navigator.of(context).pushReplacementNamed('/manager');
         break;
       case 'investor':
         Navigator.of(context).pushReplacementNamed('/investor');
         break;
       default:
-        // default: barista/admin -> shell
         Navigator.of(context).pushReplacementNamed('/shell');
     }
   }

@@ -99,8 +99,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     setState(() => isLoading = true);
     try {
       final auth = context.read<AuthProvider>();
-      // Managers see all outlets; everyone else is limited to their own.
-      final outletId = auth.currentUser?.role == 'manager'
+      // Admins and managers see all outlets; everyone else is limited to their own.
+      final role = auth.currentUser?.role;
+      final outletId = (role == 'manager' || role == 'admin')
           ? null
           : auth.currentUser?.outletId;
       final win = _businessDayBounds(selectedDate);
