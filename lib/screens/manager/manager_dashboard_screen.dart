@@ -480,18 +480,22 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  isToday
-                                      ? 'Penjualan Hari Ini'
-                                      : 'Penjualan ${dayFormat.format(selectedDate)}',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                Expanded(
+                                  child: Text(
+                                    isToday
+                                        ? 'Penjualan Hari Ini'
+                                        : 'Penjualan ${dayFormat.format(selectedDate)}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
                                 ),
+                                const SizedBox(width: 12),
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
