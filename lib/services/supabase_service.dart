@@ -759,7 +759,7 @@ class SupabaseService {
       var query = _client
           .from('sales')
           .select(
-            'id, outlet_id, total_amount, payment_method, created_at, outlets(name)',
+            'id, outlet_id, barista_id, total_amount, payment_method, created_at, outlets(name)',
           )
           .gte('created_at', startUtc.toIso8601String())
           .lt('created_at', endUtc.toIso8601String());

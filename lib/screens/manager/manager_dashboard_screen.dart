@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../theme/thema.dart';
 import '../../services/supabase_service.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/bonus_calculator.dart';
 import '../../utils/timezone_formatter.dart';
 import 'manager_outlet_screen.dart';
 import 'expense_management_screen.dart';
@@ -25,6 +26,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   late DateTime selectedDate;
   double todaySales = 0;
   int totalTransactions = 0;
+  double cashSales = 0;
+  double qrisSales = 0;
+  double baristaBonusTotal = 0;
+  double baristaMealTotal = 0;
+  double baristaDepositTotal = 0;
   List<Map<String, dynamic>> activeOutlets = [];
   List<Map<String, dynamic>> recentTransactions = [];
   List<Map<String, dynamic>> topOutlets = [];
@@ -129,6 +135,37 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
         });
       }
 
+      // Bonus and meal allowance are granted per barista, so the payout
+      // summary splits CASH/QRIS by barista_id instead of by outlet.
+      final perBarista = <String, ({double cash, double qris})>{};
+      var cashTotal = 0.0;
+      var qrisTotal = 0.0;
+      for (final sale in rows) {
+        final amount = (sale['total_amount'] as num?)?.toDouble() ?? 0;
+        final method = (sale['payment_method'] as String?)?.toUpperCase() ?? '';
+        if (method != 'CASH' && method != 'QRIS') continue;
+        if (method == 'CASH') {
+          cashTotal += amount;
+        } else {
+          qrisTotal += amount;
+        }
+        final baristaId = sale['barista_id']?.toString();
+        if (baristaId == null || baristaId.isEmpty) continue;
+        final current = perBarista[baristaId] ?? (cash: 0.0, qris: 0.0);
+        perBarista[baristaId] = method == 'CASH'
+            ? (cash: current.cash + amount, qris: current.qris)
+            : (cash: current.cash, qris: current.qris + amount);
+      }
+
+      final isHoliday = supabaseService.isHolidaySync(selectedDate);
+      var bonusTotal = 0.0;
+      var mealTotal = 0.0;
+      for (final split in perBarista.values) {
+        final omset = split.cash + split.qris;
+        bonusTotal += calculateBonus(omset, isHoliday: isHoliday).totalBonus;
+        mealTotal += calculateMealAllowance(omset);
+      }
+
       final recent = rows.take(5).map((sale) {
         final oid = sale['outlet_id'] as String? ?? '';
         return <String, dynamic>{
@@ -147,6 +184,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       setState(() {
         todaySales = salesTotal;
         totalTransactions = rows.length;
+        cashSales = cashTotal;
+        qrisSales = qrisTotal;
+        baristaBonusTotal = bonusTotal;
+        baristaMealTotal = mealTotal;
+        baristaDepositTotal = cashTotal - bonusTotal - mealTotal;
         recentTransactions = recent;
         topOutlets = top;
         activeOutlets = outletNames.entries
@@ -621,6 +663,76 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                               ),
                             ),
                       const SizedBox(height: 24),
+
+                      // Barista payout summary for the whole business day
+                      Text(
+                        'Perhitungan Semua Barista',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        supabaseService.isHolidaySync(selectedDate)
+                            ? '${dateFormat.format(selectedDate)} · tarif hari libur (semua tier 20%)'
+                            : dateFormat.format(selectedDate),
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.altSurface),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            _buildSummaryRow(
+                              'Total Omset',
+                              currencyFormat.format(todaySales),
+                              emphasize: true,
+                            ),
+                            _buildSummaryRow(
+                              'Total Transaksi Cash',
+                              currencyFormat.format(cashSales),
+                            ),
+                            _buildSummaryRow(
+                              'Total Transaksi QRIS',
+                              currencyFormat.format(qrisSales),
+                            ),
+                            _buildSummaryRow(
+                              'Total Setoran',
+                              currencyFormat.format(baristaDepositTotal),
+                              valueColor: baristaDepositTotal < 0
+                                  ? AppColors.error
+                                  : AppColors.success,
+                            ),
+                            _buildSummaryRow(
+                              'Total Bonus Barista',
+                              currencyFormat.format(baristaBonusTotal),
+                            ),
+                            _buildSummaryRow(
+                              'Total Uang Makan',
+                              currencyFormat.format(baristaMealTotal),
+                              isLast: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -679,6 +791,49 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(
+    String label,
+    String value, {
+    bool emphasize = false,
+    bool isLast = false,
+    Color? valueColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      decoration: isLast
+          ? null
+          : const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0))),
+            ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: emphasize ? 14 : 13,
+                fontWeight: emphasize ? FontWeight.w600 : FontWeight.w500,
+                color: emphasize
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: emphasize ? 17 : 14,
+              fontWeight: FontWeight.bold,
+              color:
+                  valueColor ??
+                  (emphasize ? AppColors.primary : AppColors.textPrimary),
+            ),
+          ),
         ],
       ),
     );
@@ -849,5 +1004,4 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       ),
     );
   }
-
 }
