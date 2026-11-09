@@ -4458,10 +4458,8 @@ class SupabaseService {
 
     try {
       final response = await _client
-          .from('showcase_inventory_summary')
-          .select(
-            'id, product_id, product_name, total_quantity, allocated_quantity',
-          )
+          .from('showcase_products')
+          .select('id, product_id, product_name, total_quantity')
           .order('product_name', ascending: true);
 
       return List<Map<String, dynamic>>.from(response);
@@ -4601,26 +4599,54 @@ class SupabaseService {
     }
   }
 
-  /// Cumulative units dispatched to outlets for this showcase product, all outlets.
-  /// Read from the view because showcase_products.allocated_quantity is a cache that drifted.
-  Future<int> getShowcaseDispatchedQuantity(String showcaseProductId) async {
-    final summary = await _client
-        .from('showcase_inventory_summary')
-        .select('allocated_quantity')
-        .eq('id', showcaseProductId)
-        .maybeSingle();
+  Future<int> getShowcaseAllocatedQuantity(
+    String showcaseProductId, {
+    DateTime? selectedDate,
+    required String outletId,
+  }) async {
+    try {
+      final effectiveDate = selectedDate ?? DateTime.now();
+      final outletData = await _client
+          .from('outlets')
+          .select('business_day_start_hour')
+          .eq('id', outletId)
+          .maybeSingle();
 
-    return (summary?['allocated_quantity'] as num?)?.toInt() ?? 0;
+      final businessDayStartHour =
+          (outletData?['business_day_start_hour'] as int?) ?? 4;
+      final range = buildBusinessDayRange(effectiveDate, businessDayStartHour);
+
+      final allocationsResponse = await _client
+          .from('showcase_allocations')
+          .select('quantity, created_at')
+          .eq('showcase_product_id', showcaseProductId)
+          .gte('created_at', (range['start'] as DateTime).toIso8601String())
+          .lte('created_at', (range['end'] as DateTime).toIso8601String());
+
+      int totalAllocated = 0;
+      for (final row in allocationsResponse as List<dynamic>) {
+        totalAllocated += (row['quantity'] as int? ?? 0);
+      }
+
+      return totalAllocated;
+    } catch (e) {
+      print('Error fetching showcase allocated quantity: $e');
+      return 0;
+    }
   }
 
   Future<void> _syncShowcaseProductAllocatedQuantity(
-    String showcaseProductId,
-  ) async {
+    String showcaseProductId, {
+    required String outletId,
+  }) async {
     try {
-      final dispatched = await getShowcaseDispatchedQuantity(showcaseProductId);
+      final totalAllocated = await getShowcaseAllocatedQuantity(
+        showcaseProductId,
+        outletId: outletId,
+      );
       await _client
           .from('showcase_products')
-          .update({'allocated_quantity': dispatched})
+          .update({'allocated_quantity': totalAllocated})
           .eq('id', showcaseProductId);
     } catch (e) {
       print('Error syncing showcase product allocation quantity: $e');
@@ -4632,6 +4658,7 @@ class SupabaseService {
     required String showcaseProductId,
     required String outletId,
     required int quantity,
+    DateTime? selectedDate,
   }) async {
     if (!_isInitialized) {
       return {'success': false, 'message': 'Service not initialized'};
@@ -4658,15 +4685,15 @@ class SupabaseService {
       }
 
       final totalQuantity = (productResponse['total_quantity'] as int? ?? 0);
-      final dispatched = await getShowcaseDispatchedQuantity(showcaseProductId);
-      final available = totalQuantity - dispatched;
-      if (quantity > available) {
+      final currentAllocated = await getShowcaseAllocatedQuantity(
+        showcaseProductId,
+        outletId: outletId,
+        selectedDate: selectedDate,
+      );
+      if (currentAllocated + quantity > totalQuantity) {
         return {
           'success': false,
-          'message':
-              'Stok tercatat tidak cukup: batch masuk $totalQuantity, sudah '
-              'disalurkan $dispatched. Selisih $available. Perbaiki pencatatan '
-              'batch masuk sebelum alokasi baru.',
+          'message': 'Jumlah alokasi melebihi total showcase',
         };
       }
 
@@ -4682,7 +4709,10 @@ class SupabaseService {
         'created_at': createdAtUtc,
       });
 
-      await _syncShowcaseProductAllocatedQuantity(showcaseProductId);
+      await _syncShowcaseProductAllocatedQuantity(
+        showcaseProductId,
+        outletId: outletId,
+      );
 
       print('Insert response: $response');
       print('=== ALLOCATE END (success) ===');
@@ -4888,7 +4918,7 @@ class SupabaseService {
     try {
       final allocationResponse = await _client
           .from('showcase_allocations')
-          .select('showcase_product_id')
+          .select('showcase_product_id, outlet_id')
           .eq('id', allocationId)
           .maybeSingle();
 
@@ -4897,10 +4927,19 @@ class SupabaseService {
           .delete()
           .eq('id', allocationId);
 
-      final showcaseProductId =
-          allocationResponse?['showcase_product_id'] as String?;
-      if (showcaseProductId != null && showcaseProductId.isNotEmpty) {
-        await _syncShowcaseProductAllocatedQuantity(showcaseProductId);
+      if (allocationResponse != null) {
+        final showcaseProductId =
+            allocationResponse['showcase_product_id'] as String?;
+        final allocationOutletId = allocationResponse['outlet_id'] as String?;
+        if (showcaseProductId != null &&
+            showcaseProductId.isNotEmpty &&
+            allocationOutletId != null &&
+            allocationOutletId.isNotEmpty) {
+          await _syncShowcaseProductAllocatedQuantity(
+            showcaseProductId,
+            outletId: allocationOutletId,
+          );
+        }
       }
 
       return {'success': true, 'message': 'Alokasi berhasil dihapus'};
