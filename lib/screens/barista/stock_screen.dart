@@ -2077,27 +2077,8 @@ class _StockScreenState extends State<StockScreen>
       ), // ← KEY to force rebuild when date changes
       future: _getEnrichedProductStock(SupabaseService(), _selectedDate),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildReturnListSkeleton();
-        }
-
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.inbox, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'Tidak ada stok',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final stocks = snapshot.data!;
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+        final stocks = snapshot.data ?? const <Map<String, dynamic>>[];
 
         return Column(
           children: [
@@ -2119,7 +2100,9 @@ class _StockScreenState extends State<StockScreen>
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _showReturnDialog(context, stocks),
+                      onPressed: stocks.isEmpty
+                          ? null
+                          : () => _showReturnDialog(context, stocks),
                       icon: const Icon(Icons.add),
                       label: const Text('Buat Pengembalian'),
                       style: ElevatedButton.styleFrom(
@@ -2132,7 +2115,9 @@ class _StockScreenState extends State<StockScreen>
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _scanReturnProducts(stocks),
+                      onPressed: stocks.isEmpty
+                          ? null
+                          : () => _scanReturnProducts(stocks),
                       icon: const Icon(Icons.qr_code_scanner),
                       label: const Text('Scan QR'),
                       style: OutlinedButton.styleFrom(
@@ -2147,7 +2132,23 @@ class _StockScreenState extends State<StockScreen>
             ),
             // List return history
             Expanded(
-              child: FutureBuilder<List<Map<String, dynamic>>>(
+              child: isLoading
+                  ? _buildReturnListSkeleton()
+                  : stocks.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.inbox, size: 64, color: Colors.grey[400]),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Belum ada stok di tanggal ini',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                    )
+                  : FutureBuilder<List<Map<String, dynamic>>>(
                 key: ValueKey<DateTime>(
                   _selectedDate,
                 ), // ← KEY to force rebuild when date changes
