@@ -67,7 +67,7 @@ class CameraScannerScreen extends StatefulWidget {
 }
 
 class _CameraScannerScreenState extends State<CameraScannerScreen>
-    with TickerProviderStateMixin {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   // A code counts once when it appears. It only counts again after the camera
   // has stopped seeing it for this long, i.e. the product must leave the frame
   // and be shown again.
@@ -86,8 +86,13 @@ class _CameraScannerScreenState extends State<CameraScannerScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Starting is managed here instead of by the widget: the plugin's camera is
+    // shared between screens, so an explicit start/stop is what lets us recover
+    // when a previous screen left it running.
     _scannerController = MobileScannerController(
       facing: widget.cameraFacing,
+      autoStart: false,
     );
     _scanLineController = AnimationController(
       vsync: this,
@@ -97,17 +102,56 @@ class _CameraScannerScreenState extends State<CameraScannerScreen>
       vsync: this,
       duration: const Duration(milliseconds: 320),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     for (final timer in _releaseTimers.values) {
       timer.cancel();
     }
     _scanLineController.dispose();
     _flashController.dispose();
+    // Release the platform camera before the controller is disposed, otherwise
+    // the next scanner screen starts against a camera that is still running.
+    _scannerController.stop();
     _scannerController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _startScanner();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _scannerController.stop();
+    }
+  }
+
+  Future<void> _startScanner() async {
+    if (!mounted) {
+      return;
+    }
+    try {
+      await _scannerController.start();
+    } on MobileScannerException catch (error) {
+      if (error.errorCode != MobileScannerErrorCode.controllerAlreadyInitialized) {
+        return;
+      }
+      // A previous scanner screen left the shared platform camera running.
+      // Force it down once, then start normally so the preview renders.
+      try {
+        await MobileScannerPlatform.instance.stop();
+        await _scannerController.start();
+      } on MobileScannerException {
+        // The widget renders the controller error itself.
+      }
+    }
   }
 
   Future<void> _playBeep() async {

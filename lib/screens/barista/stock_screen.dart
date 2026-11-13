@@ -48,6 +48,8 @@ class _StockScreenState extends State<StockScreen>
   List<Map<String, dynamic>> _showcaseProducts = [];
   bool _isSubmittingRequest = false;
   bool _isLoadingRequests = false;
+  Future<List<Map<String, dynamic>>> _pendingReturnRequestsFuture =
+      Future.value(const <Map<String, dynamic>>[]);
 
   @override
   void initState() {
@@ -76,8 +78,16 @@ class _StockScreenState extends State<StockScreen>
     _loadData();
     _loadShowcaseProducts();
     _loadMyRequests();
+    _pendingReturnRequestsFuture = _fetchPendingReturnRequests();
   }
 
+  Future<List<Map<String, dynamic>>> _fetchPendingReturnRequests() {
+    return SupabaseService().getProductReturnRequests(
+      outletId: _outletId,
+      status: 'pending',
+      limit: 20,
+    );
+  }
   void _onTabChanged() {
     if (_tabController.indexIsChanging) return;
     if (mounted) setState(() {});
@@ -305,6 +315,7 @@ class _StockScreenState extends State<StockScreen>
 
     setState(() {
       _stockFuture = _getEnrichedProductStock(supabaseService, _selectedDate);
+      _pendingReturnRequestsFuture = _fetchPendingReturnRequests();
       _transferRefreshCounter++; // Increment counter to trigger FutureBuilder rebuild
     });
   }
@@ -2122,6 +2133,65 @@ class _StockScreenState extends State<StockScreen>
                 ),
               ),
             ),
+            // Permintaan yang menunggu persetujuan admin
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _pendingReturnRequestsFuture,
+              builder: (context, snapshot) {
+                final requests =
+                    snapshot.data ?? const <Map<String, dynamic>>[];
+                if (requests.isEmpty) return const SizedBox.shrink();
+
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Menunggu persetujuan admin (${requests.length})',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange[900],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...requests.take(3).map((request) {
+                          final items =
+                              (request['product_return_request_items']
+                                  as List<dynamic>?) ??
+                              const [];
+                          final summary = items
+                              .map((item) {
+                                final row = item as Map<String, dynamic>;
+                                return '${row['product_name'] ?? 'Produk'} ×${row['quantity']}';
+                              })
+                              .join(', ');
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              summary.isEmpty ? '-' : summary,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          );
+                        }),
+                        if (requests.length > 3)
+                          Text(
+                            '+${requests.length - 3} permintaan lain',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
             // List return history
             Expanded(
               child: isLoading
@@ -3340,26 +3410,29 @@ class _StockScreenState extends State<StockScreen>
                       } catch (_) {
                         productProvider = null;
                       }
+                      final user = context.read<AuthProvider>().currentUser;
 
                       final notes = notesController.text.isNotEmpty
                           ? notesController.text
                           : null;
-                      var successCount = 0;
-                      var failed = 0;
-                      for (final entry in quantities.entries) {
-                        final ok = await SupabaseService().createProductReturn(
-                          outletId: _outletId,
-                          productId: entry.key,
-                          quantity: entry.value,
-                          returnReason: selectedReason!,
-                          conditionNotes: notes,
-                        );
-                        if (ok) {
-                          successCount++;
-                        } else {
-                          failed++;
-                        }
-                      }
+                      final result = await SupabaseService()
+                          .createProductReturnRequest(
+                            outletId: _outletId,
+                            requestedBy: user?.id,
+                            requestedByName: user?.name,
+                            items: [
+                              for (final entry in quantities.entries)
+                                if (entry.value > 0)
+                                  {
+                                    'product_id': entry.key,
+                                    'product_name': names[entry.key],
+                                    'quantity': entry.value,
+                                    'return_reason': selectedReason,
+                                    'condition_notes': notes,
+                                  },
+                            ],
+                          );
+                      final success = result['success'] == true;
 
                       if (!mounted) return;
                       if (dialogContext.mounted) {
@@ -3375,14 +3448,14 @@ class _StockScreenState extends State<StockScreen>
                       messenger.showSnackBar(
                         SnackBar(
                           content: Text(
-                            failed == 0
-                                ? '✅ $successCount produk dikembalikan'
-                                : '⚠️ $successCount berhasil, $failed gagal',
+                            success
+                                ? '✅ ${result['message'] ?? 'Permintaan pengembalian terkirim'}'
+                                : '❌ ${result['message'] ?? 'Gagal mengirim permintaan'}',
                           ),
-                          backgroundColor: failed == 0
+                          backgroundColor: success
                               ? Colors.green
-                              : Colors.orange,
-                          duration: const Duration(seconds: 2),
+                              : Colors.red,
+                          duration: const Duration(seconds: 3),
                         ),
                       );
                     },
@@ -3394,7 +3467,7 @@ class _StockScreenState extends State<StockScreen>
                 ),
               ),
               child: Text(
-                'Simpan (${quantities.values.fold<int>(0, (a, b) => a + b)})',
+                'Kirim Permintaan (${quantities.values.fold<int>(0, (a, b) => a + b)})',
               ),
             ),
           ],
@@ -3616,17 +3689,31 @@ class _StockScreenState extends State<StockScreen>
                             productProvider = null;
                           }
 
-                          // Save product return to database
-                          final success = await supabaseService
-                              .createProductReturn(
+                          // Save as an approval request, not a posted return
+                          final user = context.read<AuthProvider>().currentUser;
+                          final selectedName = stocks.firstWhere(
+                            (s) => s['product_id'] == selectedProductId,
+                            orElse: () => <String, dynamic>{},
+                          )['product_name'] as String?;
+                          final result = await supabaseService
+                              .createProductReturnRequest(
                                 outletId: _outletId,
-                                productId: selectedProductId!,
-                                quantity: returnQuantity,
-                                returnReason: selectedReason!,
-                                conditionNotes: notesController.text.isNotEmpty
-                                    ? notesController.text
-                                    : null,
+                                requestedBy: user?.id,
+                                requestedByName: user?.name,
+                                items: [
+                                  {
+                                    'product_id': selectedProductId,
+                                    'product_name': selectedName,
+                                    'quantity': returnQuantity,
+                                    'return_reason': selectedReason,
+                                    'condition_notes':
+                                        notesController.text.isNotEmpty
+                                        ? notesController.text
+                                        : null,
+                                  },
+                                ],
                               );
+                          final success = result['success'] == true;
 
                           if (mounted) {
                             if (dialogContext.mounted) {
@@ -3647,21 +3734,25 @@ class _StockScreenState extends State<StockScreen>
                               }
 
                               rootScaffold.showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    '✅ Pengembalian berhasil dibuat',
+                                    result['message'] as String? ??
+                                        'Permintaan pengembalian terkirim',
                                   ),
                                   backgroundColor: Colors.green,
-                                  duration: Duration(seconds: 2),
+                                  duration: const Duration(seconds: 3),
                                 ),
                               );
                               _loadData(); // Refresh data
                             } else {
                               rootScaffold.showSnackBar(
-                                const SnackBar(
-                                  content: Text('❌ Gagal membuat pengembalian'),
+                                SnackBar(
+                                  content: Text(
+                                    result['message'] as String? ??
+                                        'Gagal mengirim permintaan',
+                                  ),
                                   backgroundColor: Colors.red,
-                                  duration: Duration(seconds: 2),
+                                  duration: const Duration(seconds: 3),
                                 ),
                               );
                             }

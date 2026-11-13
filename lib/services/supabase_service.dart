@@ -2672,6 +2672,148 @@ class SupabaseService {
     }
   }
 
+  // Barista returns are staged for manager/admin approval. Nothing lands in
+  // product_returns (and therefore in stock maths) until the request is approved.
+  Future<Map<String, dynamic>> createProductReturnRequest({
+    required String outletId,
+    required List<Map<String, dynamic>> items,
+    String? requestedBy,
+    String? requestedByName,
+    String? note,
+  }) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+    if (items.isEmpty) {
+      return {'success': false, 'message': 'Tidak ada produk yang dikembalikan'};
+    }
+
+    try {
+      final request = await _client
+          .from('product_return_requests')
+          .insert({
+            'outlet_id': outletId,
+            'requested_by': requestedBy,
+            'requested_by_name': requestedByName,
+            'note': note,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .select('id')
+          .single();
+
+      final requestId = request['id'] as String;
+
+      try {
+        await _client.from('product_return_request_items').insert([
+          for (final item in items)
+            {
+              'request_id': requestId,
+              'product_id': item['product_id'],
+              'product_name': item['product_name'],
+              'quantity': item['quantity'],
+              'return_reason': item['return_reason'],
+              'condition_notes': item['condition_notes'],
+            },
+        ]);
+      } catch (e) {
+        // A request without items would look like an empty approval.
+        await _client
+            .from('product_return_requests')
+            .delete()
+            .eq('id', requestId);
+        rethrow;
+      }
+
+      return {
+        'success': true,
+        'message': 'Permintaan pengembalian terkirim, menunggu persetujuan admin',
+        'id': requestId,
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Error: $e'};
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getProductReturnRequests({
+    String? outletId,
+    String? status,
+    int limit = 100,
+  }) async {
+    if (!_isInitialized) {
+      return [];
+    }
+
+    try {
+      var query = _client
+          .from('product_return_requests')
+          .select(
+            'id, outlet_id, requested_by, requested_by_name, status, note, '
+            'created_at, reviewed_at, reviewed_by, outlets(name), '
+            'product_return_request_items(product_id, product_name, quantity, '
+            'return_reason, condition_notes)',
+          );
+
+      if (outletId != null && outletId.isNotEmpty) {
+        query = query.eq('outlet_id', outletId);
+      }
+      if (status != null && status.isNotEmpty) {
+        query = query.eq('status', status);
+      }
+
+      final response = await query
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching product return requests: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> approveProductReturnRequest(
+    String requestId, {
+    String? reviewer,
+  }) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    try {
+      await _client.rpc(
+        'approve_product_return_request',
+        params: {'p_request_id': requestId, 'p_reviewer': reviewer},
+      );
+      return {'success': true, 'message': 'Permintaan pengembalian disetujui'};
+    } catch (e) {
+      return {'success': false, 'message': _allocationRequestError(e)};
+    }
+  }
+
+  Future<Map<String, dynamic>> rejectProductReturnRequest(
+    String requestId, {
+    String? reviewer,
+    String? reason,
+  }) async {
+    if (!_isInitialized) {
+      return {'success': false, 'message': 'Service not initialized'};
+    }
+
+    try {
+      await _client.rpc(
+        'reject_product_return_request',
+        params: {
+          'p_request_id': requestId,
+          'p_reviewer': reviewer,
+          'p_reason': reason,
+        },
+      );
+      return {'success': true, 'message': 'Permintaan pengembalian ditolak'};
+    } catch (e) {
+      return {'success': false, 'message': _allocationRequestError(e)};
+    }
+  }
+
   // Create product transfer between outlets
   Future<bool> createProductTransfer({
     required String fromOutletId,

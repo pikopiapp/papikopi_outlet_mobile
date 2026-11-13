@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/business_day_helper.dart';
+import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/thema.dart';
 import '../barista/camera_scanner_screen.dart';
@@ -26,6 +27,7 @@ class _ManagerProductReturnsScreenState
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _returns = [];
   List<Map<String, dynamic>> _allocations = [];
+  List<Map<String, dynamic>> _returnRequests = [];
   Map<String, int> _soldMap = {}; // product_id -> total_quantity_sold
 
   String? _selectedOutletId;
@@ -214,6 +216,7 @@ class _ManagerProductReturnsScreenState
         _products = [];
         _returns = [];
         _allocations = [];
+        _returnRequests = [];
         _soldMap = {};
       });
       return;
@@ -305,10 +308,18 @@ class _ManagerProductReturnsScreenState
           .where((p) => allocatedProductIds.contains(p['id']))
           .toList();
 
+      // Barista returns wait here until a manager approves them.
+      final requestData = await _supabaseService.getProductReturnRequests(
+        outletId: _selectedOutletId!,
+        status: 'pending',
+        limit: 100,
+      );
+
       setState(() {
         _allocations = allocationsData;
         _products = allocatedProducts;
         _returns = returnsData;
+        _returnRequests = requestData;
         _isLoading = false;
       });
 
@@ -1131,7 +1142,7 @@ class _ManagerProductReturnsScreenState
                 if (_selectedOutletId != null)
                   Expanded(
                     child: DefaultTabController(
-                      length: 2,
+                      length: 3,
                       initialIndex: _currentTabIndex,
                       child: Column(
                         children: [
@@ -1141,9 +1152,14 @@ class _ManagerProductReturnsScreenState
                                 _currentTabIndex = index;
                               });
                             },
-                            tabs: const [
-                              Tab(text: 'Pengembalian Produk'),
-                              Tab(text: 'Daftar Pengembalian'),
+                            tabs: [
+                              const Tab(text: 'Pengembalian Produk'),
+                              const Tab(text: 'Daftar Pengembalian'),
+                              Tab(
+                                text: _returnRequests.isEmpty
+                                    ? 'Permintaan'
+                                    : 'Permintaan (${_returnRequests.length})',
+                              ),
                             ],
                           ),
                           Expanded(
@@ -1171,6 +1187,17 @@ class _ManagerProductReturnsScreenState
                                         16,
                                   ),
                                   child: _buildReturnListCard(),
+                                ),
+                                SingleChildScrollView(
+                                  padding: EdgeInsets.only(
+                                    left: 16,
+                                    right: 16,
+                                    top: 16,
+                                    bottom:
+                                        MediaQuery.of(context).padding.bottom +
+                                        16,
+                                  ),
+                                  child: _buildReturnRequestsCard(),
                                 ),
                               ],
                             ),
@@ -1733,6 +1760,228 @@ class _ManagerProductReturnsScreenState
       }
     }
     return grouped.values.toList();
+  }
+
+  Widget _buildReturnRequestsCard() {
+    return Card(
+      color: AppColors.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Permintaan Pengembalian Barista',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Pengembalian baru masuk ke stok setelah disetujui.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            if (_returnRequests.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    'Tidak ada permintaan menunggu persetujuan',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ),
+              )
+            else
+              ..._returnRequests.map(_buildReturnRequestItem),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReturnRequestItem(Map<String, dynamic> request) {
+    final items =
+        (request['product_return_request_items'] as List<dynamic>?) ?? [];
+    final requester = request['requested_by_name'] as String? ?? 'Barista';
+    final note = request['note'] as String?;
+    final createdAt = DateTime.tryParse(
+      request['created_at'] as String? ?? '',
+    )?.toLocal();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.altSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.pending_actions, size: 18, color: Colors.orange),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  requester,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (createdAt != null)
+                Text(
+                  DateFormat('dd MMM HH:mm', 'id_ID').format(createdAt),
+                  style: const TextStyle(fontSize: 11),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: items.map((item) {
+              final row = item as Map<String, dynamic>;
+              return Chip(
+                label: Text(
+                  '${row['product_name'] ?? 'Produk'} ×${row['quantity']}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                backgroundColor: AppColors.surface,
+              );
+            }).toList(),
+          ),
+          if (note != null && note.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('Catatan: $note', style: const TextStyle(fontSize: 12)),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton(
+                onPressed: () => _rejectReturnRequest(request),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                ),
+                child: const Text('Tolak'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () => _approveReturnRequest(request),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Setujui'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _approveReturnRequest(Map<String, dynamic> request) async {
+    final items =
+        (request['product_return_request_items'] as List<dynamic>?) ?? [];
+    final summary = items
+        .map((item) {
+          final row = item as Map<String, dynamic>;
+          return '${row['product_name'] ?? 'Produk'} ×${row['quantity']}';
+        })
+        .join(', ');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Setujui Pengembalian'),
+        content: Text(
+          'Stok berikut akan dikurangi:\n$summary\n\nLanjutkan?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Setujui'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final reviewer = AuthService().getSavedUser()?.name;
+    final result = await _supabaseService.approveProductReturnRequest(
+      request['id'] as String,
+      reviewer: reviewer,
+    );
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result['message'] as String? ?? 'Selesai'),
+        backgroundColor: result['success'] == true ? Colors.green : Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+    if (result['success'] == true) {
+      await _fetchProductsAndReturns();
+    }
+  }
+
+  Future<void> _rejectReturnRequest(Map<String, dynamic> request) async {
+    final reasonController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Tolak Permintaan'),
+        content: TextField(
+          controller: reasonController,
+          decoration: const InputDecoration(
+            hintText: 'Alasan penolakan (opsional)',
+          ),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Tolak'),
+          ),
+        ],
+      ),
+    );
+    final reason = reasonController.text.trim();
+    reasonController.dispose();
+    if (confirmed != true) return;
+
+    final reviewer = AuthService().getSavedUser()?.name;
+    final result = await _supabaseService.rejectProductReturnRequest(
+      request['id'] as String,
+      reviewer: reviewer,
+      reason: reason.isEmpty ? null : reason,
+    );
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result['message'] as String? ?? 'Selesai'),
+        backgroundColor: result['success'] == true ? Colors.green : Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+    if (result['success'] == true) {
+      await _fetchProductsAndReturns();
+    }
   }
 
   Widget _buildGroupedReturnItem(
