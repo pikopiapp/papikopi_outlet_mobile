@@ -1113,7 +1113,7 @@ class _StockScreenState extends State<StockScreen>
                               ),
                             )
                           : Text(
-                              'Kirim Permintaan (${_requestItems.length} produk)',
+                              'Kirim Permintaan (${_requestItems.fold<int>(0, (sum, item) => sum + (item['quantity'] as int))} item)',
                               style: const TextStyle(color: Colors.white),
                             ),
                     ),
