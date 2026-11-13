@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -67,10 +68,10 @@ class CameraScannerScreen extends StatefulWidget {
 
 class _CameraScannerScreenState extends State<CameraScannerScreen>
     with TickerProviderStateMixin {
-  // One camera session reads each code many times per second; ignore the same
-  // code within this window so one bottle is not counted dozens of times, while
-  // scanning the same bottle again a moment later still adds another unit.
-  static const _repeatWindow = Duration(milliseconds: 1500);
+  // A code counts once when it appears. It only counts again after the camera
+  // has stopped seeing it for this long, i.e. the product must leave the frame
+  // and be shown again.
+  static const _releaseDelay = Duration(milliseconds: 900);
   static const _beepChannel = MethodChannel('papikopi/scan_feedback');
 
   late final MobileScannerController _scannerController;
@@ -79,7 +80,8 @@ class _CameraScannerScreenState extends State<CameraScannerScreen>
   bool _isFlashOn = false;
   bool _isScanned = false;
   final List<String> _codes = [];
-  final Map<String, DateTime> _lastSeen = {};
+  final Set<String> _inView = {};
+  final Map<String, Timer> _releaseTimers = {};
 
   @override
   void initState() {
@@ -99,6 +101,9 @@ class _CameraScannerScreenState extends State<CameraScannerScreen>
 
   @override
   void dispose() {
+    for (final timer in _releaseTimers.values) {
+      timer.cancel();
+    }
     _scanLineController.dispose();
     _flashController.dispose();
     _scannerController.dispose();
@@ -144,10 +149,17 @@ class _CameraScannerScreenState extends State<CameraScannerScreen>
       return;
     }
 
-    final now = DateTime.now();
-    final last = _lastSeen[rawValue];
-    if (last != null && now.difference(last) < _repeatWindow) return;
-    _lastSeen[rawValue] = now;
+    // While the code stays in frame the plugin keeps reporting it; only the
+    // first report counts. The release timer re-arms the code after the frame
+    // has been clear of it for _releaseDelay.
+    _releaseTimers.remove(rawValue)?.cancel();
+    _releaseTimers[rawValue] = Timer(_releaseDelay, () {
+      _inView.remove(rawValue);
+      _releaseTimers.remove(rawValue);
+    });
+
+    if (_inView.contains(rawValue)) return;
+    _inView.add(rawValue);
     _onScanAccepted();
     setState(() => _codes.add(rawValue));
   }
@@ -439,7 +451,7 @@ class _CameraScannerScreenState extends State<CameraScannerScreen>
       children: [
         if (_codes.isEmpty)
           Text(
-            'Scan produk satu per satu. Produk yang sama boleh discan berulang untuk menambah jumlah.',
+            'Arahkan ke satu produk, lalu angkat keluar dari kamera sebelum scan berikutnya. Produk yang sama discan ulang akan menambah jumlah.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white70,
