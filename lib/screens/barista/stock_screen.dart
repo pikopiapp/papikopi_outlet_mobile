@@ -855,17 +855,27 @@ class _StockScreenState extends State<StockScreen>
           ),
         ],
       ),
-      floatingActionButton: _tabController.index == 0
-          ? FloatingActionButton.extended(
-              onPressed: _scanShowcaseProduct,
-              backgroundColor: AppColors.primary,
-              icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
-              label: const Text(
-                'Tambah Stok',
-                style: TextStyle(color: Colors.white),
-              ),
-            )
-          : null,
+      floatingActionButton: switch (_tabController.index) {
+        0 => FloatingActionButton.extended(
+          onPressed: _scanShowcaseProduct,
+          backgroundColor: AppColors.primary,
+          icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+          label: const Text(
+            'Tambah Stok',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+        2 => FloatingActionButton.extended(
+          onPressed: _scanReturnsFromFab,
+          backgroundColor: AppColors.primary,
+          icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+          label: const Text(
+            'Scan Pengembalian',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+        _ => null,
+      },
     );
   }
 
@@ -2093,41 +2103,23 @@ class _StockScreenState extends State<StockScreen>
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            // Tombol Buat Pengembalian / Scan QR
+            // Tombol Buat Pengembalian (scan QR lewat FAB)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: stocks.isEmpty
-                          ? null
-                          : () => _showReturnDialog(context, stocks),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Buat Pengembalian'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: stocks.isEmpty
+                      ? null
+                      : () => _showReturnDialog(context, stocks),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Buat Pengembalian'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: stocks.isEmpty
-                          ? null
-                          : () => _scanReturnProducts(stocks),
-                      icon: const Icon(Icons.qr_code_scanner),
-                      label: const Text('Scan QR'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        side: BorderSide(color: AppColors.primary),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
             // List return history
@@ -2187,7 +2179,7 @@ class _StockScreenState extends State<StockScreen>
                   };
 
                   return ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                     itemCount: returns.length,
                     itemBuilder: (context, index) {
                       final returnItem = returns[index];
@@ -3105,6 +3097,19 @@ class _StockScreenState extends State<StockScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _scanReturnsFromFab() async {
+    final stocks = await _getEnrichedProductStock(
+      SupabaseService(),
+      _selectedDate,
+    );
+    if (!mounted) return;
+    if (stocks.isEmpty) {
+      _showMessage('Belum ada stok di tanggal ini', isError: true);
+      return;
+    }
+    await _scanReturnProducts(stocks);
   }
 
   Future<void> _scanReturnProducts(List<Map<String, dynamic>> stocks) async {
