@@ -474,15 +474,17 @@ class _ManagerProductReturnsScreenState
       return;
     }
 
-    final scannedCode = await CameraScannerScreen.open(
+    final scannedCodes = await CameraScannerScreen.openMulti(
       context,
       cameraFacing: CameraFacing.back,
       title: 'Scan QR Pengembalian',
-      subtitle: 'Arahkan kamera ke kode produk untuk scanning',
+      subtitle: 'Scan produk berkali-kali, tekan Selesai bila sudah',
       showFlashIcon: true,
     );
 
-    if (scannedCode != null && mounted && scannedCode != '-1') {
+    if (scannedCodes == null || scannedCodes.isEmpty) return;
+    for (final scannedCode in scannedCodes) {
+      if (scannedCode.isEmpty || scannedCode == '-1') continue;
       await _addProductByQRCode(scannedCode);
     }
   }
@@ -602,8 +604,13 @@ class _ManagerProductReturnsScreenState
           .where((r) => r['product_id'] == actualProductId)
           .fold<int>(0, (sum, r) => sum + (r['quantity'] as int? ?? 0));
 
+      // Quantity already buffered in this batch but not submitted yet
+      final queuedReturns = _tempReturns
+          .where((r) => r['actual_product_id'] == actualProductId)
+          .fold<int>(0, (sum, r) => sum + (r['quantity'] as int? ?? 0));
+
       final returnableQty =
-          allocatedToOutlet - soldFromOutlet - returnedFromOutlet;
+          allocatedToOutlet - soldFromOutlet - returnedFromOutlet - queuedReturns;
 
       debugPrint('[ManagerProductReturnsScreen] Quantity calculation:');
       debugPrint('  - Allocated: $allocatedToOutlet');

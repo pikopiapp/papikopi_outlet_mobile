@@ -300,15 +300,17 @@ class _POSScreenState extends State<POSScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _handleQRScan() async {
-    final scannedCode = await CameraScannerScreen.open(
+    final scannedCodes = await CameraScannerScreen.openMulti(
       context,
       cameraFacing: CameraFacing.back,
       title: 'Scan QR Produk',
-      subtitle: 'Arahkan kamera ke kode produk',
+      subtitle: 'Scan produk berkali-kali, tekan Selesai bila sudah',
       showFlashIcon: true,
     );
 
-    if (scannedCode != null && scannedCode.isNotEmpty && scannedCode != '-1') {
+    if (scannedCodes == null || scannedCodes.isEmpty) return;
+    for (final scannedCode in scannedCodes) {
+      if (scannedCode.isEmpty || scannedCode == '-1') continue;
       await _addProductByCode(scannedCode);
     }
   }
@@ -394,12 +396,17 @@ class _POSScreenState extends State<POSScreen> with TickerProviderStateMixin {
         return;
       }
 
-      // Check if out of stock
-      if (product.stock <= 0) {
+      // Check stock, counting units already scanned into the cart
+      final inCart = cartProvider.getItem(product.id)?.quantity ?? 0;
+      if (product.stock - inCart <= 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('❌ ${product.name} habis'),
+              content: Text(
+                inCart > 0
+                    ? '❌ ${product.name} hanya tersisa ${product.stock}'
+                    : '❌ ${product.name} habis',
+              ),
               backgroundColor: Colors.red,
             ),
           );

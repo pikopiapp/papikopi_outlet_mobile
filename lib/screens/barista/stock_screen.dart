@@ -104,16 +104,27 @@ class _StockScreenState extends State<StockScreen>
   }
 
   Future<void> _scanShowcaseProduct() async {
-    final code = await CameraScannerScreen.open(
+    final codes = await CameraScannerScreen.openMulti(
       context,
       title: 'Scan QR Produk',
-      subtitle: 'Scan satu per satu, produk masuk daftar permintaan',
+      subtitle: 'Scan produk berkali-kali, tekan Selesai bila sudah',
     );
-    if (code == null || code.isEmpty || code == '-1') return;
-    await _addScannedProduct(code);
+    if (codes == null || codes.isEmpty) return;
+    var added = 0;
+    for (final code in codes) {
+      if (code.isEmpty || code == '-1') continue;
+      final ok = await _addScannedProduct(code);
+      if (ok) added++;
+    }
+    if (!mounted) return;
+    _tabController.animateTo(3);
+    _showMessage(
+      added > 0 ? '$added scan masuk daftar permintaan' : 'Tidak ada produk yang ditambahkan',
+      isError: added == 0,
+    );
   }
 
-  Future<void> _addScannedProduct(String code) async {
+  Future<bool> _addScannedProduct(String code) async {
     String? searchId;
     String? productName;
 
@@ -129,7 +140,7 @@ class _StockScreenState extends State<StockScreen>
     var products = _showcaseProducts;
     if (products.isEmpty) {
       products = await SupabaseService().fetchShowcaseProducts();
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() => _showcaseProducts = products);
     }
 
@@ -157,7 +168,7 @@ class _StockScreenState extends State<StockScreen>
         'Produk tidak ditemukan${productName != null ? ' ($productName)' : ''}',
         isError: true,
       );
-      return;
+      return false;
     }
 
     final showcaseProductId = product['id'] as String;
@@ -170,10 +181,10 @@ class _StockScreenState extends State<StockScreen>
 
     if (totalQuantity - allocated - queued <= 0) {
       _showMessage('$name tidak tersedia', isError: true);
-      return;
+      return false;
     }
 
-    if (!mounted) return;
+    if (!mounted) return false;
     setState(() {
       final index = _requestItems.indexWhere(
         (item) => item['showcase_product_id'] == showcaseProductId,
@@ -189,8 +200,7 @@ class _StockScreenState extends State<StockScreen>
         });
       }
     });
-    _tabController.animateTo(3);
-    _showMessage('$name ditambahkan');
+    return true;
   }
 
   Future<void> _submitAllocationRequest() async {
@@ -2102,21 +2112,37 @@ class _StockScreenState extends State<StockScreen>
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            // Tombol Buat Pengembalian
+            // Tombol Buat Pengembalian / Scan QR
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _showReturnDialog(context, stocks),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Buat Pengembalian'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showReturnDialog(context, stocks),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Buat Pengembalian'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _scanReturnProducts(stocks),
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('Scan QR'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             // List return history
@@ -3073,6 +3099,297 @@ class _StockScreenState extends State<StockScreen>
                   child: const Text('Pindahkan'),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _scanReturnProducts(List<Map<String, dynamic>> stocks) async {
+    final codes = await CameraScannerScreen.openMulti(
+      context,
+      title: 'Scan QR Pengembalian',
+      subtitle: 'Scan produk yang dikembalikan, tekan Selesai bila sudah',
+    );
+    if (codes == null || codes.isEmpty) return;
+
+    final scanned = <String, int>{};
+    final names = <String, String>{};
+    var skipped = 0;
+
+    for (final code in codes) {
+      if (code.isEmpty || code == '-1') continue;
+      final stock = _matchReturnStockByCode(code, stocks);
+      if (stock == null) {
+        skipped++;
+        continue;
+      }
+      final productId = stock['product_id'] as String;
+      final unsold = stock['unsold'] as int? ?? 0;
+      final current = scanned[productId] ?? 0;
+      if (current + 1 > unsold) {
+        skipped++;
+        continue;
+      }
+      scanned[productId] = current + 1;
+      names[productId] = stock['product_name'] as String? ?? 'Produk';
+    }
+
+    if (!mounted) return;
+    if (scanned.isEmpty) {
+      _showMessage(
+        'Tidak ada produk yang bisa dikembalikan',
+        isError: true,
+      );
+      return;
+    }
+    if (skipped > 0) {
+      _showMessage('$skipped scan dilewati (tidak dikenal/stok kurang)');
+    }
+    await _showScanReturnDialog(stocks, scanned, names);
+  }
+
+  Map<String, dynamic>? _matchReturnStockByCode(
+    String code,
+    List<Map<String, dynamic>> stocks,
+  ) {
+    String? searchId;
+    String? productName;
+    try {
+      final data = jsonDecode(code) as Map<String, dynamic>;
+      searchId = (data['product_id'] ?? data['id'])?.toString();
+      productName =
+          (data['product'] ?? data['product_name'] ?? data['name'])?.toString();
+    } catch (_) {
+      searchId = code;
+    }
+
+    if (searchId != null && searchId.isNotEmpty) {
+      for (final stock in stocks) {
+        if (stock['product_id']?.toString() == searchId) return stock;
+      }
+    }
+    if (productName != null && productName.isNotEmpty) {
+      for (final stock in stocks) {
+        if ((stock['product_name'] as String? ?? '').toLowerCase() ==
+            productName.toLowerCase()) {
+          return stock;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<void> _showScanReturnDialog(
+    List<Map<String, dynamic>> stocks,
+    Map<String, int> scanned,
+    Map<String, String> names,
+  ) async {
+    final quantities = Map<String, int>.from(scanned);
+    String? selectedReason;
+    final notesController = TextEditingController();
+    final reasonsList = [
+      'Outlet Tutup',
+      'Tidak Terjual',
+      'Expired/Kadaluarsa',
+      'Rusak',
+      'Lainnya',
+    ];
+
+    int unsoldOf(String productId) {
+      final stock = stocks.firstWhere(
+        (s) => s['product_id'] == productId,
+        orElse: () => <String, dynamic>{},
+      );
+      return stock['unsold'] as int? ?? 0;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogInnerContext, setDialogState) => AlertDialog(
+          title: const Text('Pengembalian dari Scan'),
+          contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...quantities.keys.map((productId) {
+                    final maxQty = unsoldOf(productId);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  names[productId] ?? 'Produk',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  'Sisa $maxQty unit',
+                                  style: Theme.of(context).textTheme.labelSmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.remove),
+                            onPressed: quantities[productId]! > 1
+                                ? () => setDialogState(
+                                      () => quantities[productId] =
+                                          quantities[productId]! - 1,
+                                    )
+                                : null,
+                          ),
+                          Text(
+                            '${quantities[productId]}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            onPressed: quantities[productId]! < maxQty
+                                ? () => setDialogState(
+                                      () => quantities[productId] =
+                                          quantities[productId]! + 1,
+                                    )
+                                : null,
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Alasan Pengembalian',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    hint: const Text('-- Pilih Alasan --'),
+                    value: selectedReason,
+                    items: reasonsList
+                        .map(
+                          (reason) =>
+                              DropdownMenuItem(value: reason, child: Text(reason)),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => selectedReason = value),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Catatan (Opsional)',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: notesController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Tambahkan catatan jika diperlukan',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+          actions: [
+            TextButton(
+              onPressed: () {
+                notesController.dispose();
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Batal'),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: selectedReason == null
+                  ? null
+                  : () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      ProductProvider? productProvider;
+                      try {
+                        productProvider = context.read<ProductProvider>();
+                      } catch (_) {
+                        productProvider = null;
+                      }
+
+                      final notes = notesController.text.isNotEmpty
+                          ? notesController.text
+                          : null;
+                      var successCount = 0;
+                      var failed = 0;
+                      for (final entry in quantities.entries) {
+                        final ok = await SupabaseService().createProductReturn(
+                          outletId: _outletId,
+                          productId: entry.key,
+                          quantity: entry.value,
+                          returnReason: selectedReason!,
+                          conditionNotes: notes,
+                        );
+                        if (ok) {
+                          successCount++;
+                        } else {
+                          failed++;
+                        }
+                      }
+
+                      if (!mounted) return;
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      }
+                      notesController.dispose();
+                      try {
+                        await productProvider?.loadProductsWithStock(_outletId);
+                      } catch (_) {
+                        // Ignore refresh errors; the list reloads below.
+                      }
+                      _loadData();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            failed == 0
+                                ? '✅ $successCount produk dikembalikan'
+                                : '⚠️ $successCount berhasil, $failed gagal',
+                          ),
+                          backgroundColor: failed == 0
+                              ? Colors.green
+                              : Colors.orange,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: Text(
+                'Simpan (${quantities.values.fold<int>(0, (a, b) => a + b)})',
+              ),
             ),
           ],
         ),

@@ -807,15 +807,17 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       return;
     }
 
-    final scannedCode = await CameraScannerScreen.open(
+    final scannedCodes = await CameraScannerScreen.openMulti(
       context,
       cameraFacing: CameraFacing.back,
       title: 'Scan QR Alokasi',
-      subtitle: 'Arahkan kamera ke kode alokasi',
+      subtitle: 'Scan produk berkali-kali, tekan Selesai bila sudah',
       showFlashIcon: true,
     );
 
-    if (scannedCode != null && scannedCode.isNotEmpty && scannedCode != '-1') {
+    if (scannedCodes == null || scannedCodes.isEmpty) return;
+    for (final scannedCode in scannedCodes) {
+      if (scannedCode.isEmpty || scannedCode == '-1') continue;
       await _addProductByQRCode(scannedCode);
     }
   }
@@ -930,7 +932,10 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       final allocated = _assignments
           .where((a) => a['showcase_product_id'] == productId)
           .fold<int>(0, (sum, a) => sum + (a['quantity'] as int? ?? 0));
-      final remaining = totalQuantity - allocated;
+      final queued = _tempAllocations
+          .where((a) => a['showcase_product_id'] == productId)
+          .fold<int>(0, (sum, a) => sum + (a['quantity'] as int? ?? 0));
+      final remaining = totalQuantity - allocated - queued;
 
       if (remaining <= 0) {
         if (mounted) {
