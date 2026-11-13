@@ -65,13 +65,17 @@ class CameraScannerScreen extends StatefulWidget {
   State<CameraScannerScreen> createState() => _CameraScannerScreenState();
 }
 
-class _CameraScannerScreenState extends State<CameraScannerScreen> {
+class _CameraScannerScreenState extends State<CameraScannerScreen>
+    with TickerProviderStateMixin {
   // One camera session reads each code many times per second; ignore the same
   // code within this window so one bottle is not counted dozens of times, while
   // scanning the same bottle again a moment later still adds another unit.
   static const _repeatWindow = Duration(milliseconds: 1500);
+  static const _beepChannel = MethodChannel('papikopi/scan_feedback');
 
   late final MobileScannerController _scannerController;
+  late final AnimationController _scanLineController;
+  late final AnimationController _flashController;
   bool _isFlashOn = false;
   bool _isScanned = false;
   final List<String> _codes = [];
@@ -83,12 +87,41 @@ class _CameraScannerScreenState extends State<CameraScannerScreen> {
     _scannerController = MobileScannerController(
       facing: widget.cameraFacing,
     );
+    _scanLineController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _flashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
   }
 
   @override
   void dispose() {
+    _scanLineController.dispose();
+    _flashController.dispose();
     _scannerController.dispose();
     super.dispose();
+  }
+
+  Future<void> _playBeep() async {
+    try {
+      await _beepChannel.invokeMethod('beep');
+    } catch (_) {
+      // No native tone channel (e.g. desktop); the haptic still fires.
+    }
+  }
+
+  void _onScanAccepted() {
+    HapticFeedback.selectionClick();
+    _playBeep();
+    _flashController.value = 1;
+    _flashController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOut,
+    );
   }
 
   Future<void> _toggleFlash() async {
@@ -106,6 +139,7 @@ class _CameraScannerScreenState extends State<CameraScannerScreen> {
     if (!widget.multiScan) {
       if (_isScanned) return;
       _isScanned = true;
+      _onScanAccepted();
       Navigator.of(context).pop(rawValue);
       return;
     }
@@ -114,7 +148,7 @@ class _CameraScannerScreenState extends State<CameraScannerScreen> {
     final last = _lastSeen[rawValue];
     if (last != null && now.difference(last) < _repeatWindow) return;
     _lastSeen[rawValue] = now;
-    HapticFeedback.selectionClick();
+    _onScanAccepted();
     setState(() => _codes.add(rawValue));
   }
 
@@ -140,6 +174,114 @@ class _CameraScannerScreenState extends State<CameraScannerScreen> {
       counts[label] = (counts[label] ?? 0) + 1;
     }
     return counts;
+  }
+
+  Widget _buildScannerFrame() {
+    return SizedBox(
+      width: 260,
+      height: 260,
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_scanLineController, _flashController]),
+        builder: (context, _) {
+          final flash = _flashController.value;
+          final borderColor = Color.lerp(
+            Colors.white.withValues(alpha: 0.75),
+            const Color(0xFF34C759),
+            flash,
+          )!;
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: borderColor,
+                      width: 2 + flash * 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 20,
+                        spreadRadius: -10,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Sweeping laser line that shows the camera is actively reading.
+              Positioned(
+                top: 12 + 234 * _scanLineController.value,
+                left: 14,
+                right: 14,
+                child: Container(
+                  height: 2,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0),
+                        AppColors.primary.withValues(alpha: 0.9),
+                        AppColors.primary.withValues(alpha: 0),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.6),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              ..._buildCornerBrackets(borderColor),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _buildCornerBrackets(Color color) {
+    const length = 22.0;
+    const thickness = 3.0;
+
+    Widget corner({required bool top, required bool left}) {
+      return Positioned(
+        top: top ? 0 : null,
+        bottom: top ? null : 0,
+        left: left ? 0 : null,
+        right: left ? null : 0,
+        child: Container(
+          width: length,
+          height: length,
+          decoration: BoxDecoration(
+            border: Border(
+              top: top
+                  ? BorderSide(color: color, width: thickness)
+                  : BorderSide.none,
+              bottom: top
+                  ? BorderSide.none
+                  : BorderSide(color: color, width: thickness),
+              left: left
+                  ? BorderSide(color: color, width: thickness)
+                  : BorderSide.none,
+              right: left
+                  ? BorderSide.none
+                  : BorderSide(color: color, width: thickness),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return [
+      corner(top: true, left: true),
+      corner(top: true, left: false),
+      corner(top: false, left: true),
+      corner(top: false, left: false),
+    ];
   }
 
   @override
@@ -229,26 +371,7 @@ class _CameraScannerScreenState extends State<CameraScannerScreen> {
             Positioned.fill(
               child: IgnorePointer(
                 ignoring: true,
-                child: Center(
-                  child: Container(
-                    width: 260,
-                    height: 260,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.75),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          spreadRadius: -10,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                child: Center(child: _buildScannerFrame()),
               ),
             ),
             Positioned(
