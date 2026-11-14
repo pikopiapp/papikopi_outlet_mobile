@@ -93,6 +93,13 @@ class _CameraScannerScreenState extends State<CameraScannerScreen>
     _scannerController = MobileScannerController(
       facing: widget.cameraFacing,
       autoStart: false,
+      // Android analyses at 640x480 by default, which leaves too few pixels per
+      // module for the printed product labels.
+      cameraResolution: const Size(1280, 720),
+      // Every frame instead of one attempt per 250 ms, and zoom in on small
+      // codes held farther than arm's length.
+      detectionSpeed: DetectionSpeed.unrestricted,
+      autoZoom: true,
     );
     _scanLineController = AnimationController(
       vsync: this,
