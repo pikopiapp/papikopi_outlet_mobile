@@ -114,10 +114,23 @@ class _StockScreenState extends State<StockScreen>
   }
 
   Future<void> _scanShowcaseProduct() async {
+    var products = _showcaseProducts;
+    if (products.isEmpty) {
+      products = await SupabaseService().fetchShowcaseProducts();
+      if (!mounted) return;
+      setState(() => _showcaseProducts = products);
+    }
+    final labelByCode = <String, String>{
+      for (final p in products)
+        if ((p['product_id'] ?? p['id']) != null)
+          (p['product_id'] ?? p['id']).toString():
+              (p['product_name'] ?? '').toString(),
+    };
     final codes = await CameraScannerScreen.openMulti(
       context,
       title: 'Scan QR Produk',
       subtitle: 'Scan produk berkali-kali, tekan Selesai bila sudah',
+      productLabels: labelByCode,
     );
     if (codes == null || codes.isEmpty) return;
     var added = 0;

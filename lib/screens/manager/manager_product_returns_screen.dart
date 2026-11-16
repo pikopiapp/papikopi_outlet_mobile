@@ -485,12 +485,19 @@ class _ManagerProductReturnsScreenState
       return;
     }
 
+    final labelByCode = <String, String>{
+      for (final p in _products)
+        if ((p['product_id'] ?? p['id']) != null)
+          (p['product_id'] ?? p['id']).toString():
+              (p['product_name'] ?? p['name'] ?? '').toString(),
+    };
     final scannedCodes = await CameraScannerScreen.openMulti(
       context,
       cameraFacing: CameraFacing.back,
       title: 'Scan QR Pengembalian',
       subtitle: 'Scan produk berkali-kali, tekan Selesai bila sudah',
       showFlashIcon: true,
+      productLabels: labelByCode,
     );
 
     if (scannedCodes == null || scannedCodes.isEmpty) return;

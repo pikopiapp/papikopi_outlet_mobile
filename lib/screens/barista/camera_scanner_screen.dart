@@ -15,6 +15,7 @@ class CameraScannerScreen extends StatefulWidget {
     this.subtitle = 'Arahkan kamera ke kode untuk memindai',
     this.showFlashIcon = true,
     this.multiScan = false,
+    this.productLabels = const {},
   });
 
   final CameraFacing cameraFacing;
@@ -22,6 +23,10 @@ class CameraScannerScreen extends StatefulWidget {
   final String subtitle;
   final bool showFlashIcon;
   final bool multiScan;
+
+  /// Product id → display name, so a label QR that carries only the id still
+  /// lists the product by name in the scan chips.
+  final Map<String, String> productLabels;
 
   static Future<String?> open(
     BuildContext context, {
@@ -48,6 +53,7 @@ class CameraScannerScreen extends StatefulWidget {
     String title = 'Scan QR Code',
     String subtitle = 'Scan produk berkali-kali, tekan Selesai bila sudah',
     bool showFlashIcon = true,
+    Map<String, String> productLabels = const {},
   }) {
     return Navigator.of(context).push<List<String>>(
       MaterialPageRoute(
@@ -57,6 +63,7 @@ class CameraScannerScreen extends StatefulWidget {
           subtitle: subtitle,
           showFlashIcon: showFlashIcon,
           multiScan: true,
+          productLabels: productLabels,
         ),
       ),
     );
@@ -225,8 +232,10 @@ class _CameraScannerScreenState extends State<CameraScannerScreen>
         }
       }
     } catch (_) {
-      // Not JSON, fall through to the raw value.
+      // Not JSON, fall through to the id lookup.
     }
+    final name = widget.productLabels[code];
+    if (name != null && name.trim().isNotEmpty) return name;
     return code.length > 18 ? '${code.substring(0, 18)}…' : code;
   }
 

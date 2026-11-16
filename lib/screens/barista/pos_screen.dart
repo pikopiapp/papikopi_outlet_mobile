@@ -300,12 +300,16 @@ class _POSScreenState extends State<POSScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _handleQRScan() async {
+    final labelByCode = <String, String>{
+      for (final p in context.read<ProductProvider>().products) p.id: p.name,
+    };
     final scannedCodes = await CameraScannerScreen.openMulti(
       context,
       cameraFacing: CameraFacing.back,
       title: 'Scan QR Produk',
       subtitle: 'Scan produk berkali-kali, tekan Selesai bila sudah',
       showFlashIcon: true,
+      productLabels: labelByCode,
     );
 
     if (scannedCodes == null || scannedCodes.isEmpty) return;

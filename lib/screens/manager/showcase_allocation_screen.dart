@@ -807,12 +807,19 @@ class _ShowcaseAllocationScreenState extends State<ShowcaseAllocationScreen> {
       return;
     }
 
+    final labelByCode = <String, String>{
+      for (final p in _showcaseProducts)
+        if ((p['product_id'] ?? p['id']) != null)
+          (p['product_id'] ?? p['id']).toString():
+              (p['product_name'] ?? '').toString(),
+    };
     final scannedCodes = await CameraScannerScreen.openMulti(
       context,
       cameraFacing: CameraFacing.back,
       title: 'Scan QR Alokasi',
       subtitle: 'Scan produk berkali-kali, tekan Selesai bila sudah',
       showFlashIcon: true,
+      productLabels: labelByCode,
     );
 
     if (scannedCodes == null || scannedCodes.isEmpty) return;
